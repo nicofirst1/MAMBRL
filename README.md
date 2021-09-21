@@ -1,3 +1,11 @@
+## Installation 
+This project requires python 3.9.
+Install pettingzoo with
+`pip install pettingzoo`
+`pip install Pillow`
+`pip install pyglet`
+
+
 ## Description of the Problem:
 
 <b><u>Abstract Definition:</b></u>
