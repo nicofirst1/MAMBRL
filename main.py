@@ -4,18 +4,34 @@ import time
 from NavigationEnv import get_env
 
 
-def policy(obs, agent):
-    return random.choice(range(3))
 
 
-env = get_env()
+par_env = get_env()
 
-env.reset()
-env.render()
-for agent in env.agent_iter():
-    observation, reward, done, info = env.last()
-    action = policy(observation, agent)
-    env.step(action)
-    env.render()
+episodes=10
+MAX_RESETS = 2
+for n_resets in range(MAX_RESETS):
+    obs = par_env.reset()
 
-    time.sleep(0.2)
+    done = {agent: False for agent in par_env.agents}
+    live_agents = par_env.agents[:]
+    has_finished = set()
+    for i in range(episodes):
+        actions = {
+            agent: space.sample()
+            for agent, space in par_env.action_spaces.items()
+            if agent in done and not done[agent]
+        }
+        obs, rew, done, info = par_env.step(actions)
+
+        for agent, d in done.items():
+            if d:
+                live_agents.remove(agent)
+        has_finished |= {agent for agent, d in done.items() if d}
+        if not par_env.agents:
+            assert has_finished == set(
+                par_env.possible_agents
+            ), "not all agents finished, some were skipped over"
+            break
+        par_env.render()
+        time.sleep(0.1)
