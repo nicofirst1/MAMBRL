@@ -1,9 +1,10 @@
 import numpy as np
+from colour import Color
 from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from pettingzoo.utils import to_parallel
-from colour import Color
+
 
 def get_env():
     '''
@@ -15,7 +16,6 @@ def get_env():
     '''
 
     return to_parallel(make_env(raw_env)())
-
 
 
 class TimerLandmark(Entity):
@@ -34,6 +34,7 @@ class TimerLandmark(Entity):
         super().__init__()
         self.timer = 0
         self.increase = increase
+        self.counter = 0
 
     def reset(self, world, np_random):
         self.timer = 0
@@ -42,11 +43,12 @@ class TimerLandmark(Entity):
         self.state.p_vel = np.zeros(world.dim_p)
 
     def step(self):
-        self.timer += self.increase
-        # c=self.colors[self.timer//self.increase]
-        # c=c.get_hsl()
-        # self.color=np.array(c)
-        # a=1
+        self.counter += 1
+        self.timer = self.increase * self.counter
+        # c = self.colors[self.counter]
+        # c = c.get_hsl()
+        # self.color = np.array(c)
+        a = 1
 
     def reset_timer(self):
         self.timer = 0
@@ -102,7 +104,6 @@ class Scenario(BaseScenario):
 
         # check for every landmark
         for landmark in world.landmarks:
-
             rew -= self.std_penalty * landmark.timer
 
         return rew

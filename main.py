@@ -1,17 +1,15 @@
-import random
 import time
 
 from NavigationEnv import get_env
 
-
-
-
 par_env = get_env()
 
-episodes=10
+episodes = 30
 MAX_RESETS = 2
+
 for n_resets in range(MAX_RESETS):
     obs = par_env.reset()
+    par_env.render()
 
     done = {agent: False for agent in par_env.agents}
     live_agents = par_env.agents[:]
@@ -23,6 +21,8 @@ for n_resets in range(MAX_RESETS):
             if agent in done and not done[agent]
         }
         obs, rew, done, info = par_env.step(actions)
+        par_env.render()
+        time.sleep(0.1)
 
         for agent, d in done.items():
             if d:
@@ -33,5 +33,3 @@ for n_resets in range(MAX_RESETS):
                 par_env.possible_agents
             ), "not all agents finished, some were skipped over"
             break
-        par_env.render()
-        time.sleep(0.1)
