@@ -1,5 +1,5 @@
+import matplotlib as mpl
 import numpy as np
-from colour import Color
 from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
@@ -18,6 +18,10 @@ def get_env():
     return to_parallel(make_env(raw_env)())
 
 
+def colorFader(c1, c2, mix=0):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+    return mpl.colors.to_rgb(mpl.colors.to_hex((1 - mix) * c1 + mix * c2))
+
+
 class TimerLandmark(Entity):
     """
     Timer landmark class.
@@ -28,7 +32,7 @@ class TimerLandmark(Entity):
     So the longer a landmark stays untouched the worse the penalty gets.
     """
 
-    colors = list(Color("green").range_to(Color("red"), 100))
+    colors = [colorFader(np.array([0, 1, 0]), np.array([1, 0, 0]), x / 100) for x in range(0, 100)]
 
     def __init__(self, increase=0.1):
         super().__init__()
@@ -38,20 +42,22 @@ class TimerLandmark(Entity):
 
     def reset(self, world, np_random):
         self.timer = 0
-        self.color = np.array([0, 1, 0])
+        self.color = np.array([0, 1.0, 0])
         self.state.p_pos = np_random.uniform(-0.9, +0.9, world.dim_p)
         self.state.p_vel = np.zeros(world.dim_p)
 
     def step(self):
         self.counter += 1
         self.timer = self.increase * self.counter
-        # c = self.colors[self.counter]
-        # c = c.get_hsl()
-        # self.color = np.array(c)
-        a = 1
+
+        if self.counter >= len(self.colors):
+            self.color = self.colors[-1]
+        else:
+            self.color = self.colors[self.counter]
 
     def reset_timer(self):
         self.timer = 0
+        self.counter = 0
 
 
 class Scenario(BaseScenario):
@@ -135,7 +141,7 @@ class raw_env(SimpleEnv):
     def __init__(self, N=2, landmarks=3, max_cycles=25, continuous_actions=False):
         scenario = Scenario()
         world = scenario.make_world(N, landmarks)
-        super().__init__(scenario, world, max_cycles, continuous_actions)
+        super().__init__(scenario, world, max_cycles, continuous_actions, special_entities=TimerLandmark)
         self.metadata["name"] = "collab_nav"
 
     def is_collision(self, agent1, agent2):
