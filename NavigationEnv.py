@@ -5,6 +5,7 @@ from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from pettingzoo.utils import to_parallel
 
+from ray.rllib.env.env_context import EnvContext
 
 def get_env():
     '''
@@ -132,11 +133,12 @@ class Scenario(BaseScenario):
 
 
 class raw_env(SimpleEnv):
-    def __init__(self, N=2, landmarks=3, max_cycles=25, continuous_actions=False):
+    def __init__(self, config: EnvContext, N=2, landmarks=3, max_cycles=25, continuous_actions=False):
         scenario = Scenario()
         world = scenario.make_world(N, landmarks)
         super().__init__(scenario, world, max_cycles, continuous_actions)
         self.metadata["name"] = "collab_nav"
+        print(config)
 
     def is_collision(self, agent1, agent2):
         delta_pos = agent1.state.p_pos - agent2.state.p_pos
