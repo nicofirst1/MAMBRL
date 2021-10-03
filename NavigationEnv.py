@@ -1,14 +1,12 @@
-import matplotlib as mpl
 from typing import Dict
 
+import matplotlib as mpl
 import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
-from pettingzoo.utils import to_parallel
 from ray.rllib.env import PettingZooEnv
 
-from ray.rllib.env.env_context import EnvContext
 
 def get_env(kwargs):
     '''
@@ -19,11 +17,10 @@ def get_env(kwargs):
     elsewhere in the developer documentation.
     '''
     env = make_env(raw_env)
-    env= env(env_context=kwargs)
-    #env=to_parallel(env)
-    env= PettingZooEnv(env)
+    env = env(env_context=kwargs)
+    # env=to_parallel(env)
+    env = PettingZooEnv(env)
     return env
-
 
 
 def colorFader(c1, c2, mix=0):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)

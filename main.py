@@ -10,23 +10,25 @@ from NavigationModel import NavModel
 
 if __name__ == "__main__":
     debug = True
-    N = 2
+    agents = 2
     experiment_name = "collab_nav"
     model_name = f"{experiment_name}_model"
 
     ray.init(local_mode=True)
-    ModelCatalog.register_custom_model(model_name, NavModel)
 
+    ## ENV CONFIG
     env_config = dict(
-        N=N, landmarks=3, max_cycles=25, continuous_actions=False, name=experiment_name
+        N=agents, landmarks=3, max_cycles=25, continuous_actions=False, name=experiment_name
     )
 
     register_env(experiment_name, lambda config: get_env(config))
 
+    ## POLICY CONFIG
+    env = get_env(env_config)
+
     model_configs = dict(custom_model=model_name,
                          vf_share_layers=True, )
-
-    env = get_env(env_config)
+    ModelCatalog.register_custom_model(model_name, NavModel)
 
     policies = {agnt: (None, env.observation_space, env.action_space, {}) for agnt in env.agents}
     multiagent_config = dict(
@@ -34,9 +36,17 @@ if __name__ == "__main__":
         policy_mapping_fn=lambda agent_id: agent_id
     )
 
-    config = {"env":experiment_name,"simple_optimizer": True, "num_gpus": int(os.environ.get("RLLIB_NUM_GPUS", "0")),
+    ## MODEL CONFIG
+
+    model_configs = dict(custom_model=model_name,
+                         vf_share_layers=True, )
+    ModelCatalog.register_custom_model(model_name, NavModel)
+
+    config = {"env": experiment_name, "simple_optimizer": True, "num_gpus": int(os.environ.get("RLLIB_NUM_GPUS", "0")),
               "num_workers": 1 if not debug else 0, "framework": "tf", 'model': model_configs,
               'env_config': env_config, "multiagent": multiagent_config, }
+
+    ## TRAIING
 
     analysis = ray.tune.run(
         "PPO",
