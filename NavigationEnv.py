@@ -6,6 +6,7 @@ from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from pettingzoo.utils import to_parallel
+from ray.rllib.env import PettingZooEnv
 
 from ray.rllib.env.env_context import EnvContext
 
@@ -19,8 +20,8 @@ def get_env(kwargs):
     '''
     env = make_env(raw_env)
     env= env(env_context=kwargs)
-    env=to_parallel(env)
-
+    #env=to_parallel(env)
+    env= PettingZooEnv(env)
     return env
 
 

@@ -21,26 +21,26 @@ if __name__ == "__main__":
         N=N, landmarks=3, max_cycles=25, continuous_actions=False, name=experiment_name
     )
 
-    register_env(experiment_name, get_env)
+    register_env(experiment_name, lambda config: get_env(config))
 
     model_configs = dict(custom_model=model_name,
                          vf_share_layers=True, )
 
     env = get_env(env_config)
 
-    policies = {agnt: (None, env.observation_spaces[agnt], env.action_spaces[agnt], {}) for agnt in env.possible_agents}
+    policies = {agnt: (None, env.observation_space, env.action_space, {}) for agnt in env.agents}
     multiagent_config = dict(
         policies=policies,
         policy_mapping_fn=lambda agent_id: agent_id
     )
 
-    config = {"simple_optimizer": True, "num_gpus": int(os.environ.get("RLLIB_NUM_GPUS", "0")),
+    config = {"env":experiment_name,"simple_optimizer": True, "num_gpus": int(os.environ.get("RLLIB_NUM_GPUS", "0")),
               "num_workers": 1 if not debug else 0, "framework": "tf", 'model': model_configs,
-              'env_config': env_config, "multiagent": multiagent_config}
+              'env_config': env_config, "multiagent": multiagent_config, }
 
     analysis = ray.tune.run(
         "PPO",
-        name="navigation_test",
+        name=f"{experiment_name}_test",
         metric="episode_reward_mean",
         config=config)
     print(analysis)
