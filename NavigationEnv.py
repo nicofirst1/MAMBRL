@@ -1,3 +1,5 @@
+from typing import Dict
+
 import numpy as np
 from colour import Color
 from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
@@ -7,7 +9,7 @@ from pettingzoo.utils import to_parallel
 
 from ray.rllib.env.env_context import EnvContext
 
-def get_env():
+def get_env(kwargs):
     '''
     The env function wraps the environment in 3 wrappers by default. These
     wrappers contain logic that is common to many pettingzoo environments.
@@ -15,8 +17,11 @@ def get_env():
     to provide sane error messages. You can find full documentation for these methods
     elsewhere in the developer documentation.
     '''
+    env = make_env(raw_env)
+    env= env(env_context=kwargs)
+    env=to_parallel(env)
 
-    return to_parallel(make_env(raw_env)())
+    return env
 
 
 class TimerLandmark(Entity):
@@ -133,12 +138,11 @@ class Scenario(BaseScenario):
 
 
 class raw_env(SimpleEnv):
-    def __init__(self, config: EnvContext, N=2, landmarks=3, max_cycles=25, continuous_actions=False):
+    def __init__(self, env_context: Dict):
         scenario = Scenario()
-        world = scenario.make_world(N, landmarks)
-        super().__init__(scenario, world, max_cycles, continuous_actions)
+        world = scenario.make_world(env_context['N'], env_context["landmarks"])
+        super().__init__(scenario, world, env_context["max_cycles"], env_context["continuous_actions"])
         self.metadata["name"] = "collab_nav"
-        print(config)
 
     def is_collision(self, agent1, agent2):
         delta_pos = agent1.state.p_pos - agent2.state.p_pos
