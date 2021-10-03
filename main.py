@@ -1,35 +1,46 @@
-import time
+import os
+
+import ray
+from ray.rllib.models import ModelCatalog
+from ray.tune.logger import pretty_print
+from ray.tune.registry import register_env
 
 from NavigationEnv import get_env
+from NavigationModel import NavModel
 
-par_env = get_env()
+if __name__ == "__main__":
+    debug = True
+    N = 2
+    experiment_name = "collab_nav"
+    model_name = f"{experiment_name}_model"
 
-episodes = 30
-MAX_RESETS = 2
+    ray.init(local_mode=True)
+    ModelCatalog.register_custom_model(model_name, NavModel)
 
-for n_resets in range(MAX_RESETS):
-    obs = par_env.reset()
-    par_env.render()
+    env_config = dict(
+        N=N, landmarks=3, max_cycles=25, continuous_actions=False, name=experiment_name
+    )
 
-    done = {agent: False for agent in par_env.agents}
-    live_agents = par_env.agents[:]
-    has_finished = set()
-    for i in range(episodes):
-        actions = {
-            agent: space.sample()
-            for agent, space in par_env.action_spaces.items()
-            if agent in done and not done[agent]
-        }
-        obs, rew, done, info = par_env.step(actions)
-        par_env.render()
-        time.sleep(0.1)
+    register_env(experiment_name, lambda config: get_env(config))
 
-        for agent, d in done.items():
-            if d:
-                live_agents.remove(agent)
-        has_finished |= {agent for agent, d in done.items() if d}
-        if not par_env.agents:
-            assert has_finished == set(
-                par_env.possible_agents
-            ), "not all agents finished, some were skipped over"
-            break
+    model_configs = dict(custom_model=model_name,
+                         vf_share_layers=True, )
+
+    env = get_env(env_config)
+
+    policies = {agnt: (None, env.observation_space, env.action_space, {}) for agnt in env.agents}
+    multiagent_config = dict(
+        policies=policies,
+        policy_mapping_fn=lambda agent_id: agent_id
+    )
+
+    config = {"env":experiment_name,"simple_optimizer": True, "num_gpus": int(os.environ.get("RLLIB_NUM_GPUS", "0")),
+              "num_workers": 1 if not debug else 0, "framework": "tf", 'model': model_configs,
+              'env_config': env_config, "multiagent": multiagent_config, }
+
+    analysis = ray.tune.run(
+        "PPO",
+        name=f"{experiment_name}_test",
+        metric="episode_reward_mean",
+        config=config)
+    print(analysis)

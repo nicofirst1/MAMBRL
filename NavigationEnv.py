@@ -1,12 +1,16 @@
 import matplotlib as mpl
+from typing import Dict
+
 import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from pettingzoo.utils import to_parallel
+from ray.rllib.env import PettingZooEnv
 
+from ray.rllib.env.env_context import EnvContext
 
-def get_env():
+def get_env(kwargs):
     '''
     The env function wraps the environment in 3 wrappers by default. These
     wrappers contain logic that is common to many pettingzoo environments.
@@ -14,8 +18,12 @@ def get_env():
     to provide sane error messages. You can find full documentation for these methods
     elsewhere in the developer documentation.
     '''
+    env = make_env(raw_env)
+    env= env(env_context=kwargs)
+    #env=to_parallel(env)
+    env= PettingZooEnv(env)
+    return env
 
-    return to_parallel(make_env(raw_env)())
 
 
 def colorFader(c1, c2, mix=0):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
@@ -138,10 +146,10 @@ class Scenario(BaseScenario):
 
 
 class raw_env(SimpleEnv):
-    def __init__(self, N=2, landmarks=3, max_cycles=25, continuous_actions=False):
+    def __init__(self, env_context: Dict):
         scenario = Scenario()
-        world = scenario.make_world(N, landmarks)
-        super().__init__(scenario, world, max_cycles, continuous_actions, special_entities=TimerLandmark)
+        world = scenario.make_world(env_context['N'], env_context["landmarks"])
+        super().__init__(scenario, world, env_context["max_cycles"], env_context["continuous_actions"])
         self.metadata["name"] = "collab_nav"
 
     def is_collision(self, agent1, agent2):
