@@ -42,3 +42,15 @@ This project aims to design and test a customized model of Markov Decision Proce
 
 In this project, the notion of multi-agent envronment is implemented using a novel method which we call <b> ConnectedQ </b>
 
+
+## TODOs
+
+- [] add requirements.txt
+- [] check observations are correct in tune training
+- [] check rewards are correct in tune training
+- [] add gpu/cpu num in init (debug dependency)
+- [] add ppo configurations
+- [] add tune configurations
+- [] add tensorboard 
+- [] try test run
+- []
