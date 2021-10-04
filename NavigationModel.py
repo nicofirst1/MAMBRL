@@ -13,7 +13,8 @@ class NavModel(TFModelV2):
         )
 
     def forward(self, input_dict, state, seq_lens):
-        return self.model.forward(input_dict, state, seq_lens)
+        actions = self.model.forward(input_dict, state, seq_lens)
+        return actions
 
     def value_function(self):
         return self.model.value_function()

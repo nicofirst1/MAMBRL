@@ -156,6 +156,7 @@ class raw_env(SimpleEnv):
             world,
             env_context["max_cycles"],
             env_context["continuous_actions"],
+            special_entities=TimerLandmark,
         )
         self.metadata["name"] = "collab_nav"
 
