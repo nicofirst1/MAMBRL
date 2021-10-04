@@ -3,7 +3,6 @@ import os
 
 class Params:
 
-
     #### TRAINING params
 
     num_workers = 6

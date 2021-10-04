@@ -2,20 +2,20 @@ from typing import Dict
 
 import matplotlib as mpl
 import numpy as np
-from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
+from pettingzoo.mpe._mpe_utils.core import Agent, Entity, World
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from ray.rllib.env import PettingZooEnv
 
 
 def get_env(kwargs):
-    '''
+    """
     The env function wraps the environment in 3 wrappers by default. These
     wrappers contain logic that is common to many pettingzoo environments.
     We recommend you use at least the OrderEnforcingWrapper on your own environment
     to provide sane error messages. You can find full documentation for these methods
     elsewhere in the developer documentation.
-    '''
+    """
     env = make_env(raw_env)
     env = env(env_context=kwargs)
     # env=to_parallel(env)
@@ -23,7 +23,9 @@ def get_env(kwargs):
     return env
 
 
-def colorFader(c1, c2, mix=0):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+def colorFader(
+    c1, c2, mix=0
+):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
     return mpl.colors.to_rgb(mpl.colors.to_hex((1 - mix) * c1 + mix * c2))
 
 
@@ -37,7 +39,10 @@ class TimerLandmark(Entity):
     So the longer a landmark stays untouched the worse the penalty gets.
     """
 
-    colors = [colorFader(np.array([0, 1, 0]), np.array([1, 0, 0]), x / 100) for x in range(0, 100)]
+    colors = [
+        colorFader(np.array([0, 1, 0]), np.array([1, 0, 0]), x / 100)
+        for x in range(0, 100)
+    ]
 
     def __init__(self, increase=0.1):
         super().__init__()
@@ -145,8 +150,13 @@ class Scenario(BaseScenario):
 class raw_env(SimpleEnv):
     def __init__(self, env_context: Dict):
         scenario = Scenario()
-        world = scenario.make_world(env_context['N'], env_context["landmarks"])
-        super().__init__(scenario, world, env_context["max_cycles"], env_context["continuous_actions"])
+        world = scenario.make_world(env_context["N"], env_context["landmarks"])
+        super().__init__(
+            scenario,
+            world,
+            env_context["max_cycles"],
+            env_context["continuous_actions"],
+        )
         self.metadata["name"] = "collab_nav"
 
     def is_collision(self, agent1, agent2):

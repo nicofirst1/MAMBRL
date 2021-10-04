@@ -1,18 +1,19 @@
 import ray
+from NavigationEnv import get_env
+from NavigationModel import NavModel
+from Parameters import Params
 from ray.rllib.models import ModelCatalog
 from ray.tune.logger import pretty_print
 from ray.tune.registry import register_env
 
-from NavigationEnv import get_env
-from NavigationModel import NavModel
-from Parameters import Params
-
 
 def get_env_configs(params: Params):
-    ## ENV CONFIG
     env_config = dict(
-        N=params.agents, landmarks=params.landmarks, max_cycles=25, continuous_actions=False,
-        name=params.experiment_name
+        N=params.agents,
+        landmarks=params.landmarks,
+        max_cycles=25,
+        continuous_actions=False,
+        name=params.experiment_name,
     )
 
     register_env(params.experiment_name, lambda config: get_env(config))
@@ -25,18 +26,21 @@ def get_policy_configs(params: Params):
 
     ModelCatalog.register_custom_model(params.model_name, NavModel)
 
-    policies = {agnt: (None, env.observation_space, env.action_space, {}) for agnt in env.agents}
+    policies = {
+        agnt: (None, env.observation_space, env.action_space, {}) for agnt in env.agents
+    }
     policy_configs = dict(
-        policies=policies,
-        policy_mapping_fn=lambda agent_id: agent_id
+        policies=policies, policy_mapping_fn=lambda agent_id: agent_id
     )
 
     return policy_configs
 
 
 def get_model_configs(params: Params):
-    model_configs = dict(custom_model=params.model_name,
-                         vf_share_layers=True, )
+    model_configs = dict(
+        custom_model=params.model_name,
+        vf_share_layers=True,
+    )
     ModelCatalog.register_custom_model(params.model_name, NavModel)
     return model_configs
 
@@ -64,9 +68,9 @@ if __name__ == "__main__":
     configs = get_general_configs(params)
 
     # set specific configs in general dic
-    configs['model'] = model_configs
-    configs['env_config'] = env_config
-    configs['multiagent'] = policy_configs
+    configs["model"] = model_configs
+    configs["env_config"] = env_config
+    configs["multiagent"] = policy_configs
 
     ## TRAIING
 
@@ -74,5 +78,6 @@ if __name__ == "__main__":
         "PPO",
         name=f"{params.experiment_name}_test",
         metric="episode_reward_mean",
-        config=configs)
+        config=configs,
+    )
     print(analysis)
