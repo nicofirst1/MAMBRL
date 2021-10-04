@@ -53,4 +53,5 @@ In this project, the notion of multi-agent envronment is implemented using a nov
 - [] add tune configurations
 - [] add tensorboard 
 - [] try test run
-- []
+- [] dockerize
+- 

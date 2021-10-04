@@ -132,18 +132,18 @@ class Scenario(BaseScenario):
                 entity_pos.append(entity.state.p_pos - agent.state.p_pos)
         # communication of all other agents
         comm = []
-        other_pos = []
-        other_vel = []
+        other_agents_pos = []
+        other_agents_vel = []
         for other in world.agents:
             comm.append(other.state.c)
-            other_pos.append(other.state.p_pos - agent.state.p_pos)
-            other_vel.append(other.state.p_vel)
+            other_agents_pos.append(other.state.p_pos - agent.state.p_pos)
+            other_agents_vel.append(other.state.p_vel)
         return np.concatenate(
             [agent.state.p_vel]
             + [agent.state.p_pos]
             + entity_pos
-            + other_pos
-            + other_vel
+            + other_agents_pos
+            + other_agents_vel
         )
 
 

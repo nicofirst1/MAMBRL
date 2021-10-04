@@ -40,7 +40,7 @@ def get_policy_configs(params: Params):
         policies=policies, policy_mapping_fn=lambda agent_id: agent_id
     )
 
-    params.configs['policy_configs'] = env_config
+    params.configs['policy_configs'] = policy_configs
 
     return policy_configs
 
@@ -52,7 +52,7 @@ def get_model_configs(params: Params):
     )
     ModelCatalog.register_custom_model(params.model_name, NavModel)
 
-    params.configs['model_configs'] = env_config
+    params.configs['model_configs'] = model_configs
 
     return model_configs
 
@@ -136,3 +136,4 @@ if __name__ == "__main__":
     ## TRAIING
 
     visual_train(params, configs)
+    #tune_train(params, configs)
