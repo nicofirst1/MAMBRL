@@ -49,7 +49,7 @@ In this project, the notion of multi-agent envronment is implemented using a nov
 - [done] check observations are correct in tune training
 - [done] check rewards are correct in tune training
 - [done] add gpu/cpu num in init (debug dependency)
-- [] add ppo configurations
+- [done] add ppo configurations
 - [] add tune configurations
 - [] add tensorboard 
 - [] try test run

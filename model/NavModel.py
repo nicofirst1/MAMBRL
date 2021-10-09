@@ -1,8 +1,4 @@
-from typing import List
-
 from ray.rllib.models.tf import FullyConnectedNetwork, TFModelV2
-from ray.rllib.utils.typing import TensorType
-
 
 class NavModel(TFModelV2):
     """Example of a keras custom model that just delegates to an fc-net."""
