@@ -9,35 +9,29 @@ from ray.rllib.env import PettingZooEnv
 
 
 def get_env(kwargs):
-    """
-    The env function wraps the environment in 3 wrappers by default. These
+    """ The env function wraps the environment in 3 wrappers by default. These
     wrappers contain logic that is common to many pettingzoo environments.
     We recommend you use at least the OrderEnforcingWrapper on your own environment
     to provide sane error messages. You can find full documentation for these methods
-    elsewhere in the developer documentation.
-    """
+    elsewhere in the developer documentation. """
+
     env = make_env(raw_env)
     env = env(env_context=kwargs)
     # env=to_parallel(env)
     env = PettingZooEnv(env)
     return env
 
-
-def colorFader(
-    c1, c2, mix=0
-):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+# fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+def colorFader(c1, c2, mix=0):
     return mpl.colors.to_rgb(mpl.colors.to_hex((1 - mix) * c1 + mix * c2))
 
 
 class TimerLandmark(Entity):
-    """
-    Timer landmark class.
+    """ Timer landmark class.
     Each landmark increases its timer by the 'increase' param per step.
     This timer is proportional (timer* penalty) to the penalty agents get at each turn.
     The timer resets when an agent lands upon it and the timer starts from zero.
-
-    So the longer a landmark stays untouched the worse the penalty gets.
-    """
+    So the longer a landmark stays untouched the worse the penalty gets. """
 
     colors = [
         colorFader(np.array([0, 1, 0]), np.array([1, 0, 0]), x / 100)
@@ -71,6 +65,8 @@ class TimerLandmark(Entity):
 
 
 class Scenario(BaseScenario):
+    std_penalty: int
+
     def make_world(self, num_agents=1, num_landmarks=2, std_penalty=2):
         world = World()
         # set any world properties first
@@ -99,7 +95,6 @@ class Scenario(BaseScenario):
         return world
 
     def reset_world(self, world, np_random):
-
         # set random initial states
         for agent in world.agents:
             agent.color = np.array([0, 0, 1])
@@ -112,7 +107,8 @@ class Scenario(BaseScenario):
             landmark.reset(world, np_random)
 
     # return all agents that are not adversaries
-    def get_agents(self, world):
+    @staticmethod
+    def get_agents(world):
         return [agent for agent in world.agents]
 
     def reward(self, agent, world):
@@ -124,12 +120,14 @@ class Scenario(BaseScenario):
 
         return rew
 
-    def observation(self, agent, world):
+    @staticmethod
+    def observation(agent, world):
         # get positions of all entities in this agent's reference frame
         entity_pos = []
         for entity in world.landmarks:
             if not entity.boundary:
                 entity_pos.append(entity.state.p_pos - agent.state.p_pos)
+                
         # communication of all other agents
         comm = []
         other_agents_pos = []
@@ -139,11 +137,7 @@ class Scenario(BaseScenario):
             other_agents_pos.append(other.state.p_pos - agent.state.p_pos)
             other_agents_vel.append(other.state.p_vel)
         return np.concatenate(
-            [agent.state.p_vel]
-            + [agent.state.p_pos]
-            + entity_pos
-            + other_agents_pos
-            + other_agents_vel
+            [agent.state.p_vel] + [agent.state.p_pos] + entity_pos + other_agents_pos + other_agents_vel
         )
 
 
@@ -160,7 +154,8 @@ class raw_env(SimpleEnv):
         )
         self.metadata["name"] = "collab_nav"
 
-    def is_collision(self, agent1, agent2):
+    @staticmethod
+    def is_collision(agent1, agent2):
         delta_pos = agent1.state.p_pos - agent2.state.p_pos
         dist = np.sqrt(np.sum(np.square(delta_pos)))
         dist_min = agent1.size + agent2.size

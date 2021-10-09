@@ -61,7 +61,7 @@ def get_general_configs(params: Params):
     configs = dict(
         env=params.env_name,
         num_gpus=params.num_gpus if not params.debug else 0,
-        num_workers=params.num_workers if not params.debug else 0,
+        num_workers=params.num_cpus if not params.debug else 0,
         framework=params.framework,
     )
 
@@ -119,7 +119,6 @@ def visual_train(params: Params, config):
 
 if __name__ == "__main__":
     params = Params()
-
     ray.init(local_mode=params.debug)
 
     # Get configs

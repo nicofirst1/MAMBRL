@@ -1,4 +1,7 @@
+from typing import List
+
 from ray.rllib.models.tf import FullyConnectedNetwork, TFModelV2
+from ray.rllib.utils.typing import TensorType
 
 
 class NavModel(TFModelV2):
@@ -18,3 +21,6 @@ class NavModel(TFModelV2):
 
     def value_function(self):
         return self.model.value_function()
+
+    def import_from_h5(self, h5_file: str) -> None:
+        pass

@@ -45,10 +45,10 @@ In this project, the notion of multi-agent envronment is implemented using a nov
 
 ## TODOs
 
-- [] add requirements.txt
-- [] check observations are correct in tune training
-- [] check rewards are correct in tune training
-- [] add gpu/cpu num in init (debug dependency)
+- [done] add requirements.txt
+- [done] check observations are correct in tune training
+- [done] check rewards are correct in tune training
+- [done] add gpu/cpu num in init (debug dependency)
 - [] add ppo configurations
 - [] add tune configurations
 - [] add tensorboard 
