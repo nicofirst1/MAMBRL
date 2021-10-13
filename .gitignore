@@ -15,5 +15,5 @@ __pycache__/
 ### Log dir
 log_dir/
 
-
-
+### .idea folder
+.idea/**
