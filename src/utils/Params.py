@@ -1,41 +1,38 @@
+import os
+import uuid
 import multiprocessing
 import tensorflow as tf
 
 class Params:
-    debug = False
+    unique_id = str(uuid.uuid1())[:8]
 
-    #### TRAINING params
-    num_cpus = multiprocessing.cpu_count() if not debug else 1
-    num_gpus = len(tf.config.list_physical_devices('GPU')) if not debug else 0
-    framework = "tfe"
-    use_critic = True
-    use_gae = True
-    lambda_value = 1.0
-    kl_coeff = 0.2
-    rollout_fragment_length = 200
-    train_batch_size = 4000
-    sgd_minibatch_size = 128
-    shuffle_sequences = True
-    num_sgd_iter = 30
-    lr = 5e-5
-    lr_schedule = None
-    vf_loss_coeff = 1.0
-    entropy_coeff = 0.0
-    entropy_coeff_schedule = None
-    clip_param = 0.3
-    vf_clip_param = 10.0
-    grad_clip = None
-    kl_target = 0.01
-    batch_mode = "truncate_episodes"
-    observation_filter = "NoFilter"
+    #### DIRECTORIES ####
+    WORKING_DIR = os.getcwd().split("src")[0]
+    SRC_DIR     = os.path.join(WORKING_DIR, "src")
+    LOG_DIR     = os.path.join(WORKING_DIR, "log_dir")
+    RAY_DIR     = os.path.join(LOG_DIR, "ray_results")
+    EVAL_DIR    = os.path.join(LOG_DIR, "eval")
 
-    #### ENV params
-    agents = 2
-    landmarks = 3
-    horizon = 100
-    episodes = 5
-    env_name = "collab_nav"
-    model_name = f"{env_name}_model"
+    #### TRAINING ####
+    debug       = False
+    num_workers = multiprocessing.cpu_count()-1 if not debug else 1
+    num_gpus    = len(tf.config.list_physical_devices('GPU')) if not debug else 0
+    framework   = "tfe"
+
+    #### ENVIRONMENT ####
+    agents      = 2
+    landmarks   = 3
+    horizon     = 100
+    episodes    = 5
+    env_name    = "collab_nav"
+    model_name  = f"{env_name}_model"
+
+    #### EVALUATION ####
+    log_step            = 500
+    checkpoint_freq     = 50
+    resume_training     = False
+    alternating         = False
+    max_checkpoint_keep = 10
 
     #### Config Dict
     configs={}

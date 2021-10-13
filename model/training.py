@@ -6,13 +6,19 @@ from ray.tune.logger import pretty_print
 from rich.progress import track
 from env.NavEnv import get_env
 from src.utils import Params
+from src.utils.utils import trial_name_creator
 
 def tune_train(params: Params, configs):
     analysis = ray.tune.run(
         "PPO",
+        local_dir=params.LOG_DIR,
         name=f"{params.env_name}_test",
         metric="episode_reward_mean",
         config=configs,
+        trial_name_creator=trial_name_creator,
+        checkpoint_freq=params.checkpoint_freq,
+        keep_checkpoints_num=params.max_checkpoint_keep,
+        resume=params.resume_training
     )
     print(analysis)
 
