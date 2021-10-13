@@ -13,7 +13,7 @@ __pycache__/
 *$py.class
 
 ### Log dir
-log_dir/
+log_dir/**
 
 ### .idea folder
 .idea/**
