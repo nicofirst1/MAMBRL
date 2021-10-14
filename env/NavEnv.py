@@ -1,5 +1,5 @@
 import numpy as np
-from env.Scenario import Scenario
+from .Scenario import Scenario
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from ray.rllib.env import PettingZooEnv
 from typing import Dict
