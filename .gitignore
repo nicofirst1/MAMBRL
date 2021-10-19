@@ -17,3 +17,7 @@ log_dir/**
 
 ### .idea folder
 .idea/**
+
+### jypiter stuff
+!/colab/log_dir/
+!/colab/.ipynb_checkpoints/
