@@ -5,8 +5,8 @@ from ray.rllib.agents.ppo import PPOTrainer
 from ray.tune.logger import pretty_print
 from rich.progress import track
 from env.NavEnv import get_env
-from utils import Params
-from utils.utils import trial_name_creator
+from src.utils import Params
+from src.utils.utils import trial_name_creator
 
 def tune_train(params: Params, configs):
     analysis = ray.tune.run(

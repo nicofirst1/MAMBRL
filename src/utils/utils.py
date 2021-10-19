@@ -1,6 +1,6 @@
 from .Params import Params
 from env.NavEnv import get_env
-from model.NavModel import NavModel
+from src.model.NavModel import NavModel
 from ray.rllib.models import ModelCatalog
 from ray.tune.registry import register_env
 
