@@ -6,7 +6,7 @@ Install the dependencies with
 
 ## Training on colab
 You can train the model on
- [![Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nicofirs1/MAMBRL)
+ [![Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nicofirst1/MAMBRL)
 
 The notebook uses [weight and biases](https://wandb.ai/) in order to keep track of the experiment.
 
