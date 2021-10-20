@@ -11,7 +11,7 @@ from src.utils import Params
 from src.utils.utils import trial_name_creator
 
 
-def tune_train(params: Params, configs):
+def tune_train(params: Params, configs, callbacks):
     analysis = ray.tune.run(
         ppo.PPOTrainer,
         local_dir=params.LOG_DIR,
@@ -21,7 +21,8 @@ def tune_train(params: Params, configs):
         trial_name_creator=trial_name_creator,
         checkpoint_freq=params.checkpoint_freq,
         keep_checkpoints_num=params.max_checkpoint_keep,
-        resume=params.resume_training
+        resume=params.resume_training,
+        callbacks=callbacks,
     )
 
     checkpoints = analysis.get_trial_checkpoints_paths(trial=analysis.get_best_trial('episode_reward_mean'),

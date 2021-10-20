@@ -21,3 +21,6 @@ log_dir/**
 ### jypiter stuff
 !/colab/log_dir/
 !/colab/.ipynb_checkpoints/
+
+### weight and biases stuff
+src/wandb/**

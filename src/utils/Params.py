@@ -17,7 +17,7 @@ class Params:
     debug       = False
     num_workers = multiprocessing.cpu_count()-1 if not debug else 1
     num_gpus    = len(tf.config.list_physical_devices('GPU')) if not debug else 0
-    framework   = "tfe"
+    framework   = "tf"
 
     #### ENVIRONMENT ####
     agents      = 2
