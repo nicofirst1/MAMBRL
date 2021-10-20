@@ -1,10 +1,15 @@
 ## Installation 
-This project requires python 3.9.
-Install pettingzoo with
-`pip install pettingzoo`
-`pip install Pillow`
-`pip install pyglet`
+This project requires python>= 3.6
+Install the dependencies with
+`pip install -r requirements.txt`
 
+
+## Training on colab
+You can train the model on [![Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nicofirs1/MAMBRL/]
+
+The notebook uses [weight and biases](https://wandb.ai/) in order to keep track of the experiment.
+
+# Problem Statement
 
 ## Description of the Problem:
 
@@ -45,13 +50,7 @@ In this project, the notion of multi-agent envronment is implemented using a nov
 
 ## TODOs
 
-- [done] add requirements.txt
-- [done] check observations are correct in tune training
-- [done] check rewards are correct in tune training
-- [done] add gpu/cpu num in init (debug dependency)
-- [done] add ppo configurations
+
 - [] add tune configurations
-- [] add tensorboard 
-- [] try test run
 - [] dockerize
 - 
