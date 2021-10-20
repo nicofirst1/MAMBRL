@@ -1,7 +1,7 @@
 import time
 
 import ray
-from ray.rllib.agents.ppo import PPOTrainer
+from ray.rllib.agents.ppo import PPOTrainer, ppo
 from ray.tune import register_env
 from ray.tune.logger import pretty_print
 from rich.progress import track
@@ -13,7 +13,7 @@ from src.utils.utils import trial_name_creator
 
 def tune_train(params: Params, configs):
     analysis = ray.tune.run(
-        "PPO",
+        ppo.PPOTrainer,
         local_dir=params.LOG_DIR,
         name=f"{params.env_name}_test",
         metric="episode_reward_mean",
@@ -23,8 +23,38 @@ def tune_train(params: Params, configs):
         keep_checkpoints_num=params.max_checkpoint_keep,
         resume=params.resume_training
     )
-    print(analysis)
 
+    checkpoints = analysis.get_trial_checkpoints_paths(trial=analysis.get_best_trial('episode_reward_mean'),
+                                                       metric='episode_reward_mean')
+    # retriev the checkpoint path; we only have a single checkpoint, so take the first one
+    checkpoint_path = checkpoints[0][0]
+    return checkpoint_path, analysis
+
+
+def load(self, path):
+    """
+    Load a trained RLlib agent from the specified path. Call this before testing a trained agent.
+    :param path: Path pointing to the agent's saved checkpoint (only used for RLlib agents)
+    """
+    self.agent = ppo.PPOTrainer(config=self.config, env=self.env_class)
+    self.agent.restore(path)
+
+
+def test(self):
+    """Test trained agent for a single episode. Return the episode reward"""
+    # instantiate env class
+    env = self.env_class(self.env_config)
+
+    # run until episode ends
+    episode_reward = 0
+    done = False
+    obs = env.reset()
+    while not done:
+        action = self.agent.compute_action(obs)
+        obs, reward, done, info = env.step(action)
+        episode_reward += reward
+
+    return episode_reward
 
 def visual_train(params: Params, config):
     agent = PPOTrainer(env=params.env_name, config=config)
