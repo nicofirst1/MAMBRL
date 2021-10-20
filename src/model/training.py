@@ -1,12 +1,15 @@
-import ray
 import time
 
+import ray
 from ray.rllib.agents.ppo import PPOTrainer
+from ray.tune import register_env
 from ray.tune.logger import pretty_print
 from rich.progress import track
+
 from env.NavEnv import get_env
 from src.utils import Params
 from src.utils.utils import trial_name_creator
+
 
 def tune_train(params: Params, configs):
     analysis = ray.tune.run(
@@ -24,8 +27,8 @@ def tune_train(params: Params, configs):
 
 
 def visual_train(params: Params, config):
-    PPOagent = PPOTrainer(env=params.env_name, config=config)
-    # PPOagent.restore(checkpoint_path)
+    agent = PPOTrainer(env=params.env_name, config=config)
+    # agent.restore(checkpoint_path)
 
     env = get_env(config['env_config'])
 
@@ -48,7 +51,7 @@ def visual_train(params: Params, config):
                 break
 
             for agent in env.agents:
-                action, _, _ = PPOagent.get_policy(agent).compute_single_action(observations[agent])
+                action, _, _ = agent.get_policy(agent).compute_single_action(observations[agent])
                 actions[agent] = action
                 obs, rew, done, info = env.step(actions)
 
@@ -60,3 +63,16 @@ def visual_train(params: Params, config):
                 env.render()
 
                 time.sleep(0.1)
+
+
+def agent_train(params: Params, config):
+    register_env(params.env_name,
+                 lambda config: get_env(config))
+
+    agent = PPOTrainer(env=params.env_name, config=config)
+    # agent.restore(checkpoint_path)
+
+    ep=0
+    for ep in track(range(params.episodes), description=f"Episode {ep}..."):
+        result = agent.train()
+        pretty_print(result)
