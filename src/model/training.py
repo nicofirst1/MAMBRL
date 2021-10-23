@@ -57,8 +57,9 @@ def test(self):
 
     return episode_reward
 
-def visual_train(params: Params, config):
-    agent = PPOTrainer(env=params.env_name, config=config)
+
+def visual_train(params: Params, config, render=True):
+    PPO_Agent = PPOTrainer(env=params.env_name, config=config)
     # agent.restore(checkpoint_path)
 
     env = get_env(config['env_config'])
@@ -75,15 +76,15 @@ def visual_train(params: Params, config):
         obs = env.reset()
         observations.update(obs)
 
-        env.render()
+        if render: env.render()
         for _ in track(range(params.horizon), description=f"Episode {ep}..."):
 
             if dones['__all__']:
                 break
 
-            for agent in env.agents:
-                action, _, _ = agent.get_policy(agent).compute_single_action(observations[agent])
-                actions[agent] = action
+            for agent_id in env.agents:
+                action, _, _ = PPO_Agent.get_policy(agent_id).compute_single_action(observations[agent_id])
+                actions[agent_id] = action
                 obs, rew, done, info = env.step(actions)
 
                 observations.update(obs)
@@ -91,9 +92,49 @@ def visual_train(params: Params, config):
                 dones.update(done)
                 infos.update(info)
 
-                env.render()
+                if render:
+                    env.render()
 
-                time.sleep(0.1)
+                    time.sleep(0.1)
+
+
+def cnn_train(params: Params, config):
+    PPO_Agent = PPOTrainer(env=params.env_name, config=config)
+    # agent.restore(checkpoint_path)
+
+    env = get_env(config['env_config'])
+
+    # building dicts
+    observations = {ag: 0 for ag in env.agents}
+    actions = {ag: 0 for ag in env.agents}
+    rewards = {ag: 0 for ag in env.agents}
+    dones = {ag: 0 for ag in env.agents}
+    dones["__all__"] = False
+    infos = {ag: {} for ag in env.agents}
+
+    for ep in range(params.episodes):
+        obs = env.reset()
+        observations.update(obs)
+
+        for _ in track(range(params.horizon), description=f"Episode {ep}..."):
+
+            if dones['__all__']:
+                break
+
+            for agent_id in env.agents:
+                obs = observations[agent_id]
+                action, _, _ = PPO_Agent.get_policy(agent_id).compute_single_action(obs)
+                actions[agent_id] = action
+
+                obs, rew, done, info = env.step(actions)
+                img = env.render(mode="rgb_array")
+
+                obs={k:img for k in obs.keys()}
+
+                observations.update(obs)
+                rewards.update(rew)
+                dones.update(done)
+                infos.update(info)
 
 
 def agent_train(params: Params, config):
@@ -103,7 +144,7 @@ def agent_train(params: Params, config):
     agent = PPOTrainer(env=params.env_name, config=config)
     # agent.restore(checkpoint_path)
 
-    ep=0
+    ep = 0
     for ep in track(range(params.episodes), description=f"Episode {ep}..."):
         result = agent.train()
         pretty_print(result)

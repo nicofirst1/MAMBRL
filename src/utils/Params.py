@@ -26,6 +26,7 @@ class Params:
     episodes    = 5
     env_name    = "collab_nav"
     model_name  = f"{env_name}_model"
+    obs_type    = "image" #or "states"
 
     #### EVALUATION ####
     log_step            = 500

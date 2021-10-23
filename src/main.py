@@ -1,5 +1,5 @@
 import ray
-from model.training import visual_train, tune_train, agent_train
+from model.training import visual_train, tune_train, agent_train, cnn_train
 from utils.utils import *
 
 if __name__ == "__main__":
@@ -43,6 +43,7 @@ if __name__ == "__main__":
     }
 
     ## TRAIING
-    #visual_train(params, configs)
+    cnn_train(params, configs)
+    #visual_train(params, configs, render=True)
     #tune_train(params, configs)
-    agent_train(params,configs)
+    #agent_train(params,configs)

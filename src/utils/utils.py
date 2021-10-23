@@ -1,3 +1,6 @@
+import gym
+import numpy as np
+
 from .Params import Params
 from env.NavEnv import get_env
 from src.model.NavModel import NavModel
@@ -23,8 +26,22 @@ def get_policy_configs(params: Params):
     env = get_env(params.configs['env_config'])
     ModelCatalog.register_custom_model(params.model_name, NavModel)
 
+    if params.obs_type=="image":
+        shape = env.render(mode="rgb_array").shape
+        obs_dim = gym.spaces.Box(
+            low=0,
+            high=255,
+            shape=shape,
+            dtype=np.uint8,
+        )
+    elif params.obs_type=="states":
+        obs_dim= env.observation_space
+
+    else:
+        raise NotImplementedError(f"No observation space for name '{params.obs_type}'")
+
     policies = {
-        agnt: (None, env.observation_space, env.action_space, {}) for agnt in env.agents
+        agnt: (None, obs_dim, env.action_space, {}) for agnt in env.agents
     }
     policy_configs = dict(
         policies=policies, policy_mapping_fn=lambda agent_id: agent_id
