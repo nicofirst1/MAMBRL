@@ -1,11 +1,12 @@
 import gym
 import numpy as np
-
-from .Params import Params
-from env.NavEnv import get_env
-from src.model.NavModel import NavModel
 from ray.rllib.models import ModelCatalog
 from ray.tune.registry import register_env
+
+from src.env.NavEnv import get_env
+from src.model.NavModel import NavModel
+from .Params import Params
+
 
 def get_env_configs(params: Params):
     env_config = dict(
@@ -26,7 +27,7 @@ def get_policy_configs(params: Params):
     env = get_env(params.configs['env_config'])
     ModelCatalog.register_custom_model(params.model_name, NavModel)
 
-    if params.obs_type=="image":
+    if params.obs_type == "image":
         shape = env.render(mode="rgb_array").shape
         obs_dim = gym.spaces.Box(
             low=0,
@@ -34,8 +35,8 @@ def get_policy_configs(params: Params):
             shape=shape,
             dtype=np.uint8,
         )
-    elif params.obs_type=="states":
-        obs_dim= env.observation_space
+    elif params.obs_type == "states":
+        obs_dim = env.observation_space
 
     else:
         raise NotImplementedError(f"No observation space for name '{params.obs_type}'")
@@ -77,6 +78,7 @@ def get_general_configs(params: Params):
     )
 
     return configs
+
 
 def trial_name_creator(something):
     name = str(something).rsplit("_", 1)[0]

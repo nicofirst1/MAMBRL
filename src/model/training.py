@@ -1,12 +1,12 @@
 import time
 
 import ray
+from env.NavEnv import get_env
 from ray.rllib.agents.ppo import PPOTrainer, ppo
 from ray.tune import register_env
 from ray.tune.logger import pretty_print
 from rich.progress import track
 
-from env.NavEnv import get_env
 from src.utils import Params
 from src.utils.utils import trial_name_creator
 
@@ -105,7 +105,6 @@ def cnn_train(params: Params, config):
     env = get_env(config['env_config'])
 
     # building dicts
-    observations = {ag: 0 for ag in env.agents}
     actions = {ag: 0 for ag in env.agents}
     rewards = {ag: 0 for ag in env.agents}
     dones = {ag: 0 for ag in env.agents}
@@ -113,8 +112,10 @@ def cnn_train(params: Params, config):
     infos = {ag: {} for ag in env.agents}
 
     for ep in range(params.episodes):
-        obs = env.reset()
-        observations.update(obs)
+        # reset envs
+        _ = env.reset()
+        # call render and set image as observation value
+        img = env.render(mode="rgb_array")
 
         for _ in track(range(params.horizon), description=f"Episode {ep}..."):
 
@@ -122,16 +123,12 @@ def cnn_train(params: Params, config):
                 break
 
             for agent_id in env.agents:
-                obs = observations[agent_id]
-                action, _, _ = PPO_Agent.get_policy(agent_id).compute_single_action(obs)
+                action, _, _ = PPO_Agent.get_policy(agent_id).compute_single_action(img)
                 actions[agent_id] = action
 
-                obs, rew, done, info = env.step(actions)
+                _, rew, done, info = env.step(actions)
                 img = env.render(mode="rgb_array")
 
-                obs={k:img for k in obs.keys()}
-
-                observations.update(obs)
                 rewards.update(rew)
                 dones.update(done)
                 infos.update(info)
