@@ -3,6 +3,14 @@ This project requires python>= 3.6
 Install the dependencies with
 `pip install -r requirements.txt`
 
+Moreover we are using a custom version of the PettingZoo library, in order to install it execute:
+
+```
+cd PettingZoo
+python setup.py install
+```
+If you wish to modify the library while coding use `python setup.py delvelop` instead.
+
 
 ## Training on colab
 You can train the model on

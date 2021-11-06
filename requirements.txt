@@ -2,7 +2,6 @@ ray==1.6.0
 tensorflow==2.6.0
 env==0.1.0
 rich==10.12.0
-pettingzoo==1.13
 ray[rllib]
 ray[tune]
 wandb
