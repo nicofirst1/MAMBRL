@@ -1,10 +1,9 @@
-import ray
-from model.training import visual_train, tune_train, agent_train, cnn_train
-from utils.utils import *
+from model.train import train
+from common.utils import *
 
 if __name__ == "__main__":
     params = Params()
-    ray.init(local_mode=params.debug)
+    #ray.init(local_mode=params.debug)
 
     # Get configs
     env_config = get_env_configs(params)
@@ -25,12 +24,19 @@ if __name__ == "__main__":
         "lr": 3e-4,
         "lambda": .95,
         "gamma": .998,
-        "entropy_coeff": 0.01,
+        "entropy_coef": 0.01,
         "clip_param": 0.2,
         "use_critic": True,
         "use_gae": True,
         "grad_clip": 5,
         "num_sgd_iter": 10,
+        "value_loss_coef": 0.5,
+        "max_grad_norm": 0.5,
+        "num_steps": 5,
+        "num_frames": 10,
+        "eps": 1e-5,
+        "alpha": 0.99,
+        "full_rollout": False,
 
         # Callbacks
         "callbacks": {},
@@ -42,8 +48,5 @@ if __name__ == "__main__":
         "multiagent": policy_configs
     }
 
-    ## TRAIING
-    cnn_train(params, configs)
-    #visual_train(params, configs, render=True)
-    #tune_train(params, configs)
-    #agent_train(params,configs)
+    ## TRAINING
+    train(params, configs)

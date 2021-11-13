@@ -15,9 +15,11 @@ class Params:
 
     #### TRAINING ####
     debug       = False
+    resize      = True
+    obs_shape = (3, 32, 32)
     num_workers = multiprocessing.cpu_count()-1 if not debug else 1
     num_gpus    = len(tf.config.list_physical_devices('GPU')) if not debug else 0
-    framework   = "tf"
+    framework   = "torch"
 
     #### ENVIRONMENT ####
     agents      = 2
