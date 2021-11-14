@@ -45,6 +45,8 @@ def train(params: Params, config: dict):
     actor_critic = actor_critic.to(device)
 
     rollout = RolloutStorage(config['num_steps'], 1, obs_space)
+    if device == "cuda":
+        rollout.cuda()
 
     all_rewards = []
     all_losses = []
@@ -63,25 +65,43 @@ def train(params: Params, config: dict):
     episode_rewards = torch.zeros(1, 1)
     final_rewards = torch.zeros(1, 1)
 
+    """
+        How to include the multi agent in this cicles?
+    """
     for i in range(config['num_frames']):
         for step in range(config['num_steps']):
-            current_state = current_state.to(device)
-            action = actor_critic.act(current_state)
+            for agent_id in env.agents:
+                current_state = current_state.to(device)
+                action = actor_critic.act(current_state)
 
-            ###Addeded these lines to make it work
-            action = action.cpu().numpy()[0]
-            next_state, reward, done, _ = env.step([int(action)])
-            #next_state, reward, done, _ = env.step(action.detach().cpu().numpy())
+                ###Addeded these lines to make it work
+                action = action.cpu().numpy()[0]
+                _, reward, done, _ = env.step({agent_id: action})
+                #next_state, reward, done, _ = env.step(action.detach().cpu().numpy())
 
-            reward = torch.FloatTensor(reward).unsqueeze(1)
-            episode_rewards += reward
-            masks = torch.FloatTensor(1 - np.array(done)).unsqueeze(1)
-            final_rewards *= masks
-            final_rewards += (1 - masks) * episode_rewards
-            episode_rewards *= masks
+                ## Our reward is a dict {'agent_0': reward}
+                ##reward = torch.FloatTensor(reward).unsqueeze(1)
+                reward = reward[agent_id]
+                episode_rewards += reward
 
-            current_state = torch.FloatTensor(np.float32(next_state))
-            rollout.insert(step, current_state, action.data, reward, masks)
+                ## Added by me
+                done = [int(x) for x in done.values()]
+                done = done[:-1]
+
+                masks = torch.FloatTensor(1 - np.array(done)).unsqueeze(1)
+                final_rewards *= masks
+                final_rewards += (1 - masks) * episode_rewards
+                episode_rewards *= masks
+
+                next_state = env.render(mode="rgb_array")
+                next_state = np.moveaxis(next_state, -1, 0)
+                if params.resize:
+                    next_state = resize(next_state, params.obs_shape)
+                next_state = np.expand_dims(next_state, axis=0)
+
+                current_state = torch.FloatTensor(np.float32(next_state))
+                #rollout.insert(step, current_state, action.data, reward, masks)
+                rollout.insert(step, current_state, torch.Tensor(np.reshape(action, (1, 1))), torch.Tensor(np.reshape(reward, (1, 1))), masks)
 
         _, next_value = actor_critic(rollout.states[-1])
         next_value = next_value.data
@@ -101,6 +121,7 @@ def train(params: Params, config: dict):
         distil_loss = 0.01 * (F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)).sum(1).mean()
 
         values = values.view(config['num_steps'], 1, 1)
+
         action_log_probs = action_log_probs.view(config['num_steps'], 1, 1)
         advantages = returns - values
 
@@ -116,8 +137,8 @@ def train(params: Params, config: dict):
         distil_optimizer.zero_grad()
         distil_loss.backward()
         optimizer.step()
-        wandb.log({"loss": loss.item()})
-        wandb.log({"reward": final_rewards.mean()})
+        #wandb.log({"loss": loss.item()})
+        #wandb.log({"reward": final_rewards.mean()})
 
         if i % 100 == 0:
             all_rewards.append(final_rewards.mean())
@@ -125,6 +146,6 @@ def train(params: Params, config: dict):
             print("Update {}:".format(i))
             print("\t Mean Loss: {}".format(np.mean(all_losses[-10:])))
             print("\t Last 10 Mean Reward: {}".format(np.mean(all_rewards[-10:])))
-            wandb.log({"Mean Reward": np.mean(all_rewards[-10:])})
+            #wandb.log({"Mean Reward": np.mean(all_rewards[-10:])})
 
         rollout.after_update()

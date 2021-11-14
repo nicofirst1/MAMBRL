@@ -22,8 +22,8 @@ class Params:
     framework   = "torch"
 
     #### ENVIRONMENT ####
-    agents      = 2
-    landmarks   = 3
+    agents      = 1
+    landmarks   = 2
     horizon     = 100
     episodes    = 5
     env_name    = "collab_nav"

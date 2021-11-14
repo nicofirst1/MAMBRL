@@ -83,6 +83,14 @@ class ImaginationCore(nn.Module):
 
             """
                 Added by me to go back from tensor of (1024,) to image of (3, 32, 32)
+                
+                Qui ci sta un problema -> dentro il rollout viene inserito lo stato
+                con dimensione (1, 1, 3, 32, 32) (riga 102) e questo poi da problemi quando vengono
+                settati più num_step (problemi sulla chiamata riga 111 di train.py),
+                perché nel rollout se ci sono due stati lo shape sarà (2, 1, 3, 32, 32)
+                e questo shape non piace alla rete neurale. Bisogna capire dove vanno
+                aggiustate le cose, perché la chiamata riga 44 di I2A.py (chiamata all'env_model)
+                sembra volere lo shape (1, 1, 3, 32, 32) quindi quest'ultimo sembra essere giusto!
             """
             imagined_state = imagined_state.detach().cpu().numpy()
             imagined_state = np.concatenate([imagined_state, imagined_state, imagined_state])
@@ -92,6 +100,7 @@ class ImaginationCore(nn.Module):
             onehot_reward[range(rollout_batch_size), imagined_reward.detach().cpu().numpy()] = 1
 
             rollout_states.append(imagined_state.unsqueeze(0))
+            #rollout_states.append(imagined_state)
             rollout_rewards.append(onehot_reward.unsqueeze(0))
 
             state = imagined_state.to(device)
