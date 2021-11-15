@@ -2,7 +2,7 @@ import numpy as np
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from PettingZoo.pettingzoo.utils import wrappers
-from .Scenario import Scenario
+from src.env.Scenario import Scenario
 from ray.rllib.env import PettingZooEnv, ParallelPettingZooEnv
 from typing import Dict
 

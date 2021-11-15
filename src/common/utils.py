@@ -3,7 +3,7 @@ import numpy as np
 from ray.rllib.models import ModelCatalog
 
 from src.env.NavEnv import get_env
-from .Params import Params
+from src.common.Params import Params
 
 
 def get_env_configs(params: Params):

@@ -1,5 +1,9 @@
-from model.train import train
-from common.utils import *
+import sys
+import os
+print(os.path.abspath(os.path.pardir))
+sys.path.insert(1, os.path.abspath(os.path.pardir))
+from src.model.train import train
+from src.common.utils import *
 
 if __name__ == "__main__":
     params = Params()
