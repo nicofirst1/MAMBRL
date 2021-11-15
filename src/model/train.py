@@ -1,3 +1,5 @@
+from itertools import chain
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,6 +17,9 @@ from src.model.RolloutStorage import RolloutStorage
 
 
 def parametrize_state(params):
+    """
+    Function used to fix image coming from env
+    """
     def inner(state):
         state = np.moveaxis(state, -1, 0)
         if params.resize:
@@ -35,6 +40,9 @@ def mas_dict2tensor(agent_dict):
 
 
 def get_actor_critic(obs_space, distil_policy, params):
+    """
+    Create all the modules to build the i2a
+    """
     env_model = EnvModel(obs_space, obs_space[1] * obs_space[2], 1)
     env_model = env_model.to(params.device)
 
@@ -68,73 +76,67 @@ def train(params: Params, config: dict):
 
     ac_dict = {agent_id: get_actor_critic(obs_space, distil_policy, params) for agent_id in env.agents}
 
-    optim_params = []
-    for ac in ac_dict.values():
-        optim_params += list(ac.parameters())
+    ac_optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
+    ac_optim_params = chain.from_iterable(ac_optim_params)
 
-    optimizer = optim.RMSprop(optim_params, config['lr'], eps=config['eps'],
+    ac_optimizer = optim.RMSprop(ac_optim_params, config['lr'], eps=config['eps'],
                               alpha=config['alpha'])
 
     state_fn = parametrize_state(params)
 
     rollout = RolloutStorage(params.num_steps, obs_space, num_agents=params.agents)
-    if params.device == "cuda":
-        rollout.cuda()
+    rollout.to(params.device)
 
     all_rewards = []
     all_losses = []
 
-    _ = env.reset()
-    state = env.render(mode="rgb_array")
-    current_state = state_fn(state)
-
-    rollout.states[0].copy_(current_state)
-
     episode_rewards = torch.zeros(1, 1)
     final_rewards = torch.zeros(1, 1)
 
-    """
-        How to include the multi agent in this cicles?
-    """
+
     for i in range(params.episodes):
+        # init dicts and reset env
         dones = {agent_id: False for agent_id in env.agents}
         action_dict = {agent_id: False for agent_id in env.agents}
+
         _ = env.reset()
+        state = env.render(mode="rgb_array")
+        current_state = state_fn(state)
 
         for step in range(params.num_steps):
 
-            if current_state.ndim == 3:
-                current_state = current_state.to(params.device).unsqueeze(dim=0)
+            current_state = current_state.to(params.device).unsqueeze(dim=0)
 
+            # let every agent act
             for agent_id in env.agents:
+
+                # skip action for done agents
                 if dones[agent_id]:
-                    # skip action for done agents
                     action_dict[agent_id] = None
                     continue
+
                 action = ac_dict[agent_id].act(current_state)
                 action_dict[agent_id] = int(action)
 
+            ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             _, rewards, dones, _ = env.step(action_dict)
 
-            ## Our reward is a dict {'agent_0': reward}
+            # todo: log rewards better
             episode_rewards += sum(rewards.values())
 
-            ## Added by me
-
+            # if done for all agents end episode
             if dones.pop("__all__"):
-                # if done for all agents end episode
                 break
 
             # sort in agent orders and convert to list of int for tensor
-
             masks = 1 - mas_dict2tensor(dones)
             rewards = mas_dict2tensor(rewards)
+            actions = mas_dict2tensor(action_dict)
 
             next_state = env.render(mode="rgb_array")
             current_state = state_fn(next_state)
 
-            # rollout.insert(step, current_state, action.data, reward, masks)
-            rollout.insert(step, current_state, action, rewards, masks)
+            rollout.insert(step, current_state, actions, rewards, masks)
 
         # from now on the last dimension is the number of agents
 
@@ -147,11 +149,13 @@ def train(params: Params, config: dict):
 
         returns = rollout.compute_returns(next_value, config['gamma'])
 
+
         tmp = [ac_dict[id].evaluate_actions(
             rollout.states[:-1],
             rollout.actions
         ) for id in env.agents]
 
+        # unpack all the calls from before
         logit, action_log_probs, values, entropy = tuple(map(torch.stack, zip(*tmp)))
 
         distil_logit, _, _, _ = distil_policy.evaluate_actions(
@@ -159,10 +163,16 @@ def train(params: Params, config: dict):
             rollout.actions
         )
 
+        # estiamte distil loss and backpropag
         distil_loss = F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)
         distil_loss = distil_loss.sum(1).mean()
         distil_loss *= 0.01
 
+        distil_optimizer.zero_grad()
+        distil_loss.backward()
+        distil_optimizer.step()
+
+        # estiamte other loss and backpropag
         values = values.view(params.agents, params.num_steps, -1)
 
         action_log_probs = action_log_probs.view(params.agents, params.num_steps, -1)
@@ -171,25 +181,17 @@ def train(params: Params, config: dict):
         value_loss = advantages.pow(2).mean()
         action_loss = -(advantages.data * action_log_probs).mean()
 
-        distil_optimizer.zero_grad()
-        distil_loss.backward()
-        distil_optimizer.step()
-
-        optimizer.zero_grad()
+        ac_optimizer.zero_grad()
         loss = value_loss * config['value_loss_coef'] + action_loss - entropy * config['entropy_coef']
         loss = loss.mean()
         loss.backward()
-        nn.utils.clip_grad_norm_(optim_params, config['max_grad_norm'])
-        optimizer.step()
+        nn.utils.clip_grad_norm_(ac_optim_params, config['max_grad_norm'])
+        ac_optimizer.step()
 
-        # wandb.log({"loss": loss.item()})
-        # wandb.log({"reward": final_rewards.mean()})
+
 
         all_rewards.append(final_rewards.mean())
         all_losses.append(loss.item())
         print("Update {}:".format(i))
-        print("\t Mean Loss: {}".format(np.mean(all_losses[-10:])))
-        print("\t Last 10 Mean Reward: {}".format(np.mean(all_rewards[-10:])))
-        # wandb.log({"Mean Reward": np.mean(all_rewards[-10:])})
 
-        rollout.after_update()
+

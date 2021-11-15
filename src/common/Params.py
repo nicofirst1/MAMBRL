@@ -26,7 +26,7 @@ class Params:
     framework = "torch"
 
     #### ENVIRONMENT ####
-    agents = 1
+    agents = 2
     landmarks = 2
     horizon = 10
     episodes = 5
