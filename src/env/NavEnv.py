@@ -1,7 +1,9 @@
 import numpy as np
+
+from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
+from PettingZoo.pettingzoo.utils import wrappers
 from .Scenario import Scenario
-from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
-from ray.rllib.env import PettingZooEnv
+from ray.rllib.env import PettingZooEnv, ParallelPettingZooEnv
 from typing import Dict
 
 def get_env(kwargs):
@@ -10,11 +12,9 @@ def get_env(kwargs):
     We recommend you use at least the OrderEnforcingWrapper on your own environment
     to provide sane error messages. You can find full documentation for these methods
     elsewhere in the developer documentation. """
-
-    env = make_env(raw_env)
-    env = env(env_context=kwargs)
+    env = raw_env(kwargs)
     # env=to_parallel(env)
-    env = PettingZooEnv(env)
+    env = ParallelPettingZooEnv(env)
     return env
 
 class raw_env(SimpleEnv):
@@ -37,8 +37,11 @@ class raw_env(SimpleEnv):
         dist_min = agent1.size + agent2.size
         return True if dist < dist_min else False
 
-    def step(self, action):
-        super(raw_env, self).step(action)
+    def step(self, actions):
+
+        for agent_id, action in actions.items():
+            self.agent_selection=agent_id
+            super(raw_env, self).step(action)
 
         for landmark in self.world.landmarks:
 
@@ -55,3 +58,5 @@ class raw_env(SimpleEnv):
                 landmark.reset_timer()
             else:
                 landmark.step()
+
+        return None, self.rewards, self.dones, self.infos

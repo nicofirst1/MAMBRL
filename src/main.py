@@ -32,14 +32,13 @@ if __name__ == "__main__":
         "num_sgd_iter": 10,
         "value_loss_coef": 0.5,
         "max_grad_norm": 0.5,
-        "num_steps": 1,
-        "num_frames": 1,
         "eps": 1e-5,
         "alpha": 0.99,
-        "full_rollout": False,
 
         # Callbacks
         "callbacks": {},
+
+
 
         # Model
         "model": model_configs,

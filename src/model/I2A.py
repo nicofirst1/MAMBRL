@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from model.ActorCritic import OnPolicy
-from model.RolloutEncoder import RolloutEncoder
+from src.model.ActorCritic import OnPolicy
+from src.model.RolloutEncoder import RolloutEncoder
 
 
 class I2A(OnPolicy):

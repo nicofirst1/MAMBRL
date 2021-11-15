@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
 """
     Here this has to be clarified.. what is this pixels and how the function
@@ -38,7 +37,7 @@ def target_to_pix(imagined_states):
 
 
 class ImaginationCore(nn.Module):
-    def __init__(self, num_rolouts, in_shape, num_actions, num_rewards, env_model, distil_policy, full_rollout=True):
+    def __init__(self, num_rolouts, in_shape, num_actions, num_rewards, env_model, distil_policy, device, full_rollout=True):
         super().__init__()
         self.num_rolouts = num_rolouts
         self.in_shape = in_shape
@@ -47,6 +46,7 @@ class ImaginationCore(nn.Module):
         self.env_model = env_model
         self.distil_policy = distil_policy
         self.full_rollout = full_rollout
+        self.device= device
 
     def forward(self, state):
         # state      = state.cpu()
@@ -66,9 +66,9 @@ class ImaginationCore(nn.Module):
             rollout_batch_size = batch_size
 
         for step in range(self.num_rolouts):
-            onehot_action = torch.zeros(rollout_batch_size, self.num_actions, *self.in_shape[1:]).to(device)
+            onehot_action = torch.zeros(rollout_batch_size, self.num_actions, *self.in_shape[1:]).to(self.device)
             onehot_action[range(rollout_batch_size), action] = 1
-            inputs = torch.cat([state, onehot_action], 1).to(device)
+            inputs = torch.cat([state, onehot_action], 1).to(self.device)
 
             imagined_state, imagined_reward = self.env_model(inputs)
 
@@ -79,7 +79,7 @@ class ImaginationCore(nn.Module):
                 Commentend cause it does not work!!
             """
             #imagined_state = target_to_pix(imagined_state.detach().cpu().numpy())
-            #imagined_state = torch.FloatTensor(imagined_state).view(rollout_batch_size, *self.in_shape).to(device)
+            #imagined_state = torch.FloatTensor(imagined_state).view(rollout_batch_size, *self.in_shape).to(self.device)
 
             """
                 Added by me to go back from tensor of (1024,) to image of (3, 32, 32)
@@ -94,7 +94,7 @@ class ImaginationCore(nn.Module):
             """
             imagined_state = imagined_state.detach().cpu().numpy()
             imagined_state = np.concatenate([imagined_state, imagined_state, imagined_state])
-            imagined_state = torch.FloatTensor(np.reshape(imagined_state, (1, 3, 32, 32)))
+            imagined_state = torch.FloatTensor(np.reshape(imagined_state, (-1, 3, 32, 32)))
 
             onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)
             onehot_reward[range(rollout_batch_size), imagined_reward.detach().cpu().numpy()] = 1
@@ -103,8 +103,8 @@ class ImaginationCore(nn.Module):
             #rollout_states.append(imagined_state)
             rollout_rewards.append(onehot_reward.unsqueeze(0))
 
-            state = imagined_state.to(device)
+            state = imagined_state.to(self.device)
             action = self.distil_policy.act(state)
             action = action.detach()
 
-        return torch.cat(rollout_states).to(device), torch.cat(rollout_rewards).to(device)
+        return torch.cat(rollout_states).to(self.device), torch.cat(rollout_rewards).to(self.device)

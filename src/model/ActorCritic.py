@@ -11,13 +11,14 @@ class OnPolicy(nn.Module):
         raise NotImplementedError
 
     def act(self, x, deterministic=True):
+
         logit, value = self.forward(x)
         probs = F.softmax(logit)
 
         if deterministic:
             action = probs.max(1)[1]
         else:
-            action = probs.multinomial()
+            action = probs.multinomial(1)
 
         return action
 
