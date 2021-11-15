@@ -46,7 +46,7 @@ def get_actor_critic(obs_space, distil_policy, params):
     actor_critic = I2A(in_shape=obs_space, num_actions=5, num_rewards=1, hidden_size=256, imagination=imagination,
                        full_rollout=params.full_rollout)
 
-    actor_critic=actor_critic.to(params.device)
+    actor_critic = actor_critic.to(params.device)
 
     return actor_critic
 
@@ -62,17 +62,15 @@ def train(params: Params, config: dict):
     else:
         obs_space = env.render(mode="rgb_array").shape
 
-    act_space = env.action_space
-
     distil_policy = ActorCritic(obs_space, num_actions=5)
     distil_optimizer = optim.Adam(distil_policy.parameters())
     distil_policy = distil_policy.to(params.device)
 
     ac_dict = {agent_id: get_actor_critic(obs_space, distil_policy, params) for agent_id in env.agents}
 
-    optim_params=[]
+    optim_params = []
     for ac in ac_dict.values():
-        optim_params+=list(ac.parameters())
+        optim_params += list(ac.parameters())
 
     optimizer = optim.RMSprop(optim_params, config['lr'], eps=config['eps'],
                               alpha=config['alpha'])
@@ -85,7 +83,6 @@ def train(params: Params, config: dict):
 
     all_rewards = []
     all_losses = []
-    action_dict = {}
 
     _ = env.reset()
     state = env.render(mode="rgb_array")
@@ -100,11 +97,20 @@ def train(params: Params, config: dict):
         How to include the multi agent in this cicles?
     """
     for i in range(params.episodes):
+        dones = {agent_id: False for agent_id in env.agents}
+        action_dict = {agent_id: False for agent_id in env.agents}
+        _ = env.reset()
+
         for step in range(params.num_steps):
-            current_state = current_state.to(params.device).unsqueeze(dim=0)
+
+            if current_state.ndim == 3:
+                current_state = current_state.to(params.device).unsqueeze(dim=0)
 
             for agent_id in env.agents:
-                # todo: use list of actor_critic
+                if dones[agent_id]:
+                    # skip action for done agents
+                    action_dict[agent_id] = None
+                    continue
                 action = ac_dict[agent_id].act(current_state)
                 action_dict[agent_id] = int(action)
 
@@ -133,16 +139,15 @@ def train(params: Params, config: dict):
         # from now on the last dimension is the number of agents
 
         # get value associated with last state in rollout
-        next_value=[ac_dict[id](rollout.states) for id in env.agents]
-        next_value=[x[1] for x in next_value]
-        next_value= torch.concat(next_value, dim=1)
+        next_value = [ac_dict[id](rollout.states) for id in env.agents]
+        next_value = [x[1] for x in next_value]
+        next_value = torch.concat(next_value, dim=1)
 
         next_value = next_value.data
 
         returns = rollout.compute_returns(next_value, config['gamma'])
 
-
-        tmp=[ac_dict[id].evaluate_actions(
+        tmp = [ac_dict[id].evaluate_actions(
             rollout.states[:-1],
             rollout.actions
         ) for id in env.agents]
@@ -154,11 +159,11 @@ def train(params: Params, config: dict):
             rollout.actions
         )
 
-        distil_loss= F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)
-        distil_loss=distil_loss.sum(1).mean()
+        distil_loss = F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)
+        distil_loss = distil_loss.sum(1).mean()
         distil_loss *= 0.01
 
-        values = values.view(params.agents,params.num_steps, -1)
+        values = values.view(params.agents, params.num_steps, -1)
 
         action_log_probs = action_log_probs.view(params.agents, params.num_steps, -1)
         advantages = returns - values
@@ -166,25 +171,25 @@ def train(params: Params, config: dict):
         value_loss = advantages.pow(2).mean()
         action_loss = -(advantages.data * action_log_probs).mean()
 
+        distil_optimizer.zero_grad()
+        distil_loss.backward()
+        distil_optimizer.step()
+
         optimizer.zero_grad()
         loss = value_loss * config['value_loss_coef'] + action_loss - entropy * config['entropy_coef']
-        loss=loss.mean()
+        loss = loss.mean()
         loss.backward()
         nn.utils.clip_grad_norm_(optim_params, config['max_grad_norm'])
         optimizer.step()
 
-        distil_optimizer.zero_grad()
-        distil_loss.backward()
-        optimizer.step()
         # wandb.log({"loss": loss.item()})
         # wandb.log({"reward": final_rewards.mean()})
 
-        if i % 100 == 0:
-            all_rewards.append(final_rewards.mean())
-            all_losses.append(loss.item())
-            print("Update {}:".format(i))
-            print("\t Mean Loss: {}".format(np.mean(all_losses[-10:])))
-            print("\t Last 10 Mean Reward: {}".format(np.mean(all_rewards[-10:])))
-            # wandb.log({"Mean Reward": np.mean(all_rewards[-10:])})
+        all_rewards.append(final_rewards.mean())
+        all_losses.append(loss.item())
+        print("Update {}:".format(i))
+        print("\t Mean Loss: {}".format(np.mean(all_losses[-10:])))
+        print("\t Last 10 Mean Reward: {}".format(np.mean(all_rewards[-10:])))
+        # wandb.log({"Mean Reward": np.mean(all_rewards[-10:])})
 
         rollout.after_update()
