@@ -61,11 +61,14 @@ class ImaginationCore(nn.Module):
             action = action.view(-1)
             rollout_batch_size = batch_size * self.num_actions
         else:
+            # get action based on current state
             action = self.distil_policy.act(state)
             action = action.detach()
             rollout_batch_size = batch_size
 
         for step in range(self.num_rolouts):
+            # propagate action on "image" (aka tensor of same shape as image)
+            # this tensor
             onehot_action = torch.zeros(rollout_batch_size, self.num_actions, *self.in_shape[1:]).to(self.device)
             onehot_action[range(rollout_batch_size), action] = 1
             inputs = torch.cat([state, onehot_action], 1).to(self.device)
