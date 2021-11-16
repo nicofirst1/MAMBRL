@@ -61,6 +61,17 @@ class RawEnv(SimpleEnv):
             else:
                 landmark.step()
 
+        # __all__ did not go True when all agents were done
+        avail_agents = 0
+        for agent in self.dones:
+            if agent == "__all__":
+                continue
+            if self.dones[agent] is False:
+                avail_agents += 1
+
+        if avail_agents == 0:
+            self.dones["__all__"] = True
+
         observation = self.render(mode="rgb_array")
 
         return observation, self.rewards, self.dones, self.infos
