@@ -119,7 +119,7 @@ def train(params: Params, config: dict):
                 action_dict[agent_id] = int(action)
 
             ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
-            _, rewards, dones, _ = env.step(action_dict)
+            next_state, rewards, dones, _ = env.step(action_dict)
 
             # todo: log rewards better
             episode_rewards += sum(rewards.values())
@@ -133,9 +133,7 @@ def train(params: Params, config: dict):
             rewards = mas_dict2tensor(rewards)
             actions = mas_dict2tensor(action_dict)
 
-            next_state = env.render(mode="rgb_array")
             current_state = state_fn(next_state)
-
             rollout.insert(step, current_state, actions, rewards, masks)
 
         # from now on the last dimension is the number of agents

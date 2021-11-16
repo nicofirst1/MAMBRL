@@ -1,10 +1,11 @@
-import numpy as np
-
-from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
-from PettingZoo.pettingzoo.utils import wrappers
-from src.env.Scenario import Scenario
-from ray.rllib.env import PettingZooEnv, ParallelPettingZooEnv
 from typing import Dict
+
+import numpy as np
+from ray.rllib.env import ParallelPettingZooEnv
+
+from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
+from .Scenario import Scenario
+
 
 def get_env(kwargs):
     """ The env function wraps the environment in 3 wrappers by default. These
@@ -12,12 +13,13 @@ def get_env(kwargs):
     We recommend you use at least the OrderEnforcingWrapper on your own environment
     to provide sane error messages. You can find full documentation for these methods
     elsewhere in the developer documentation. """
-    env = raw_env(kwargs)
+    env = RawEnv(kwargs)
     # env=to_parallel(env)
     env = ParallelPettingZooEnv(env)
     return env
 
-class raw_env(SimpleEnv):
+
+class RawEnv(SimpleEnv):
     def __init__(self, env_context: Dict):
         scenario = Scenario()
         world = scenario.make_world(env_context["N"], env_context["landmarks"])
@@ -26,7 +28,7 @@ class raw_env(SimpleEnv):
             world,
             env_context["max_cycles"],
             env_context["continuous_actions"],
-            #special_entities=TimerLandmark,
+            # special_entities=TimerLandmark,
         )
         self.metadata["name"] = "collab_nav"
 
@@ -40,8 +42,8 @@ class raw_env(SimpleEnv):
     def step(self, actions):
 
         for agent_id, action in actions.items():
-            self.agent_selection=agent_id
-            super(raw_env, self).step(action)
+            self.agent_selection = agent_id
+            super(RawEnv, self).step(action)
 
         for landmark in self.world.landmarks:
 
@@ -59,4 +61,6 @@ class raw_env(SimpleEnv):
             else:
                 landmark.step()
 
-        return None, self.rewards, self.dones, self.infos
+        observation = self.render(mode="rgb_array")
+
+        return observation, self.rewards, self.dones, self.infos
