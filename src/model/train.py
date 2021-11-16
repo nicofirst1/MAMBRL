@@ -138,18 +138,17 @@ def train(params: Params, config: dict):
 
         # from now on the last dimension is the number of agents
 
-        # get value associated with last state in rollout
+        # get value from actor critic model for multiple states in the rollout
+        #todo : dobbiamo aggiungere un metodo dentro il rollout che ritorna delle versioni batched degli states
         next_value = [ac_dict[id](rollout.states) for id in env.agents]
         next_value = [x[1] for x in next_value]
         next_value = torch.concat(next_value, dim=1)
-
-        next_value = next_value.data
 
         returns = rollout.compute_returns(next_value, config['gamma'])
 
 
         tmp = [ac_dict[id].evaluate_actions(
-            rollout.states[:-1],
+            rollout.states,
             rollout.actions
         ) for id in env.agents]
 

@@ -27,7 +27,7 @@ class RolloutStorage(object):
         self.masks[0].copy_(self.masks[-1])
 
     def compute_returns(self, next_value, gamma):
-
+        # fixme: che e' sta roba?
         for step in reversed(range(self.num_steps)):
             next_value[step] = next_value[step + 1] * gamma * self.masks[step + 1] + self.rewards[step]
         return next_value[:-1]

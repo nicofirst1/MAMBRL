@@ -11,6 +11,10 @@ class OnPolicy(nn.Module):
         raise NotImplementedError
 
     def act(self, x, deterministic=True):
+        """
+        Use the current forward method to extract action based logits
+        Then return an action in a deterministic or stochastic way
+        """
 
         logit, value = self.forward(x)
         probs = F.softmax(logit)
@@ -35,6 +39,9 @@ class OnPolicy(nn.Module):
 
 
 class ActorCritic(OnPolicy):
+    """
+    This class is responsible for choosing an action and assigning a value given a state
+    """
     def __init__(self, in_shape, num_actions):
         super(ActorCritic, self).__init__()
 
