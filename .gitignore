@@ -24,3 +24,6 @@ log_dir/**
 
 ### weight and biases stuff
 src/wandb/**
+dist/
+build/
+mambrl.egg-info/
