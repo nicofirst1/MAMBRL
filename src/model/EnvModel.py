@@ -7,8 +7,17 @@ import torch.nn as nn
     other is (1, 32, z, z). Thus, it's not possible in the forward function to
     apply the cat function. I've replaced the self.conv1 with another version
     to make it work for now, but this problem must be investigated
+    
+    Nico: IMO it is not important if we copy exactly the conv structure as long as it serve its purpose
+     (extract features from image)
 """
+
+
 class BasicBlock(nn.Module):
+    """
+    Basic image block. Extract features from image 3 different convolutions
+    """
+
     def __init__(self, in_shape, n1, n2, n3):
         super(BasicBlock, self).__init__()
 
@@ -18,12 +27,7 @@ class BasicBlock(nn.Module):
         self.n3 = n3
 
         self.maxpool = nn.MaxPool2d(kernel_size=in_shape[1:])
-        #self.conv1 = nn.Sequential(
-        #    nn.Conv2d(in_shape[0] * 2, n1, kernel_size=1, stride=2, padding=6),
-        #    nn.ReLU(),
-        #    nn.Conv2d(n1, n1, kernel_size=10, stride=1, padding=(5, 6)),
-        #    nn.ReLU(),
-        #)
+
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_shape[0] * 2, n1, kernel_size=1),
             nn.ReLU(),
@@ -56,6 +60,7 @@ class BasicBlock(nn.Module):
         out = torch.cat([tiled, x], 1)
         return out
 
+
 class EnvModel(nn.Module):
     def __init__(self, in_shape, num_pixels, num_rewards):
         super(EnvModel, self).__init__()
@@ -63,6 +68,7 @@ class EnvModel(nn.Module):
         width = in_shape[1]
         height = in_shape[2]
 
+        # fixme: imo this are way to many conv for a 32x32 image, we have 3 in each basicBlock + 1 conv + 1 if image or 2 if reward = 8/9
         self.conv = nn.Sequential(
             nn.Conv2d(8, 64, kernel_size=1),
             nn.ReLU()
@@ -86,13 +92,21 @@ class EnvModel(nn.Module):
         self.reward_fc = nn.Linear(64 * width * height, num_rewards)
 
     def forward(self, inputs):
+        """
+        Given the current input(a concatenation of the observed frames and the propagated actions)
+        predict next frame and reward
+        """
         batch_size = inputs.size(0)
 
         x = self.conv(inputs)
         x = self.basic_block1(x)
         x = self.basic_block2(x)
+        # [batch size, features, img_w, img_h]
 
         image = self.image_conv(x)
+        # [batch size, features, img_w, img_h] ->[batch size, img_w, img_h, features] with permutation
+        # [batch size, img_w, img_h, features] -> [whatever, 256] with view
+        # fixme: why 256 is so arbitrary?
         image = image.permute(0, 2, 3, 1).contiguous().view(-1, 256)
         image = self.image_fc(image)
 
