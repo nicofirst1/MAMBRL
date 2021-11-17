@@ -68,7 +68,8 @@ class EnvModel(nn.Module):
         width = in_shape[1]
         height = in_shape[2]
 
-        # fixme: imo this are way to many conv for a 32x32 image, we have 3 in each basicBlock + 1 conv + 1 if image or 2 if reward = 8/9
+        # fixme: imo this are way to many conv for a 32x32 image,
+        #  we have 3 in each basicBlock + 1 conv + 1 if image or 2 if reward = 8/9
         self.conv = nn.Sequential(
             nn.Conv2d(8, 64, kernel_size=1),
             nn.ReLU()
@@ -89,6 +90,12 @@ class EnvModel(nn.Module):
             nn.Conv2d(64, 64, kernel_size=1),
             nn.ReLU()
         )
+        # fixme: qui il num rewards dipende dal gioco pacman su cui e' stato fatto il paper.
+        #  In pratica hanno una lista con dentro possibili rewards per ogni azione.
+        #  Noi invece (al momento) abbiamo un float... Gli approcci possono essere 2:
+        #  1) rendiamo la nostra reward statica (ad ogni step puoi ricevere solo un numero finito di interi)
+        #  2) Rendiamo il problema una regressione, e a quel punto rimane un solo numero
+        #  (ma perche non lo hanno fatto loro?)
         self.reward_fc = nn.Linear(64 * width * height, num_rewards)
 
     def forward(self, inputs):
@@ -106,7 +113,7 @@ class EnvModel(nn.Module):
         image = self.image_conv(x)
         # [batch size, features, img_w, img_h] ->[batch size, img_w, img_h, features] with permutation
         # [batch size, img_w, img_h, features] -> [whatever, 256] with view
-        # fixme: why 256 is so arbitrary?
+        # fixme: why 256 is so arbitrary? Maybe bc is the pixel interval?
         image = image.permute(0, 2, 3, 1).contiguous().view(-1, 256)
         image = self.image_fc(image)
 
