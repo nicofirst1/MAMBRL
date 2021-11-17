@@ -37,7 +37,7 @@ def target_to_pix(imagined_states):
 
 
 class ImaginationCore(nn.Module):
-    def __init__(self, num_rolouts, in_shape, num_actions, num_rewards, env_model, distil_policy, device,
+    def __init__(self, num_rolouts, in_shape, num_actions, num_rewards, env_model, model_free, device,
                  full_rollout=True):
         super().__init__()
         self.num_rolouts = num_rolouts
@@ -45,7 +45,7 @@ class ImaginationCore(nn.Module):
         self.num_actions = num_actions
         self.num_rewards = num_rewards
         self.env_model = env_model
-        self.distil_policy = distil_policy
+        self.model_free = model_free
         self.full_rollout = full_rollout
         self.device = device
 
@@ -63,7 +63,7 @@ class ImaginationCore(nn.Module):
             rollout_batch_size = batch_size * self.num_actions
         else:
             # get action based on current state
-            action = self.distil_policy.act(state)
+            action = self.model_free.act(state)
             action = action.detach()
             rollout_batch_size = batch_size
 
@@ -82,8 +82,8 @@ class ImaginationCore(nn.Module):
             imagined_state, imagined_reward = self.env_model(inputs)
 
             imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
-            imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
-
+            #imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
+            imagined_reward= imagined_reward.long()
             """
                 Commentend cause it does not work!!
             """
@@ -118,7 +118,7 @@ class ImaginationCore(nn.Module):
             rollout_rewards.append(onehot_reward.unsqueeze(0))
 
             state = imagined_state.to(self.device)
-            action = self.distil_policy.act(state)
+            action = self.model_free.act(state)
             action = action.detach()
 
         rollout_states= torch.cat(rollout_states).to(self.device)

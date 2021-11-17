@@ -71,7 +71,7 @@ class EnvModel(nn.Module):
         # fixme: imo this are way to many conv for a 32x32 image,
         #  we have 3 in each basicBlock + 1 conv + 1 if image or 2 if reward = 8/9
         self.conv = nn.Sequential(
-            nn.Conv2d(8, 64, kernel_size=1),
+            nn.Conv2d(8, 64, kernel_size=1), # 8 = 3 frames + 5 actions
             nn.ReLU()
         )
 
@@ -119,6 +119,6 @@ class EnvModel(nn.Module):
 
         reward = self.reward_conv(x)
         reward = reward.view(batch_size, -1)
-        reward = self.reward_fc(reward)
+        reward = self.reward_fc(reward)[0]
 
         return image, reward

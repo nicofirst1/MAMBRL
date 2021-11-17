@@ -38,12 +38,12 @@ class OnPolicy(nn.Module):
         return logit, action_log_probs, value, entropy
 
 
-class ActorCritic(OnPolicy):
+class ModelFree(OnPolicy):
     """
     This class is responsible for choosing an action and assigning a value given a state
     """
     def __init__(self, in_shape, num_actions):
-        super(ActorCritic, self).__init__()
+        super(ModelFree, self).__init__()
 
         self.in_shape = in_shape
 
