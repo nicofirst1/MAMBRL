@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from src.model.ActorCritic import OnPolicy
+from src.model.ModelFree import OnPolicy
 from src.model.RolloutEncoder import RolloutEncoder
 
 
@@ -50,10 +50,10 @@ class I2A(OnPolicy):
         x = torch.cat([state, hidden], 1)
         x = self.fc(x)
 
-        logit = self.actor(x)
-        value = self.critic(x)
+        action_logit = self.actor(x)
+        value_logit = self.critic(x)
 
-        return logit, value
+        return action_logit, value_logit
 
     def feature_size(self):
         return self.features(torch.zeros(1, *self.in_shape)).view(1, -1).size(1)

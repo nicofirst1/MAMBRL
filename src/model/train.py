@@ -2,17 +2,16 @@ from itertools import chain
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from skimage.transform import resize
 from torch import optim
 
 from src.common import Params
 from src.env.NavEnv import get_env
-from src.model.ActorCritic import ActorCritic
 from src.model.EnvModel import EnvModel
 from src.model.I2A import I2A
 from src.model.ImaginationCore import ImaginationCore
+from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
 
 
@@ -20,6 +19,7 @@ def parametrize_state(params):
     """
     Function used to fix image coming from env
     """
+
     def inner(state):
         state = np.moveaxis(state, -1, 0)
         if params.resize:
@@ -39,15 +39,18 @@ def mas_dict2tensor(agent_dict):
     return torch.as_tensor(tensor)
 
 
-def get_actor_critic(obs_space, distil_policy, params):
+def get_actor_critic(obs_space, params):
     """
     Create all the modules to build the i2a
     """
     env_model = EnvModel(obs_space, obs_space[1] * obs_space[2], 1)
     env_model = env_model.to(params.device)
 
+    model_free = ModelFree(obs_space, num_actions=5)
+    model_free = model_free.to(params.device)
+
     imagination = ImaginationCore(num_rolouts=1, in_shape=obs_space, num_actions=5, num_rewards=1, env_model=env_model,
-                                  distil_policy=distil_policy, device=params.device,
+                                  model_free=model_free, device=params.device,
                                   full_rollout=params.full_rollout)
     imagination = imagination.to(params.device)
 
@@ -70,34 +73,29 @@ def train(params: Params, config: dict):
     else:
         obs_space = env.render(mode="rgb_array").shape
 
-    distil_policy = ActorCritic(obs_space, num_actions=5)
-    distil_optimizer = optim.Adam(distil_policy.parameters())
-    distil_policy = distil_policy.to(params.device)
-
-    ac_dict = {agent_id: get_actor_critic(obs_space, distil_policy, params) for agent_id in env.agents}
+    ac_dict = {agent_id: get_actor_critic(obs_space, params) for agent_id in env.agents}
 
     ac_optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
     ac_optim_params = chain.from_iterable(ac_optim_params)
 
     ac_optimizer = optim.RMSprop(ac_optim_params, config['lr'], eps=config['eps'],
-                              alpha=config['alpha'])
+                                 alpha=config['alpha'])
 
-    state_fn = parametrize_state(params)
-
-    rollout = RolloutStorage(params.num_steps, obs_space, num_agents=params.agents)
+    rollout = RolloutStorage(params.num_steps, obs_space, num_agents=params.agents, gamma=config['gamma'])
     rollout.to(params.device)
 
-    all_rewards = []
-    all_losses = []
+    # fill rollout storage with trajcetories
+    collect_trajectories(params, env, ac_dict, rollout)
 
-    episode_rewards = torch.zeros(1, 1)
-    final_rewards = torch.zeros(1, 1)
 
+def collect_trajectories(params, env, ac_dict, rollout):
+    state_fn = parametrize_state(params)
 
     for i in range(params.episodes):
         # init dicts and reset env
         dones = {agent_id: False for agent_id in env.agents}
         action_dict = {agent_id: False for agent_id in env.agents}
+        values_dict = {agent_id: False for agent_id in env.agents}
 
         _ = env.reset()
         state = env.render(mode="rgb_array")
@@ -115,14 +113,17 @@ def train(params: Params, config: dict):
                     action_dict[agent_id] = None
                     continue
 
-                action = ac_dict[agent_id].act(current_state)
-                action_dict[agent_id] = int(action)
+                # call forward method
+                action_logit, value_logit = ac_dict[agent_id](current_state)
+
+                # get action with softmax and multimodal (stochastic)
+                action_probs = F.softmax(action_logit)
+                actions = action_probs.multinomial(1)
+                action_dict[agent_id] = int(actions)
+                values_dict[agent_id] = int(value_logit)
 
             ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, _ = env.step(action_dict)
-
-            # todo: log rewards better
-            episode_rewards += sum(rewards.values())
 
             # if done for all agents end episode
             if dones.pop("__all__"):
@@ -132,63 +133,67 @@ def train(params: Params, config: dict):
             masks = 1 - mas_dict2tensor(dones)
             rewards = mas_dict2tensor(rewards)
             actions = mas_dict2tensor(action_dict)
+            values = mas_dict2tensor(values_dict)
 
             current_state = state_fn(next_state)
-            rollout.insert(step, current_state, actions, rewards, masks)
+            rollout.insert(step, current_state, actions, values, rewards, masks)
 
         # from now on the last dimension is the number of agents
 
         # get value from actor critic model for multiple states in the rollout
-        #todo : dobbiamo aggiungere un metodo dentro il rollout che ritorna delle versioni batched degli states
+        # todo : dobbiamo aggiungere un metodo dentro il rollout che ritorna delle versioni batched degli states
         next_value = [ac_dict[id](rollout.states) for id in env.agents]
         next_value = [x[1] for x in next_value]
         next_value = torch.concat(next_value, dim=1)
 
-        returns = rollout.compute_returns(next_value, config['gamma'])
+        returns = rollout.compute_returns(next_value)
+        advantages = returns - rollout.values
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
+        # todo: actual training loop
 
-        tmp = [ac_dict[id].evaluate_actions(
-            rollout.states,
-            rollout.actions
-        ) for id in env.agents]
-
-        # unpack all the calls from before
-        logit, action_log_probs, values, entropy = tuple(map(torch.stack, zip(*tmp)))
-
-        distil_logit, _, _, _ = distil_policy.evaluate_actions(
-            rollout.states[:-1],
-            rollout.actions
-        )
-
-        # estiamte distil loss and backpropag
-        distil_loss = F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)
-        distil_loss = distil_loss.sum(1).mean()
-        distil_loss *= 0.01
-
-        distil_optimizer.zero_grad()
-        distil_loss.backward()
-        distil_optimizer.step()
-
-        # estiamte other loss and backpropag
-        values = values.view(params.agents, params.num_steps, -1)
-
-        action_log_probs = action_log_probs.view(params.agents, params.num_steps, -1)
-        advantages = returns - values
-
-        value_loss = advantages.pow(2).mean()
-        action_loss = -(advantages.data * action_log_probs).mean()
-
-        ac_optimizer.zero_grad()
-        loss = value_loss * config['value_loss_coef'] + action_loss - entropy * config['entropy_coef']
-        loss = loss.mean()
-        loss.backward()
-        nn.utils.clip_grad_norm_(ac_optim_params, config['max_grad_norm'])
-        ac_optimizer.step()
-
-
-
-        all_rewards.append(final_rewards.mean())
-        all_losses.append(loss.item())
-        print("Update {}:".format(i))
-
-
+        #
+        # tmp = [ac_dict[id].evaluate_actions(
+        #     rollout.states,
+        #     rollout.actions
+        # ) for id in env.agents]
+        #
+        # # unpack all the calls from before
+        # logit, action_log_probs, values, entropy = tuple(map(torch.stack, zip(*tmp)))
+        #
+        # distil_logit, _, _, _ = distil_policy.evaluate_actions(
+        #     rollout.states[:-1],
+        #     rollout.actions
+        # )
+        #
+        # # estiamte distil loss and backpropag
+        # distil_loss = F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)
+        # distil_loss = distil_loss.sum(1).mean()
+        # distil_loss *= 0.01
+        #
+        # distil_optimizer.zero_grad()
+        # distil_loss.backward()
+        # distil_optimizer.step()
+        #
+        # # estiamte other loss and backpropag
+        # values = values.view(params.agents, params.num_steps, -1)
+        #
+        # action_log_probs = action_log_probs.view(params.agents, params.num_steps, -1)
+        #
+        # value_loss = advantages.pow(2).mean()
+        # action_loss = -(advantages.data * action_log_probs).mean()
+        #
+        # ac_optimizer.zero_grad()
+        # loss = value_loss * config['value_loss_coef'] + action_loss - entropy * config['entropy_coef']
+        # loss = loss.mean()
+        # loss.backward()
+        # nn.utils.clip_grad_norm_(ac_optim_params, config['max_grad_norm'])
+        # ac_optimizer.step()
+        #
+        #
+        #
+        # all_rewards.append(final_rewards.mean())
+        # all_losses.append(loss.item())
+        # print("Update {}:".format(i))
+        #
+        #
