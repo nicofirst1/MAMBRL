@@ -24,6 +24,7 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = len(tf.config.list_physical_devices('GPU'))
     framework = "torch"
+    minibatch=2
 
     #### ENVIRONMENT ####
     agents = 2

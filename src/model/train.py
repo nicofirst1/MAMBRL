@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from skimage.transform import resize
 from torch import optim
+from torch.nn.utils import clip_grad_norm_
 
 from src.common import Params
 from src.env.NavEnv import get_env
@@ -75,21 +76,28 @@ def train(params: Params, config: dict):
 
     ac_dict = {agent_id: get_actor_critic(obs_space, params) for agent_id in env.agents}
 
-    ac_optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
-    ac_optim_params = chain.from_iterable(ac_optim_params)
+    optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
+    optim_params = chain.from_iterable(optim_params)
 
-    ac_optimizer = optim.RMSprop(ac_optim_params, config['lr'], eps=config['eps'],
-                                 alpha=config['alpha'])
+    optimizer = optim.RMSprop(optim_params, config['lr'], eps=config['eps'],
+                              alpha=config['alpha'])
 
     rollout = RolloutStorage(params.num_steps, obs_space, num_agents=params.agents, gamma=config['gamma'])
     rollout.to(params.device)
 
     # fill rollout storage with trajcetories
     collect_trajectories(params, env, ac_dict, rollout)
+    train_epochs(rollout, ac_dict, env, params, optimizer, optim_params)
 
 
 def collect_trajectories(params, env, ac_dict, rollout):
+    """
+    Collect a number of samples from the environment based on the current model (in eval mode)
+    """
     state_fn = parametrize_state(params)
+
+    # set all i2a to eval
+    [model.eval() for model in ac_dict.values()]
 
     for i in range(params.episodes):
         # init dicts and reset env
@@ -136,64 +144,77 @@ def collect_trajectories(params, env, ac_dict, rollout):
             values = mas_dict2tensor(values_dict)
 
             current_state = state_fn(next_state)
-            rollout.insert(step, current_state, actions, values, rewards, masks)
+            rollout.insert(step, current_state, actions, values, rewards, masks,action_probs)
 
-        # from now on the last dimension is the number of agents
 
-        # get value from actor critic model for multiple states in the rollout
-        # todo : dobbiamo aggiungere un metodo dentro il rollout che ritorna delle versioni batched degli states
-        next_value = [ac_dict[id](rollout.states) for id in env.agents]
-        next_value = [x[1] for x in next_value]
-        next_value = torch.concat(next_value, dim=1)
+def train_epochs(rollouts, ac_dict, env, params, optimizer, optim_params):
 
-        returns = rollout.compute_returns(next_value)
-        advantages = returns - rollout.values
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
+    # estimate advantages
+    # todo: check if correct from formula
+    next_value = [ac_dict[id](rollouts.states) for id in env.agents]
+    next_value = [x[1] for x in next_value]  # get values discard actions
+    next_value = torch.concat(next_value, dim=1)
 
-        # todo: actual training loop
+    rollouts.compute_returns(next_value[-1])
+    advantages = rollouts.returns - rollouts.values
+    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
-        #
-        # tmp = [ac_dict[id].evaluate_actions(
-        #     rollout.states,
-        #     rollout.actions
-        # ) for id in env.agents]
-        #
-        # # unpack all the calls from before
-        # logit, action_log_probs, values, entropy = tuple(map(torch.stack, zip(*tmp)))
-        #
-        # distil_logit, _, _, _ = distil_policy.evaluate_actions(
-        #     rollout.states[:-1],
-        #     rollout.actions
-        # )
-        #
-        # # estiamte distil loss and backpropag
-        # distil_loss = F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)
-        # distil_loss = distil_loss.sum(1).mean()
-        # distil_loss *= 0.01
-        #
-        # distil_optimizer.zero_grad()
-        # distil_loss.backward()
-        # distil_optimizer.step()
-        #
-        # # estiamte other loss and backpropag
-        # values = values.view(params.agents, params.num_steps, -1)
-        #
-        # action_log_probs = action_log_probs.view(params.agents, params.num_steps, -1)
-        #
-        # value_loss = advantages.pow(2).mean()
-        # action_loss = -(advantages.data * action_log_probs).mean()
-        #
-        # ac_optimizer.zero_grad()
-        # loss = value_loss * config['value_loss_coef'] + action_loss - entropy * config['entropy_coef']
-        # loss = loss.mean()
-        # loss.backward()
-        # nn.utils.clip_grad_norm_(ac_optim_params, config['max_grad_norm'])
-        # ac_optimizer.step()
-        #
-        #
-        #
-        # all_rewards.append(final_rewards.mean())
-        # all_losses.append(loss.item())
-        # print("Update {}:".format(i))
-        #
-        #
+    # get data generation that splits rollout in batches
+    data_generator = rollouts.recurrent_generator(advantages,
+                                                  params.minibatch)
+
+    for sample in data_generator:
+        states_batch, actions_batch, \
+        return_batch, masks_batch, old_action_log_probs_batch, \
+        adv_targ = sample
+
+        tmp = [ac_dict[id].evaluate_actions(
+            states_batch,
+            actions_batch
+        ) for id in env.agents]
+
+        # unpack all the calls from before
+        logit, action_log_probs, values, entropy = tuple(map(torch.stack, zip(*tmp)))
+
+        value_loss = (return_batch - values).pow(2).mean()
+
+        ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
+        surr1 = ratio * adv_targ
+        surr2 = torch.clamp(ratio, 1.0 - params.config['ppo_clip_param'], 1.0 + params.config['ppo_clip_param']) * adv_targ
+        action_loss=- torch.min(surr1, surr2).mean()
+
+        optimizer.zero_grad()
+        loss = value_loss * params.config['value_loss_coef'] + action_loss - entropy * params.config['entropy_coef']
+        loss = loss.mean()
+        loss.backward()
+
+        clip_grad_norm_(optim_params, params.config['max_grad_norm'])
+        optimizer.step()
+
+    # distil_logit, _, _, _ = distil_policy.evaluate_actions(
+    #     rollouts.states[:-1],
+    #     rollouts.actions
+    # )
+    #
+    # # estiamte distil loss and backpropag
+    # distil_loss = F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)
+    # distil_loss = distil_loss.sum(1).mean()
+    # distil_loss *= 0.01
+    #
+    # distil_optimizer.zero_grad()
+    # distil_loss.backward()
+    # distil_optimizer.step()
+    #
+    # # estiamte other loss and backpropag
+    #
+    # action_log_probs = action_log_probs.view(params.agents, params.num_steps, -1)
+    #
+    # action_loss = -(advantages.data * action_log_probs).mean()
+    #
+
+    #
+    #
+    #
+    # all_rewards.append(final_rewards.mean())
+    # all_losses.append(loss.item())
+    # print("Update {}:".format(i))

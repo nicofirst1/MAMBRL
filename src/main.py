@@ -1,9 +1,9 @@
-from model.train import train
 from common.utils import *
+from model.train import train
 
 if __name__ == "__main__":
     params = Params()
-    #ray.init(local_mode=params.debug)
+    # ray.init(local_mode=params.debug)
 
     # Get configs
     env_config = get_env_configs(params)
@@ -17,7 +17,7 @@ if __name__ == "__main__":
         "num_workers": params.num_workers,
         "num_gpus": params.num_gpus,
         "batch_mode": "complete_episodes",
-        #"train_batch_size": 400,
+        # "train_batch_size": 400,
         "rollout_fragment_length": 50,
 
         # PPO parameter
@@ -34,11 +34,10 @@ if __name__ == "__main__":
         "max_grad_norm": 0.5,
         "eps": 1e-5,
         "alpha": 0.99,
+        "ppo_clip_param": 0.1,
 
         # Callbacks
         "callbacks": {},
-
-
 
         # Model
         "model": model_configs,
@@ -46,6 +45,8 @@ if __name__ == "__main__":
         # Multiagent
         "multiagent": policy_configs
     }
+
+    params.configs = configs
 
     ## TRAINING
     train(params, configs)
