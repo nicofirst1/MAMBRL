@@ -29,6 +29,7 @@ class RolloutStorage(object):
         self.values[step].copy_(torch.as_tensor(values))
         self.rewards[step].copy_(torch.as_tensor(reward))
         self.masks[step + 1].copy_(torch.as_tensor(mask))
+        self.action_log_probs[step + 1].copy_(torch.as_tensor(action_log_probs))
 
     def after_update(self):
         self.states[0].copy_(self.states[-1])

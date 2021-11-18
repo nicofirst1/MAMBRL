@@ -99,7 +99,7 @@ def train(params: Params, config: dict):
     )
 
     rollout = RolloutStorage(
-        params.num_steps,
+        params.horizon,
         obs_space,
         num_agents=params.agents,
         gamma=config["gamma"],
@@ -115,6 +115,7 @@ def train(params: Params, config: dict):
         rollout.after_update()
 
 
+# todo: this can be done in parallel
 def collect_trajectories(params, env, ac_dict, rollout):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
@@ -134,7 +135,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
         state = env.render(mode="rgb_array")
         current_state = state_fn(state)
 
-        for step in range(params.num_steps):
+        for step in range(params.horizon):
 
             current_state = current_state.to(params.device).unsqueeze(dim=0)
 
@@ -150,8 +151,8 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action_logit, value_logit = ac_dict[agent_id](current_state)
 
                 # get action with softmax and multimodal (stochastic)
-                action_probs = F.softmax(action_logit, dim=0)
-                actions = action_probs.multinomial(1)
+                action_log_probs = F.log_softmax(action_logit, dim=0)
+                actions = action_log_probs.multinomial(1)
                 action_dict[agent_id] = int(actions)
                 values_dict[agent_id] = int(value_logit)
 
@@ -170,7 +171,13 @@ def collect_trajectories(params, env, ac_dict, rollout):
 
             current_state = state_fn(next_state)
             rollout.insert(
-                step, current_state, actions, values, rewards, masks, action_probs
+                step=step,
+                state=current_state,
+                action=actions,
+                values=values,
+                rewards=rewards,
+                masks=masks,
+                action_log_probs=action_log_probs,
             )
 
 
@@ -180,6 +187,7 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
     # estimate advantages
     rollouts.compute_returns(rollouts.values[-1])
     advantages = rollouts.returns - rollouts.values
+    # normalize advantages
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
     # get data generation that splits rollout in batches
