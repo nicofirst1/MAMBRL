@@ -27,6 +27,7 @@ def parametrize_state(params):
             state = resize(state, params.obs_shape)
 
         state = torch.FloatTensor(state)
+        state = state.repeat([params.num_frames, 1, 1])
         return state
 
     return inner
@@ -44,10 +45,11 @@ def get_actor_critic(obs_space, params):
     """
     Create all the modules to build the i2a
     """
-    env_model = EnvModel(obs_space, obs_space[1] * obs_space[2], 1)
+    env_model = EnvModel(obs_space, num_rewards=1, num_frames=params.num_frames,
+                         num_actions=5)
     env_model = env_model.to(params.device)
 
-    model_free = ModelFree(obs_space, num_actions=5)
+    model_free = ModelFree(obs_space, num_actions=5, num_frames=params.num_frames)
     model_free = model_free.to(params.device)
 
     imagination = ImaginationCore(num_rolouts=1, in_shape=obs_space, num_actions=5, num_rewards=1, env_model=env_model,
@@ -56,7 +58,7 @@ def get_actor_critic(obs_space, params):
     imagination = imagination.to(params.device)
 
     actor_critic = I2A(in_shape=obs_space, num_actions=5, num_rewards=1, hidden_size=256, imagination=imagination,
-                       full_rollout=params.full_rollout)
+                       full_rollout=params.full_rollout, num_frames=params.num_frames)
 
     actor_critic = actor_critic.to(params.device)
 
@@ -82,7 +84,8 @@ def train(params: Params, config: dict):
     optimizer = optim.RMSprop(optim_params, config['lr'], eps=config['eps'],
                               alpha=config['alpha'])
 
-    rollout = RolloutStorage(params.num_steps, obs_space, num_agents=params.agents, gamma=config['gamma'])
+    rollout = RolloutStorage(params.num_steps, obs_space, num_agents=params.agents, gamma=config['gamma'],
+                             size_mini_batch=params.minibatch)
     rollout.to(params.device)
 
     # fill rollout storage with trajcetories
@@ -144,51 +147,62 @@ def collect_trajectories(params, env, ac_dict, rollout):
             values = mas_dict2tensor(values_dict)
 
             current_state = state_fn(next_state)
-            rollout.insert(step, current_state, actions, values, rewards, masks,action_probs)
+            rollout.insert(step, current_state, actions, values, rewards, masks, action_probs)
 
 
 def train_epochs(rollouts, ac_dict, env, params, optimizer, optim_params):
-
     # estimate advantages
     # todo: check if correct from formula
-    next_value = [ac_dict[id](rollouts.states) for id in env.agents]
-    next_value = [x[1] for x in next_value]  # get values discard actions
-    next_value = torch.concat(next_value, dim=1)
 
-    rollouts.compute_returns(next_value[-1])
+    rollouts.compute_returns(rollouts.values[-1])
     advantages = rollouts.returns - rollouts.values
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
     # get data generation that splits rollout in batches
     data_generator = rollouts.recurrent_generator(advantages,
-                                                  params.minibatch)
+                                                  params.num_frames)
 
     for sample in data_generator:
         states_batch, actions_batch, \
         return_batch, masks_batch, old_action_log_probs_batch, \
         adv_targ = sample
 
-        tmp = [ac_dict[id].evaluate_actions(
-            states_batch,
-            actions_batch
-        ) for id in env.agents]
+        logits, action_log_probs, values, entropys = [], [], [], []
+
+        for agent_id in env.agents:
+            agent_index = env.agents.index(agent_id)
+            agent_action = actions_batch[:, :, agent_index]
+
+            agent = ac_dict[agent_id]
+            logit, action_log_prob, value, entropy = agent.evaluate_actions(states_batch, agent_action,
+                                                                            params.num_frames)
+
+            # add multi agent dim
+            logits.append(logit.unsqueeze(dim=-1))
+            action_log_probs.append(action_log_prob.unsqueeze(dim=-1))
+            values.append(value.unsqueeze(dim=-1))
+            entropys.append(entropy.unsqueeze(dim=-1))
 
         # unpack all the calls from before
-        logit, action_log_probs, values, entropy = tuple(map(torch.stack, zip(*tmp)))
+        logits = torch.cat(logits, dim=-1)
+        action_log_probs = torch.cat(action_log_probs, dim=-1)
+        values = torch.cat(values, dim=-1)
+        entropys = torch.cat(entropys, dim=-1)
 
         value_loss = (return_batch - values).pow(2).mean()
 
         ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
         surr1 = ratio * adv_targ
-        surr2 = torch.clamp(ratio, 1.0 - params.config['ppo_clip_param'], 1.0 + params.config['ppo_clip_param']) * adv_targ
-        action_loss=- torch.min(surr1, surr2).mean()
+        surr2 = torch.clamp(ratio, 1.0 - params.configs['ppo_clip_param'],
+                            1.0 + params.configs['ppo_clip_param']) * adv_targ
+        action_loss = - torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
-        loss = value_loss * params.config['value_loss_coef'] + action_loss - entropy * params.config['entropy_coef']
+        loss = value_loss * params.configs['value_loss_coef'] + action_loss - entropys * params.configs['entropy_coef']
         loss = loss.mean()
         loss.backward()
 
-        clip_grad_norm_(optim_params, params.config['max_grad_norm'])
+        clip_grad_norm_(optim_params, params.configs['max_grad_norm'])
         optimizer.step()
 
     # distil_logit, _, _, _ = distil_policy.evaluate_actions(

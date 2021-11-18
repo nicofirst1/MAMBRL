@@ -29,12 +29,12 @@ class Params:
     #### ENVIRONMENT ####
     agents = 2
     landmarks = 2
-    horizon = 10
+    horizon = 21
     episodes = 5
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
-    num_frames = 2
+    num_frames = 3
     num_steps = horizon // num_frames
     full_rollout = False
 

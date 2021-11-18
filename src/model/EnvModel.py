@@ -62,16 +62,19 @@ class BasicBlock(nn.Module):
 
 
 class EnvModel(nn.Module):
-    def __init__(self, in_shape, num_pixels, num_rewards):
+    def __init__(self, in_shape, num_rewards, num_frames, num_actions):
         super(EnvModel, self).__init__()
 
         width = in_shape[1]
         height = in_shape[2]
+        num_pixels=width*height
+
+        num_channels = in_shape[0]
 
         # fixme: imo this are way to many conv for a 32x32 image,
         #  we have 3 in each basicBlock + 1 conv + 1 if image or 2 if reward = 8/9
         self.conv = nn.Sequential(
-            nn.Conv2d(8, 64, kernel_size=1), # 8 = 3 frames + 5 actions
+            nn.Conv2d(num_channels * num_frames + num_actions, 64, kernel_size=1),  # 8 = 3 frames + 5 actions
             nn.ReLU()
         )
 
@@ -116,9 +119,10 @@ class EnvModel(nn.Module):
         # fixme: why 256 is so arbitrary? Maybe bc is the pixel interval?
         image = image.permute(0, 2, 3, 1).contiguous().view(-1, 256)
         image = self.image_fc(image)
+        image= image.view(batch_size, -1, image.shape[-1])
 
         reward = self.reward_conv(x)
         reward = reward.view(batch_size, -1)
-        reward = self.reward_fc(reward)[0]
+        reward = self.reward_fc(reward)
 
         return image, reward

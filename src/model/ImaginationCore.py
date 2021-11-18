@@ -82,8 +82,8 @@ class ImaginationCore(nn.Module):
             imagined_state, imagined_reward = self.env_model(inputs)
 
             imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
-            #imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
-            imagined_reward= imagined_reward.long()
+            # imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
+            imagined_reward = imagined_reward.long()
             """
                 Commentend cause it does not work!!
             """
@@ -104,24 +104,22 @@ class ImaginationCore(nn.Module):
 
             # fixme: va tolto questo concat e cercato di ritornare un imagined_state con le dimensioni
             #  esatta per poter fare un view e basta
-            imagined_state = imagined_state.detach().cpu().numpy()
-            imagined_state = np.concatenate([imagined_state, imagined_state, imagined_state])
-            imagined_state = torch.FloatTensor(np.reshape(imagined_state, (-1, 3, 32, 32)))
+            imagined_state = imagined_state.view(batch_size, -1, 32, 32)
+            imagined_state = imagined_state.repeat([1, 3 * 3, 1, 1])
+            imagined_state = imagined_state.float()
 
             onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)
             onehot_reward[range(rollout_batch_size), imagined_reward] = 1
 
-            # fixme : perche  aggiungiamo una dimensione? Ho visto che togliendola
-            #  l'encoder dentro immagination non funziona ma a che serve??
+            # add a dimension for the rollout, then concat
             rollout_states.append(imagined_state.unsqueeze(0))
-            # rollout_states.append(imagined_state)
             rollout_rewards.append(onehot_reward.unsqueeze(0))
 
             state = imagined_state.to(self.device)
             action = self.model_free.act(state)
             action = action.detach()
 
-        rollout_states= torch.cat(rollout_states).to(self.device)
-        rollout_rewards= torch.cat(rollout_rewards).to(self.device)
+        rollout_states = torch.cat(rollout_states).to(self.device)
+        rollout_rewards = torch.cat(rollout_rewards).to(self.device)
 
         return rollout_states, rollout_rewards
