@@ -1,10 +1,9 @@
 from itertools import chain
 
-import numpy as np
+import cv2
 import torch
 import torch.nn.functional as F
 from rich.progress import track
-from skimage.transform import resize
 from torch import optim
 from torch.nn.utils import clip_grad_norm_
 
@@ -23,11 +22,11 @@ def parametrize_state(params):
     """
 
     def inner(state):
-        state = np.moveaxis(state, -1, 0)
         if params.resize:
-            state = resize(state, params.obs_shape)
+            state = state.squeeze()
+            state = cv2.resize(state, dsize=params.obs_shape[1:], interpolation=cv2.INTER_CUBIC)
 
-        state = torch.FloatTensor(state)
+        state = torch.FloatTensor(state).unsqueeze(dim=0)
         state = state.repeat([params.num_frames, 1, 1])
         return state
 
@@ -112,6 +111,7 @@ def train(params: Params, config: dict):
     for ep in range(params.epochs):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, ac_dict, rollout)
+        exit(0)
         # train for all the trajectories collected so far
         train_epoch(rollout, ac_dict, env, params, optimizer, optim_params)
         rollout.after_update()

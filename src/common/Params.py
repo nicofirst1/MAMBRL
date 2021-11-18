@@ -31,7 +31,7 @@ class Params:
     agents = 2
     landmarks = 2
     horizon = 21
-    episodes = 2
+    episodes = 3
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
