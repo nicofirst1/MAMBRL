@@ -1,7 +1,7 @@
 import numpy as np
-from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from ray.rllib.env import ParallelPettingZooEnv
 
+from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from .Scenario import Scenario
 from .TimerLandmark import TimerLandmark
 
@@ -19,7 +19,7 @@ def rgb2gray(rgb):
 
 class RawEnv(SimpleEnv):
     def __init__(
-        self, name, N, landmarks, max_cycles, continuous_actions, gray_scale=False
+            self, name, N, landmarks, max_cycles, continuous_actions, gray_scale=False
     ):
         scenario = Scenario()
         world = scenario.make_world(N, landmarks)
@@ -39,6 +39,20 @@ class RawEnv(SimpleEnv):
         dist = np.sqrt(np.sum(np.square(delta_pos)))
         dist_min = agent1.size + agent2.size
         return True if dist < dist_min else False
+
+    def reset(self):
+        super(RawEnv, self).reset()
+
+        return self.observe()
+
+    def observe(self):
+        observation = self.render(mode="rgb_array")
+
+        if self.gray_scale:
+            observation = rgb2gray(observation)
+            observation = np.expand_dims(observation, axis=0)
+
+        return observation
 
     def step(self, actions):
 
@@ -62,10 +76,4 @@ class RawEnv(SimpleEnv):
             else:
                 landmark.step()
 
-        observation = self.render(mode="rgb_array")
-
-        if self.gray_scale:
-            observation = rgb2gray(observation)
-            observation = np.expand_dims(observation, axis=0)
-
-        return observation, self.rewards, self.dones, self.infos
+        return self.observe(), self.rewards, self.dones, self.infos

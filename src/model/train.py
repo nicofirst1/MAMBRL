@@ -5,6 +5,9 @@ import torch
 import torch.nn.functional as F
 from rich.progress import track
 from skimage.transform import resize
+from torch import optim
+from torch.nn.utils import clip_grad_norm_
+
 from src.common import Params
 from src.env.NavEnv import get_env
 from src.model.EnvModel import EnvModel
@@ -12,8 +15,6 @@ from src.model.I2A import I2A
 from src.model.ImaginationCore import ImaginationCore
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
-from torch import optim
-from torch.nn.utils import clip_grad_norm_
 
 
 def parametrize_state(params):
@@ -104,6 +105,7 @@ def train(params: Params, config: dict):
         num_agents=params.agents,
         gamma=config["gamma"],
         size_mini_batch=params.minibatch,
+        num_actions=5
     )
     rollout.to(params.device)
 
@@ -131,8 +133,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
         action_dict = {agent_id: False for agent_id in env.agents}
         values_dict = {agent_id: False for agent_id in env.agents}
 
-        _ = env.reset()
-        state = env.render(mode="rgb_array")
+        state = env.reset()
         current_state = state_fn(state)
 
         for step in range(params.horizon):
@@ -151,7 +152,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action_logit, value_logit = ac_dict[agent_id](current_state)
 
                 # get action with softmax and multimodal (stochastic)
-                action_log_probs = F.log_softmax(action_logit, dim=0)
+                action_log_probs = F.softmax(action_logit, dim=0)
                 actions = action_log_probs.multinomial(1)
                 action_dict[agent_id] = int(actions)
                 values_dict[agent_id] = int(value_logit)
@@ -175,9 +176,9 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 state=current_state,
                 action=actions,
                 values=values,
-                rewards=rewards,
-                masks=masks,
-                action_log_probs=action_log_probs,
+                reward=rewards,
+                mask=masks,
+                action_log_probs=action_log_probs.detach().squeeze(),
             )
 
 
@@ -232,23 +233,24 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
 
         value_loss = (return_batch - values).pow(2).mean()
 
+        # fixme: actually using softmax probs (not log) check if different
         ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
         surr1 = ratio * adv_targ
         surr2 = (
-            torch.clamp(
-                ratio,
-                1.0 - params.configs["ppo_clip_param"],
-                1.0 + params.configs["ppo_clip_param"],
-            )
-            * adv_targ
+                torch.clamp(
+                    ratio,
+                    1.0 - params.configs["ppo_clip_param"],
+                    1.0 + params.configs["ppo_clip_param"],
+                )
+                * adv_targ
         )
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-            value_loss * params.configs["value_loss_coef"]
-            + action_loss
-            - entropys * params.configs["entropy_coef"]
+                value_loss * params.configs["value_loss_coef"]
+                + action_loss
+                - entropys * params.configs["entropy_coef"]
         )
         loss = loss.mean()
         loss.backward()

@@ -2,7 +2,7 @@ import torch
 
 
 class RolloutStorage(object):
-    def __init__(self, num_steps, state_shape, num_agents, gamma, size_mini_batch):
+    def __init__(self, num_steps, state_shape, num_agents, gamma, size_mini_batch, num_actions):
         self.num_steps = num_steps
         self.num_channels = state_shape[0]
 
@@ -12,7 +12,7 @@ class RolloutStorage(object):
         self.actions = torch.zeros(num_steps, num_agents).long()
         self.values = torch.zeros(num_steps + 1, num_agents).long()
         self.returns = torch.zeros(num_steps + 1, num_agents)
-        self.action_log_probs = torch.zeros(num_steps, num_agents)
+        self.action_log_probs = torch.zeros(num_steps+1, num_actions)
         self.gamma = gamma
         self.size_mini_batch = size_mini_batch
 
@@ -24,12 +24,12 @@ class RolloutStorage(object):
 
     def insert(self, step, state, action, values, reward, mask, action_log_probs):
 
-        self.states[step + 1].copy_(torch.as_tensor(state[: self.num_channels]))
-        self.actions[step].copy_(torch.as_tensor(action))
-        self.values[step].copy_(torch.as_tensor(values))
-        self.rewards[step].copy_(torch.as_tensor(reward))
-        self.masks[step + 1].copy_(torch.as_tensor(mask))
-        self.action_log_probs[step + 1].copy_(torch.as_tensor(action_log_probs))
+        self.states[step + 1].copy_(state[: self.num_channels])
+        self.actions[step].copy_(action)
+        self.values[step].copy_(values)
+        self.rewards[step].copy_(reward)
+        self.masks[step + 1].copy_(mask)
+        self.action_log_probs[step ].copy_(action_log_probs)
 
     def after_update(self):
         self.states[0].copy_(self.states[-1])
