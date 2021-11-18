@@ -17,7 +17,7 @@ class OnPolicy(nn.Module):
         """
 
         logit, value = self.forward(x)
-        probs = F.softmax(logit)
+        probs = F.softmax(logit, dim=0)
 
         if deterministic:
             action = probs.max(1)[1]
@@ -26,12 +26,12 @@ class OnPolicy(nn.Module):
 
         return action
 
-    def evaluate_actions(self, frames, action, num_frames):
+    def evaluate_actions(self, frames, action):
 
         logit, value = self.forward(frames)
 
         probs = F.softmax(logit)
-        log_probs = F.log_softmax(logit)
+        log_probs = F.log_softmax(logit, dim=0)
 
         action_log_probs = log_probs.gather(1, action)
         entropy = -(probs * log_probs).sum(1).mean()

@@ -43,8 +43,14 @@ class RolloutStorage(object):
             gae = delta + self.gamma * tau * self.masks[step + 1] * gae
             self.returns[step] = gae + self.values[step]
 
+    def get_num_batches(self, num_frames):
+        total_samples = self.rewards.size(0) - 1
+        minibatch_frames = self.size_mini_batch * num_frames
+
+        return total_samples//minibatch_frames
+
     def recurrent_generator(self, advantages, num_frames):
-        total_samples = self.rewards.size(0)-1
+        total_samples = self.rewards.size(0) - 1
         perm = torch.randperm(total_samples)
 
         minibatch_frames = self.size_mini_batch * num_frames
@@ -76,7 +82,7 @@ class RolloutStorage(object):
 
             # split per num frame
             # [batch * num_frames , *shape] ->[batch, num_frames , *shape]
-            states_batch = states_batch.view(-1, self.num_channels*num_frames, *states_batch.shape[2:])
+            states_batch = states_batch.view(-1, self.num_channels * num_frames, *states_batch.shape[2:])
             actions_batch = actions_batch.view(-1, num_frames, *actions_batch.shape[1:])
             return_batch = return_batch.view(-1, num_frames, *return_batch.shape[1:])
             masks_batch = masks_batch.view(-1, num_frames, *masks_batch.shape[1:])
@@ -86,3 +92,7 @@ class RolloutStorage(object):
 
             yield states_batch, actions_batch, \
                   return_batch, masks_batch, old_action_log_probs_batch, adv_targ
+
+    def after_update(self):
+        self.states[0].copy_(self.states[-1])
+        self.masks[0].copy_(self.masks[-1])

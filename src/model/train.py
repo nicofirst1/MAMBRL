@@ -3,6 +3,7 @@ from itertools import chain
 import numpy as np
 import torch
 import torch.nn.functional as F
+from rich.progress import track
 from skimage.transform import resize
 from torch import optim
 from torch.nn.utils import clip_grad_norm_
@@ -88,9 +89,12 @@ def train(params: Params, config: dict):
                              size_mini_batch=params.minibatch)
     rollout.to(params.device)
 
-    # fill rollout storage with trajcetories
-    collect_trajectories(params, env, ac_dict, rollout)
-    train_epochs(rollout, ac_dict, env, params, optimizer, optim_params)
+    for ep in range(params.epochs):
+        # fill rollout storage with trajcetories
+        collect_trajectories(params, env, ac_dict, rollout)
+        # train for all the trajectories collected so far
+        train_epoch(rollout, ac_dict, env, params, optimizer, optim_params)
+        rollout.after_update()
 
 
 def collect_trajectories(params, env, ac_dict, rollout):
@@ -102,7 +106,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
     # set all i2a to eval
     [model.eval() for model in ac_dict.values()]
 
-    for i in range(params.episodes):
+    for _ in track(range(params.episodes), description="Sample collection episode "):
         # init dicts and reset env
         dones = {agent_id: False for agent_id in env.agents}
         action_dict = {agent_id: False for agent_id in env.agents}
@@ -128,7 +132,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action_logit, value_logit = ac_dict[agent_id](current_state)
 
                 # get action with softmax and multimodal (stochastic)
-                action_probs = F.softmax(action_logit)
+                action_probs = F.softmax(action_logit, dim=0)
                 actions = action_probs.multinomial(1)
                 action_dict[agent_id] = int(actions)
                 values_dict[agent_id] = int(value_logit)
@@ -150,7 +154,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
             rollout.insert(step, current_state, actions, values, rewards, masks, action_probs)
 
 
-def train_epochs(rollouts, ac_dict, env, params, optimizer, optim_params):
+def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
     # estimate advantages
     # todo: check if correct from formula
 
@@ -161,8 +165,9 @@ def train_epochs(rollouts, ac_dict, env, params, optimizer, optim_params):
     # get data generation that splits rollout in batches
     data_generator = rollouts.recurrent_generator(advantages,
                                                   params.num_frames)
+    num_batches= rollouts.get_num_batches(params.num_frames)
 
-    for sample in data_generator:
+    for sample in track(data_generator, description="Batches", total=num_batches):
         states_batch, actions_batch, \
         return_batch, masks_batch, old_action_log_probs_batch, \
         adv_targ = sample
@@ -174,8 +179,7 @@ def train_epochs(rollouts, ac_dict, env, params, optimizer, optim_params):
             agent_action = actions_batch[:, :, agent_index]
 
             agent = ac_dict[agent_id]
-            logit, action_log_prob, value, entropy = agent.evaluate_actions(states_batch, agent_action,
-                                                                            params.num_frames)
+            logit, action_log_prob, value, entropy = agent.evaluate_actions(states_batch, agent_action)
 
             # add multi agent dim
             logits.append(logit.unsqueeze(dim=-1))
