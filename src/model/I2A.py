@@ -1,12 +1,20 @@
 import torch
 import torch.nn as nn
-
-from src.model.ActorCritic import OnPolicy
+from src.model.ModelFree import OnPolicy
 from src.model.RolloutEncoder import RolloutEncoder
 
 
 class I2A(OnPolicy):
-    def __init__(self, in_shape, num_actions, num_rewards, hidden_size, imagination, full_rollout=True):
+    def __init__(
+        self,
+        in_shape,
+        num_actions,
+        num_rewards,
+        hidden_size,
+        imagination,
+        num_frames,
+        full_rollout=True,
+    ):
         super(I2A, self).__init__()
 
         self.in_shape = in_shape
@@ -14,24 +22,33 @@ class I2A(OnPolicy):
         self.num_rewards = num_rewards
 
         self.imagination = imagination
+        num_channels = in_shape[0]
 
         self.features = nn.Sequential(
-            nn.Conv2d(in_shape[0], 16, kernel_size=3, stride=1),
+            nn.Conv2d(num_channels * num_frames, 16, kernel_size=3, stride=1),
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=3, stride=2),
             nn.ReLU(),
         )
 
-        self.encoder = RolloutEncoder(in_shape, num_rewards, hidden_size)
+        self.encoder = RolloutEncoder(
+            in_shape, num_rewards, hidden_size, num_frames=num_frames
+        )
+
+        features_out = (
+            self.features(torch.zeros(1, num_channels * num_frames, *self.in_shape[1:]))
+            .view(1, -1)
+            .size(1)
+        )
 
         if full_rollout:
             self.fc = nn.Sequential(
-                nn.Linear(self.feature_size() + num_actions * hidden_size, 256),
+                nn.Linear(features_out + num_actions * hidden_size, 256),
                 nn.ReLU(),
             )
         else:
             self.fc = nn.Sequential(
-                nn.Linear(self.feature_size() + hidden_size, 256),
+                nn.Linear(features_out + hidden_size, 256),
                 nn.ReLU(),
             )
 
@@ -50,10 +67,7 @@ class I2A(OnPolicy):
         x = torch.cat([state, hidden], 1)
         x = self.fc(x)
 
-        logit = self.actor(x)
-        value = self.critic(x)
+        action_logit = self.actor(x)
+        value_logit = self.critic(x)
 
-        return logit, value
-
-    def feature_size(self):
-        return self.features(torch.zeros(1, *self.in_shape)).view(1, -1).size(1)
+        return action_logit, value_logit

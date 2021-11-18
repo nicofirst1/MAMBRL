@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.autograd as autograd
+
 
 class OnPolicy(nn.Module):
     def __init__(self):
@@ -17,7 +17,7 @@ class OnPolicy(nn.Module):
         """
 
         logit, value = self.forward(x)
-        probs = F.softmax(logit)
+        probs = F.softmax(logit, dim=0)
 
         if deterministic:
             action = probs.max(1)[1]
@@ -26,11 +26,12 @@ class OnPolicy(nn.Module):
 
         return action
 
-    def evaluate_actions(self, x, action):
-        logit, value = self.forward(x)
+    def evaluate_actions(self, frames, action):
 
-        probs = F.softmax(logit)
-        log_probs = F.log_softmax(logit)
+        logit, value = self.forward(frames)
+
+        probs = F.softmax(logit, dim=0)
+        log_probs = F.log_softmax(logit, dim=0)
 
         action_log_probs = log_probs.gather(1, action)
         entropy = -(probs * log_probs).sum(1).mean()
@@ -38,24 +39,32 @@ class OnPolicy(nn.Module):
         return logit, action_log_probs, value, entropy
 
 
-class ActorCritic(OnPolicy):
+class ModelFree(OnPolicy):
     """
     This class is responsible for choosing an action and assigning a value given a state
     """
-    def __init__(self, in_shape, num_actions):
-        super(ActorCritic, self).__init__()
+
+    def __init__(self, in_shape, num_actions, num_frames):
+        super(ModelFree, self).__init__()
 
         self.in_shape = in_shape
+        num_channels = in_shape[0]
 
         self.features = nn.Sequential(
-            nn.Conv2d(in_shape[0], 16, kernel_size=3, stride=1),
+            nn.Conv2d(num_channels, 16, kernel_size=3, stride=1),
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=3, stride=2),
             nn.ReLU(),
         )
 
+        features_out = (
+            self.features(torch.zeros(1, num_channels, *self.in_shape[1:]))
+            .view(1, -1)
+            .size(1)
+        )
+
         self.fc = nn.Sequential(
-            nn.Linear(self.feature_size(), 256),
+            nn.Linear(features_out, 256),
             nn.ReLU(),
         )
 
@@ -69,6 +78,3 @@ class ActorCritic(OnPolicy):
         logit = self.actor(x)
         value = self.critic(x)
         return logit, value
-
-    def feature_size(self):
-        return self.features(autograd.Variable(torch.zeros(1, *self.in_shape))).view(1, -1).size(1)

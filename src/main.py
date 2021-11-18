@@ -7,7 +7,7 @@ from src.common.utils import *
 
 if __name__ == "__main__":
     params = Params()
-    #ray.init(local_mode=params.debug)
+    # ray.init(local_mode=params.debug)
 
     # Get configs
     env_config = get_env_configs(params)
@@ -21,13 +21,12 @@ if __name__ == "__main__":
         "num_workers": params.num_workers,
         "num_gpus": params.num_gpus,
         "batch_mode": "complete_episodes",
-        #"train_batch_size": 400,
+        # "train_batch_size": 400,
         "rollout_fragment_length": 50,
-
         # PPO parameter
         "lr": 3e-4,
-        "lambda": .95,
-        "gamma": .998,
+        "lambda": 0.95,
+        "gamma": 0.998,
         "entropy_coef": 0.01,
         "clip_param": 0.2,
         "use_critic": True,
@@ -38,18 +37,16 @@ if __name__ == "__main__":
         "max_grad_norm": 0.5,
         "eps": 1e-5,
         "alpha": 0.99,
-
+        "ppo_clip_param": 0.1,
         # Callbacks
         "callbacks": {},
-
-
-
         # Model
         "model": model_configs,
-
         # Multiagent
-        "multiagent": policy_configs
+        "multiagent": policy_configs,
     }
+
+    params.configs = configs
 
     ## TRAINING
     train(params, configs)

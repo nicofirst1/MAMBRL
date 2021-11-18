@@ -22,20 +22,23 @@ class Params:
     resize = True
     obs_shape = (3, 32, 32)
     num_workers = multiprocessing.cpu_count() - 1
-    num_gpus = len(tf.config.list_physical_devices('GPU'))
+    num_gpus = len(tf.config.list_physical_devices("GPU"))
     framework = "torch"
+    minibatch = 2
+    epochs = 1
 
     #### ENVIRONMENT ####
     agents = 2
     landmarks = 2
-    horizon = 10
-    episodes = 5
+    horizon = 21
+    episodes = 3
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
-    num_frames = 2
+    num_frames = 3
     num_steps = horizon // num_frames
     full_rollout = False
+    gray_scale = True
 
     #### EVALUATION ####
     log_step = 500
@@ -53,3 +56,6 @@ class Params:
             self.num_workers = 1
             self.num_gpus = 0
             torch.autograd.set_detect_anomaly(True)
+
+        if self.gray_scale:
+            self.obs_shape = (1, 32, 32)
