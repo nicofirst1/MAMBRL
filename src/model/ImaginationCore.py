@@ -63,8 +63,9 @@ class ImaginationCore(nn.Module):
             action = action.view(-1)
             rollout_batch_size = batch_size * self.num_actions
         else:
-            # get action based on current state
-            action = self.model_free.act(state)
+            # get last state (discard num_frames)
+            last_state= state[:, -self.in_shape[0]:, :]
+            action = self.model_free.act(last_state)
             action = action.detach()
             rollout_batch_size = batch_size
 
@@ -85,34 +86,13 @@ class ImaginationCore(nn.Module):
             imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
             # imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
             imagined_reward = imagined_reward.long()
-            """
-                Commentend cause it does not work!!
-            """
-            # imagined_state = target_to_pix(imagined_state.detach().cpu().numpy())
-            # imagined_state = torch.FloatTensor(imagined_state).view(rollout_batch_size, *self.in_shape).to(self.device)
-
-            """
-                Added by me to go back from tensor of (1024,) to image of (3, 32, 32)
-                
-                Qui ci sta un problema -> dentro il rollout viene inserito lo stato
-                con dimensione (1, 1, 3, 32, 32) (riga 102) e questo poi da problemi quando vengono
-                settati più num_step (problemi sulla chiamata riga 111 di train.py),
-                perché nel rollout se ci sono due stati lo shape sarà (2, 1, 3, 32, 32)
-                e questo shape non piace alla rete neurale. Bisogna capire dove vanno
-                aggiustate le cose, perché la chiamata riga 44 di I2A.py (chiamata all'env_model)
-                sembra volere lo shape (1, 1, 3, 32, 32) quindi quest'ultimo sembra essere giusto!
-            """
-
 
             imagined_state = imagined_state.view(batch_size, -1, 32, 32)
-            # fixme: va tolto questo concat e cercato di ritornare un imagined_state con le dimensioni
-            #  esatta per poter fare un view e basta
-            imagined_state = imagined_state.repeat([1, self.in_shape[0] * self.num_frames, 1, 1])
             imagined_state = imagined_state.float()
 
             # onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)
             # onehot_reward[range(rollout_batch_size), imagined_reward] = 1
-            onehot_reward=imagined_reward
+            onehot_reward = imagined_reward
 
             # add a dimension for the rollout, then concat
             rollout_states.append(imagined_state.unsqueeze(0))

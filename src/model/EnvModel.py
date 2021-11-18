@@ -85,7 +85,7 @@ class EnvModel(nn.Module):
             nn.Conv2d(192, 256, kernel_size=1),
             nn.ReLU()
         )
-        self.image_fc = nn.Linear(256, num_pixels)
+        self.image_fc = nn.Linear(256, num_channels*num_pixels)
 
         self.reward_conv = nn.Sequential(
             nn.Conv2d(192, 64, kernel_size=1),
