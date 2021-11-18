@@ -54,7 +54,7 @@ def get_actor_critic(obs_space, params):
     model_free = model_free.to(params.device)
 
     imagination = ImaginationCore(num_rolouts=1, in_shape=obs_space, num_actions=5, num_rewards=1, env_model=env_model,
-                                  model_free=model_free, device=params.device,
+                                  model_free=model_free, device=params.device, num_frames=params.num_frames,
                                   full_rollout=params.full_rollout)
     imagination = imagination.to(params.device)
 
@@ -68,9 +68,6 @@ def get_actor_critic(obs_space, params):
 
 def train(params: Params, config: dict):
     env = get_env(config['env_config'])
-
-    # wandb.init(project="mbrl", dir=".", tags=["I2A"])
-    # wandb.config.update(vars(args))
 
     if params.resize:
         obs_space = params.obs_shape
@@ -155,9 +152,9 @@ def collect_trajectories(params, env, ac_dict, rollout):
 
 
 def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
-    # estimate advantages
-    # todo: check if correct from formula
+    # todo: add logging in wandb
 
+    # estimate advantages
     rollouts.compute_returns(rollouts.values[-1])
     advantages = rollouts.returns - rollouts.values
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
@@ -165,7 +162,10 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
     # get data generation that splits rollout in batches
     data_generator = rollouts.recurrent_generator(advantages,
                                                   params.num_frames)
-    num_batches= rollouts.get_num_batches(params.num_frames)
+    num_batches = rollouts.get_num_batches(params.num_frames)
+
+    # set model to train mode
+    [model.train() for model in ac_dict.values()]
 
     for sample in track(data_generator, description="Batches", total=num_batches):
         states_batch, actions_batch, \

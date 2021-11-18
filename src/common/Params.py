@@ -38,6 +38,7 @@ class Params:
     num_frames = 3
     num_steps = horizon // num_frames
     full_rollout = False
+    gray_scale = True
 
     #### EVALUATION ####
     log_step = 500
@@ -55,3 +56,6 @@ class Params:
             self.num_workers = 1
             self.num_gpus = 0
             torch.autograd.set_detect_anomaly(True)
+
+        if self.gray_scale:
+            self.obs_shape = (1, 32, 32)

@@ -13,6 +13,7 @@ def get_env_configs(params: Params):
         max_cycles=params.horizon,
         continuous_actions=False,
         name=params.env_name,
+        gray_scale=params.gray_scale,
     )
 
     #register_env(params.env_name, lambda config: get_env(config))

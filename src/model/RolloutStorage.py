@@ -24,7 +24,7 @@ class RolloutStorage(object):
 
     def insert(self, step, state, action, values, reward, mask, action_log_probs):
 
-        self.states[step + 1].copy_(torch.as_tensor(state[:3]))
+        self.states[step + 1].copy_(torch.as_tensor(state[:self.num_channels]))
         self.actions[step].copy_(torch.as_tensor(action))
         self.values[step].copy_(torch.as_tensor(values))
         self.rewards[step].copy_(torch.as_tensor(reward))
@@ -35,6 +35,8 @@ class RolloutStorage(object):
         self.masks[0].copy_(self.masks[-1])
 
     def compute_returns(self, next_value, tau=0.95):
+        # todo: check if correct from formula
+
         self.values[-1] = next_value
         gae = 0
         for step in reversed(range(self.rewards.size(0))):

@@ -37,7 +37,7 @@ def target_to_pix(imagined_states):
 
 
 class ImaginationCore(nn.Module):
-    def __init__(self, num_rolouts, in_shape, num_actions, num_rewards, env_model, model_free, device,
+    def __init__(self, num_rolouts, in_shape, num_actions, num_rewards, env_model, model_free, device, num_frames,
                  full_rollout=True):
         super().__init__()
         self.num_rolouts = num_rolouts
@@ -48,6 +48,7 @@ class ImaginationCore(nn.Module):
         self.model_free = model_free
         self.full_rollout = full_rollout
         self.device = device
+        self.num_frames = num_frames
 
     def forward(self, state):
         # state      = state.cpu()
@@ -102,14 +103,16 @@ class ImaginationCore(nn.Module):
                 sembra volere lo shape (1, 1, 3, 32, 32) quindi quest'ultimo sembra essere giusto!
             """
 
+
+            imagined_state = imagined_state.view(batch_size, -1, 32, 32)
             # fixme: va tolto questo concat e cercato di ritornare un imagined_state con le dimensioni
             #  esatta per poter fare un view e basta
-            imagined_state = imagined_state.view(batch_size, -1, 32, 32)
-            imagined_state = imagined_state.repeat([1, 3 * 3, 1, 1])
+            imagined_state = imagined_state.repeat([1, self.in_shape[0] * self.num_frames, 1, 1])
             imagined_state = imagined_state.float()
 
-            onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)
-            onehot_reward[range(rollout_batch_size), imagined_reward] = 1
+            # onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)
+            # onehot_reward[range(rollout_batch_size), imagined_reward] = 1
+            onehot_reward=imagined_reward
 
             # add a dimension for the rollout, then concat
             rollout_states.append(imagined_state.unsqueeze(0))
