@@ -1,5 +1,4 @@
 import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,7 +14,7 @@ pixels = (
     (1.0, 1.0, 1.0),
     (1.0, 1.0, 0.0),
     (0.0, 0.0, 0.0),
-    (1.0, 0.0, 0.0)
+    (1.0, 0.0, 0.0),
 )
 pixel_to_onehot = {pix: i for i, pix in enumerate(pixels)}
 
@@ -37,8 +36,18 @@ def target_to_pix(imagined_states):
 
 
 class ImaginationCore(nn.Module):
-    def __init__(self, num_rolouts, in_shape, num_actions, num_rewards, env_model, model_free, device, num_frames,
-                 full_rollout=True):
+    def __init__(
+        self,
+        num_rolouts,
+        in_shape,
+        num_actions,
+        num_rewards,
+        env_model,
+        model_free,
+        device,
+        num_frames,
+        full_rollout=True,
+    ):
         super().__init__()
         self.num_rolouts = num_rolouts
         self.in_shape = in_shape
@@ -58,13 +67,19 @@ class ImaginationCore(nn.Module):
         rollout_rewards = []
 
         if self.full_rollout:
-            state = state.unsqueeze(0).repeat(self.num_actions, 1, 1, 1, 1).view(-1, *self.in_shape)
-            action = torch.LongTensor([[i] for i in range(self.num_actions)] * batch_size)
+            state = (
+                state.unsqueeze(0)
+                .repeat(self.num_actions, 1, 1, 1, 1)
+                .view(-1, *self.in_shape)
+            )
+            action = torch.LongTensor(
+                [[i] for i in range(self.num_actions)] * batch_size
+            )
             action = action.view(-1)
             rollout_batch_size = batch_size * self.num_actions
         else:
             # get last state (discard num_frames)
-            last_state= state[:, -self.in_shape[0]:, :]
+            last_state = state[:, -self.in_shape[0] :, :]
             action = self.model_free.act(last_state)
             action = action.detach()
             rollout_batch_size = batch_size
@@ -77,7 +92,9 @@ class ImaginationCore(nn.Module):
             [batch size, actions , img_w, img_h]
             the index [:,idx,:,:] corresponding to the action is chosen and the image is set to 1, the others are zero
             """
-            onehot_action = torch.zeros(rollout_batch_size, self.num_actions, *self.in_shape[1:]).to(self.device)
+            onehot_action = torch.zeros(
+                rollout_batch_size, self.num_actions, *self.in_shape[1:]
+            ).to(self.device)
             onehot_action[range(rollout_batch_size), action] = 1
             inputs = torch.cat([state, onehot_action], 1).to(self.device)
 

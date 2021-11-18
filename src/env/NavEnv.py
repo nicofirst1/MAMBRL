@@ -1,7 +1,7 @@
 import numpy as np
+from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from ray.rllib.env import ParallelPettingZooEnv
 
-from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from .Scenario import Scenario
 from .TimerLandmark import TimerLandmark
 
@@ -18,7 +18,9 @@ def rgb2gray(rgb):
 
 
 class RawEnv(SimpleEnv):
-    def __init__(self, name, N, landmarks, max_cycles, continuous_actions, gray_scale=False):
+    def __init__(
+        self, name, N, landmarks, max_cycles, continuous_actions, gray_scale=False
+    ):
         scenario = Scenario()
         world = scenario.make_world(N, landmarks)
         super().__init__(

@@ -30,7 +30,7 @@ class OnPolicy(nn.Module):
 
         logit, value = self.forward(frames)
 
-        probs = F.softmax(logit)
+        probs = F.softmax(logit, dim=0)
         log_probs = F.log_softmax(logit, dim=0)
 
         action_log_probs = log_probs.gather(1, action)
@@ -51,13 +51,17 @@ class ModelFree(OnPolicy):
         num_channels = in_shape[0]
 
         self.features = nn.Sequential(
-            nn.Conv2d(num_channels , 16, kernel_size=3, stride=1),
+            nn.Conv2d(num_channels, 16, kernel_size=3, stride=1),
             nn.ReLU(),
             nn.Conv2d(16, 16, kernel_size=3, stride=2),
             nn.ReLU(),
         )
 
-        features_out = self.features(torch.zeros(1, num_channels , *self.in_shape[1:])).view(1, -1).size(1)
+        features_out = (
+            self.features(torch.zeros(1, num_channels, *self.in_shape[1:]))
+            .view(1, -1)
+            .size(1)
+        )
 
         self.fc = nn.Sequential(
             nn.Linear(features_out, 256),

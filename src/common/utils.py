@@ -1,8 +1,7 @@
 import gym
 import numpy as np
-from ray.rllib.models import ModelCatalog
-
 from src.env.NavEnv import get_env
+
 from .Params import Params
 
 
@@ -16,15 +15,15 @@ def get_env_configs(params: Params):
         gray_scale=params.gray_scale,
     )
 
-    #register_env(params.env_name, lambda config: get_env(config))
-    params.configs['env_config'] = env_config
+    # register_env(params.env_name, lambda config: get_env(config))
+    params.configs["env_config"] = env_config
 
     return env_config
 
 
 def get_policy_configs(params: Params):
-    env = get_env(params.configs['env_config'])
-    #ModelCatalog.register_custom_model(params.model_name, NavModel)
+    env = get_env(params.configs["env_config"])
+    # ModelCatalog.register_custom_model(params.model_name, NavModel)
 
     if params.obs_type == "image":
         shape = env.render(mode="rgb_array").shape
@@ -39,15 +38,12 @@ def get_policy_configs(params: Params):
     else:
         raise NotImplementedError(f"No observation space for name '{params.obs_type}'")
 
-    policies = {
-        agnt: (None, obs_dim, env.action_space, {}) for agnt in env.agents
-    }
+    policies = {agnt: (None, obs_dim, env.action_space, {}) for agnt in env.agents}
     policy_configs = dict(
-        policies=policies,
-        policy_mapping_fn=lambda agent_id: agent_id
+        policies=policies, policy_mapping_fn=lambda agent_id: agent_id
     )
 
-    params.configs['policy_configs'] = policy_configs
+    params.configs["policy_configs"] = policy_configs
     return policy_configs
 
 
@@ -56,8 +52,8 @@ def get_model_configs(params: Params):
         custom_model=params.model_name,
         vf_share_layers=True,
     )
-    #ModelCatalog.register_custom_model(params.model_name, NavModel)
-    params.configs['model_configs'] = model_configs
+    # ModelCatalog.register_custom_model(params.model_name, NavModel)
+    params.configs["model_configs"] = model_configs
 
     return model_configs
 

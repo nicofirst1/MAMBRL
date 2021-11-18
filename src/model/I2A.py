@@ -1,12 +1,20 @@
 import torch
 import torch.nn as nn
-
 from src.model.ModelFree import OnPolicy
 from src.model.RolloutEncoder import RolloutEncoder
 
 
 class I2A(OnPolicy):
-    def __init__(self, in_shape, num_actions, num_rewards, hidden_size, imagination, num_frames, full_rollout=True):
+    def __init__(
+        self,
+        in_shape,
+        num_actions,
+        num_rewards,
+        hidden_size,
+        imagination,
+        num_frames,
+        full_rollout=True,
+    ):
         super(I2A, self).__init__()
 
         self.in_shape = in_shape
@@ -23,9 +31,15 @@ class I2A(OnPolicy):
             nn.ReLU(),
         )
 
-        self.encoder = RolloutEncoder(in_shape, num_rewards, hidden_size,num_frames=num_frames)
+        self.encoder = RolloutEncoder(
+            in_shape, num_rewards, hidden_size, num_frames=num_frames
+        )
 
-        features_out = self.features(torch.zeros(1, num_channels * num_frames, *self.in_shape[1:])).view(1, -1).size(1)
+        features_out = (
+            self.features(torch.zeros(1, num_channels * num_frames, *self.in_shape[1:]))
+            .view(1, -1)
+            .size(1)
+        )
 
         if full_rollout:
             self.fc = nn.Sequential(

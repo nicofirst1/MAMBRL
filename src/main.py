@@ -19,11 +19,10 @@ if __name__ == "__main__":
         "batch_mode": "complete_episodes",
         # "train_batch_size": 400,
         "rollout_fragment_length": 50,
-
         # PPO parameter
         "lr": 3e-4,
-        "lambda": .95,
-        "gamma": .998,
+        "lambda": 0.95,
+        "gamma": 0.998,
         "entropy_coef": 0.01,
         "clip_param": 0.2,
         "use_critic": True,
@@ -35,15 +34,12 @@ if __name__ == "__main__":
         "eps": 1e-5,
         "alpha": 0.99,
         "ppo_clip_param": 0.1,
-
         # Callbacks
         "callbacks": {},
-
         # Model
         "model": model_configs,
-
         # Multiagent
-        "multiagent": policy_configs
+        "multiagent": policy_configs,
     }
 
     params.configs = configs

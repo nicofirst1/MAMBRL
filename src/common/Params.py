@@ -22,7 +22,7 @@ class Params:
     resize = True
     obs_shape = (3, 32, 32)
     num_workers = multiprocessing.cpu_count() - 1
-    num_gpus = len(tf.config.list_physical_devices('GPU'))
+    num_gpus = len(tf.config.list_physical_devices("GPU"))
     framework = "torch"
     minibatch = 2
     epochs = 1

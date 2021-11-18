@@ -1,17 +1,20 @@
 import matplotlib as mpl
 import numpy as np
-
 from pettingzoo.mpe._mpe_utils.core import Entity
 
-def colorFader(c1, c2, mix=0): # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+
+def colorFader(
+    c1, c2, mix=0
+):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
     return mpl.colors.to_rgb(mpl.colors.to_hex((1 - mix) * c1 + mix * c2))
 
+
 class TimerLandmark(Entity):
-    """ Timer landmark class.
+    """Timer landmark class.
     Each landmark increases its timer by the 'increase' param per step.
     This timer is proportional (timer* penalty) to the penalty agents get at each turn.
     The timer resets when an agent lands upon it and the timer starts from zero.
-    So the longer a landmark stays untouched the worse the penalty gets. """
+    So the longer a landmark stays untouched the worse the penalty gets."""
 
     colors = [
         colorFader(np.array([0, 1, 0]), np.array([1, 0, 0]), x / 100)

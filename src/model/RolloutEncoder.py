@@ -7,7 +7,6 @@ class RolloutEncoder(nn.Module):
         super(RolloutEncoder, self).__init__()
         self.in_shape = list(in_shape)
 
-
         self.features = nn.Sequential(
             nn.Conv2d(self.in_shape[0], 16, kernel_size=3, stride=1),
             nn.ReLU(),
