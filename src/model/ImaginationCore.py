@@ -67,6 +67,7 @@ class ImaginationCore(nn.Module):
         rollout_rewards = []
 
         if self.full_rollout:
+            # esegui un rollout per ogni azione
             state = (
                 state.unsqueeze(0)
                 .repeat(self.num_actions, 1, 1, 1, 1)
@@ -100,11 +101,11 @@ class ImaginationCore(nn.Module):
 
             imagined_state, imagined_reward = self.env_model(inputs)
 
-            imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
+            imagined_state = F.softmax(imagined_state, dim=2).max(dim=1)[1]
             # imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
             imagined_reward = imagined_reward.long()
 
-            imagined_state = imagined_state.view(batch_size, -1, 32, 32)
+            imagined_state = imagined_state.view(batch_size, -1, 32, 32) #fixme: use in_shape
             imagined_state = imagined_state.float()
 
             # onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)

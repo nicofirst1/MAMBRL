@@ -111,7 +111,6 @@ def train(params: Params, config: dict):
     for ep in range(params.epochs):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, ac_dict, rollout)
-        exit(0)
         # train for all the trajectories collected so far
         train_epoch(rollout, ac_dict, env, params, optimizer, optim_params)
         rollout.after_update()
@@ -258,19 +257,7 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
         clip_grad_norm_(optim_params, params.configs["max_grad_norm"])
         optimizer.step()
 
-    # distil_logit, _, _, _ = distil_policy.evaluate_actions(
-    #     rollouts.states[:-1],
-    #     rollouts.actions
-    # )
-    #
-    # # estiamte distil loss and backpropag
-    # distil_loss = F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)
-    # distil_loss = distil_loss.sum(1).mean()
-    # distil_loss *= 0.01
-    #
-    # distil_optimizer.zero_grad()
-    # distil_loss.backward()
-    # distil_optimizer.step()
+
     #
     # # estiamte other loss and backpropag
     #

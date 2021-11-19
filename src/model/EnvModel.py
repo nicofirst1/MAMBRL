@@ -112,7 +112,7 @@ class EnvModel(nn.Module):
         image = self.image_conv(x)
         # [batch size, features, img_w, img_h] ->[batch size, img_w, img_h, features] with permutation
         # [batch size, img_w, img_h, features] -> [whatever, 256] with view
-        # fixme: why 256 is so arbitrary? Maybe bc is the pixel interval?
+        #
         image = image.permute(0, 2, 3, 1).contiguous().view(-1, 256)
         image = self.image_fc(image)
         image = image.view(batch_size, -1, image.shape[-1])
