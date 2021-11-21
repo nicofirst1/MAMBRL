@@ -24,7 +24,7 @@ def parametrize_state(params):
     def inner(state):
         if params.resize:
             state = state.squeeze()
-            state = cv2.resize(state, dsize=params.obs_shape[1:], interpolation=cv2.INTER_CUBIC)
+            state = cv2.resize(state, dsize=(params.obs_shape[2], params.obs_shape[1]), interpolation=cv2.INTER_CUBIC)
 
         state = torch.FloatTensor(state).unsqueeze(dim=0)
         state = state.repeat([params.num_frames, 1, 1])
@@ -136,7 +136,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
         current_state = state_fn(state)
 
         for step in range(params.horizon):
-
+            action_log_probs_list = []
             current_state = current_state.to(params.device).unsqueeze(dim=0)
 
             # let every agent act
@@ -151,10 +151,11 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action_logit, value_logit = ac_dict[agent_id](current_state)
 
                 # get action with softmax and multimodal (stochastic)
-                action_log_probs = F.softmax(action_logit, dim=0)
-                actions = action_log_probs.multinomial(1)
-                action_dict[agent_id] = int(actions)
+                action_log_probs = F.softmax(action_logit, dim=1)
+                action = action_log_probs.multinomial(1).squeeze()
+                action_dict[agent_id] = int(action)
                 values_dict[agent_id] = int(value_logit)
+                action_log_probs_list.append(action_log_probs)
 
             ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, _ = env.step(action_dict)
@@ -168,6 +169,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
             rewards = mas_dict2tensor(rewards)
             actions = mas_dict2tensor(action_dict)
             values = mas_dict2tensor(values_dict)
+            action_log_probs = torch.cat(action_log_probs_list, dim=0)
 
             current_state = state_fn(next_state)
             rollout.insert(

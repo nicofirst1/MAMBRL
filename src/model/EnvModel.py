@@ -110,12 +110,12 @@ class EnvModel(nn.Module):
         # [batch size, features, img_w, img_h]
 
         image = self.image_conv(x)
-        # [batch size, features, img_w, img_h] ->[batch size, img_w, img_h, features] with permutation
+
+        # [batch size, features, img_w, img_h] -> [batch size, img_w, img_h, features] with permutation
         # [batch size, img_w, img_h, features] -> [whatever, 256] with view
-        #
         image = image.permute(0, 2, 3, 1).contiguous().view(-1, 256)
         image = self.image_fc(image)
-        image = image.view(batch_size, -1, image.shape[-1])
+        #image = image.view(batch_size, -1, image.shape[-1])
 
         reward = self.reward_conv(x)
         reward = reward.view(batch_size, -1)

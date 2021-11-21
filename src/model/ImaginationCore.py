@@ -101,12 +101,11 @@ class ImaginationCore(nn.Module):
 
             imagined_state, imagined_reward = self.env_model(inputs)
 
-            imagined_state = F.softmax(imagined_state, dim=2).max(dim=1)[1]
-            # imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
-            imagined_reward = imagined_reward.long()
-
-            imagined_state = imagined_state.view(batch_size, -1, 32, 32) #fixme: use in_shape
+            imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
+            imagined_state = imagined_state.view(rollout_batch_size, *self.in_shape)
             imagined_state = imagined_state.float()
+
+            imagined_reward = imagined_reward.long() ##fixme: 0.9 diventa 0 con .long()
 
             # onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)
             # onehot_reward[range(rollout_batch_size), imagined_reward] = 1

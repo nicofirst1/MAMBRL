@@ -36,7 +36,7 @@ class OnPolicy(nn.Module):
         action_log_probs = log_probs.gather(1, action)
         entropy = -(probs * log_probs).sum(1).mean()
 
-        return action_logit, action_log_probs, value, entropy
+        return action_logit, probs, value, entropy
 
 
 class ModelFree(OnPolicy):
