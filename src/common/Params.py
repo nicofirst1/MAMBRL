@@ -2,7 +2,6 @@ import multiprocessing
 import os
 import uuid
 
-import tensorflow as tf
 import torch
 
 
@@ -22,7 +21,7 @@ class Params:
     resize = True
     obs_shape = (3, 15, 19)
     num_workers = multiprocessing.cpu_count() - 1
-    num_gpus = len(tf.config.list_physical_devices("GPU"))
+    num_gpus = len(torch.cuda.device_count())
     framework = "torch"
     minibatch = 2
     epochs = 1
