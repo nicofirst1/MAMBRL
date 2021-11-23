@@ -21,7 +21,7 @@ class Params:
     resize = True
     obs_shape = (3, 15, 19)
     num_workers = multiprocessing.cpu_count() - 1
-    num_gpus = len(torch.cuda.device_count())
+    num_gpus = torch.cuda.device_count()
     framework = "torch"
     minibatch = 2
     epochs = 1
