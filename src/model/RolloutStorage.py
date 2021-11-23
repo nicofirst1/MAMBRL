@@ -12,7 +12,7 @@ class RolloutStorage(object):
         self.actions = torch.zeros(num_steps, num_agents).long()
         self.values = torch.zeros(num_steps + 1, num_agents).long()
         self.returns = torch.zeros(num_steps + 1, num_agents)
-        self.action_log_probs = torch.zeros(num_steps+1, num_agents, num_actions)
+        self.action_log_probs = torch.zeros(num_steps+1, num_actions, num_agents)
         self.gamma = gamma
         self.size_mini_batch = size_mini_batch
 

@@ -155,7 +155,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action = action_log_probs.multinomial(1).squeeze()
                 action_dict[agent_id] = int(action)
                 values_dict[agent_id] = int(value_logit)
-                action_log_probs_list.append(action_log_probs)
+                action_log_probs_list.append(action_log_probs.unsqueeze(dim=-1))
 
             ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, _ = env.step(action_dict)
@@ -169,7 +169,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
             rewards = mas_dict2tensor(rewards)
             actions = mas_dict2tensor(action_dict)
             values = mas_dict2tensor(values_dict)
-            action_log_probs = torch.cat(action_log_probs_list, dim=0)
+            action_log_probs = torch.cat(action_log_probs_list, dim=-1)
 
             current_state = state_fn(next_state)
             rollout.insert(
@@ -235,6 +235,9 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
         value_loss = (return_batch - values).pow(2).mean()
 
         # fixme: actually using softmax probs (not log) check if different
+        # take last old_action_prob/adv_targ since is the prob of the last frame in the sequence of num_frames
+        old_action_log_probs_batch= old_action_log_probs_batch[:,-1]
+        adv_targ= adv_targ[:, -1:, :]
         ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
         surr1 = ratio * adv_targ
         surr2 = (
