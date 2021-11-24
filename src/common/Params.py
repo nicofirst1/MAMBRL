@@ -19,7 +19,7 @@ class Params:
     debug = True
     device = torch.device("cuda")
     resize = True
-    obs_shape = (3, 15, 19)
+    obs_shape = [3, 32, 32]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
@@ -57,4 +57,4 @@ class Params:
             torch.autograd.set_detect_anomaly(True)
 
         if self.gray_scale:
-            self.obs_shape = (1, 15, 19)
+            self.obs_shape[0] = 1

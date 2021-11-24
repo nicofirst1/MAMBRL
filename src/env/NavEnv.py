@@ -36,7 +36,7 @@ class RawEnv(SimpleEnv):
             world,
             max_cycles,
             continuous_actions,
-            color_entities=TimerLandmark,
+            #color_entities=TimerLandmark,
         )
         self.metadata["name"] = name
         self.gray_scale = gray_scale

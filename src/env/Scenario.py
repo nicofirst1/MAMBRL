@@ -46,6 +46,7 @@ class Scenario(BaseScenario):
             agent.size = 0.05
             agent.accel = 4.0
             agent.max_speed = 1.3
+            agent.color = np.array([0, 0, 1])
 
         # add agents collisions
         self.registered_collisions = {agent.name: [] for agent in world.agents}

@@ -11,7 +11,7 @@ from src.common import Params
 from src.env.NavEnv import get_env
 from src.model.EnvModel import EnvModel
 from src.model.I2A import I2A
-from src.model.ImaginationCore import ImaginationCore
+from src.model.ImaginationCore import ImaginationCore, target_to_pix
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
 
@@ -45,8 +45,13 @@ def get_actor_critic(obs_space, params, num_rewards):
     """
     Create all the modules to build the i2a
     """
+
+    num_colors=3
+
+    t2p=target_to_pix(num_colors)
+
     env_model = EnvModel(
-        obs_space, num_rewards=num_rewards, num_frames=params.num_frames, num_actions=5
+        obs_space, num_rewards=num_rewards, num_frames=params.num_frames, num_actions=5, num_colors=num_colors,
     )
     env_model = env_model.to(params.device)
 
@@ -63,6 +68,7 @@ def get_actor_critic(obs_space, params, num_rewards):
         device=params.device,
         num_frames=params.num_frames,
         full_rollout=params.full_rollout,
+        target2pix=t2p,
     )
     imagination = imagination.to(params.device)
 
