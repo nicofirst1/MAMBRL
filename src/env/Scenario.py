@@ -1,19 +1,35 @@
 import numpy as np
-from env.TimerLandmark import TimerLandmark
 from pettingzoo.mpe._mpe_utils.core import Agent, World
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 
+from src.env.TimerLandmark import TimerLandmark
+
+
+def is_collision(agent1, agent2):
+    delta_pos = agent1.state.p_pos - agent2.state.p_pos
+    dist = np.sqrt(np.sum(np.square(delta_pos)))
+    dist_min = agent1.size + agent2.size
+    return True if dist < dist_min else False
+
 
 class Scenario(BaseScenario):
-    std_penalty: int
+    def __init__(self, landmark_reward=1, max_landmark_counter=4, landmark_penalty=2):
+        self.registered_collisions = {}
+        self.landmarks = {}
+        self.max_landmark_counter = max_landmark_counter
+        self.landmark_reward = landmark_reward
+        self.landmark_penalty = landmark_penalty
 
-    def make_world(self, num_agents=1, num_landmarks=2, std_penalty=2):
+    def make_world(
+        self,
+        num_agents=1,
+        num_landmarks=2,
+    ):
         world = World()
         # set any world properties first
         world.dim_c = 2
         # add agents
         world.agents = [Agent() for _ in range(num_agents)]
-        self.std_penalty = std_penalty
 
         for i, agent in enumerate(world.agents):
             agent.name = f"agent_{i}"
@@ -23,14 +39,19 @@ class Scenario(BaseScenario):
             agent.accel = 4.0
             agent.max_speed = 1.3
 
+        # add agents collisions
+        self.registered_collisions = {agent.name: [] for agent in world.agents}
+
         # add landmarks
         world.landmarks = [TimerLandmark() for _ in range(num_landmarks)]
         for i, landmark in enumerate(world.landmarks):
-            landmark.name = "landmark %d" % i
+            landmark.name = f"landmark_{i}"
             landmark.collide = False
             landmark.movable = False
             landmark.size = 0.1
             landmark.boundary = False
+
+        self.landmarks = {landmark.name: landmark for landmark in world.landmarks}
 
         return world
 
@@ -56,7 +77,21 @@ class Scenario(BaseScenario):
 
         # check for every landmark
         for landmark in world.landmarks:
-            rew -= self.std_penalty * landmark.timer
+
+            already_collided = landmark.name in self.registered_collisions[agent.name]
+            had_collided = is_collision(agent, landmark)
+
+            if not already_collided and had_collided:
+                # positive reward, and add collision
+                rew += self.landmark_reward
+                self.registered_collisions[agent.name] += [landmark.name]
+            elif already_collided and not had_collided:
+                # if not on landmark and remove registered collision
+                self.registered_collisions[agent.name].remove(landmark.name)
+
+            rew += self.landmark_penalty * min(
+                landmark.counter, self.max_landmark_counter
+            )
 
         return rew
 

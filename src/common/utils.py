@@ -7,12 +7,17 @@ from .Params import Params
 
 def get_env_configs(params: Params):
     env_config = dict(
-        N=params.agents,
-        landmarks=params.landmarks,
+        num_agents=params.agents,
+        num_landmarks=params.landmarks,
         max_cycles=params.horizon,
         continuous_actions=False,
         name=params.env_name,
         gray_scale=params.gray_scale,
+        scenario_kwargs=dict(
+            landmark_reward=1,
+            max_landmark_counter=4,
+            landmark_penalty=-2,
+        )
     )
 
     # register_env(params.env_name, lambda config: get_env(config))
