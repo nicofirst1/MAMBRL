@@ -105,11 +105,10 @@ class ImaginationCore(nn.Module):
             imagined_state = imagined_state.view(rollout_batch_size, *self.in_shape)
             imagined_state = imagined_state.float()
 
-            imagined_reward = imagined_reward.long() ##fixme: 0.9 diventa 0 con .long()
+            imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
 
-            # onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)
-            # onehot_reward[range(rollout_batch_size), imagined_reward] = 1
-            onehot_reward = imagined_reward
+            onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)
+            onehot_reward[range(rollout_batch_size), imagined_reward] = 1
 
             # add a dimension for the rollout, then concat
             rollout_states.append(imagined_state.unsqueeze(0))

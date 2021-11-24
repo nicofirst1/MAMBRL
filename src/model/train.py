@@ -41,12 +41,12 @@ def mas_dict2tensor(agent_dict):
     return torch.as_tensor(tensor)
 
 
-def get_actor_critic(obs_space, params):
+def get_actor_critic(obs_space, params, num_rewards):
     """
     Create all the modules to build the i2a
     """
     env_model = EnvModel(
-        obs_space, num_rewards=1, num_frames=params.num_frames, num_actions=5
+        obs_space, num_rewards=num_rewards, num_frames=params.num_frames, num_actions=5
     )
     env_model = env_model.to(params.device)
 
@@ -57,7 +57,7 @@ def get_actor_critic(obs_space, params):
         num_rolouts=1,
         in_shape=obs_space,
         num_actions=5,
-        num_rewards=1,
+        num_rewards=num_rewards,
         env_model=env_model,
         model_free=model_free,
         device=params.device,
@@ -69,7 +69,7 @@ def get_actor_critic(obs_space, params):
     actor_critic = I2A(
         in_shape=obs_space,
         num_actions=5,
-        num_rewards=1,
+        num_rewards=num_rewards,
         hidden_size=256,
         imagination=imagination,
         full_rollout=params.full_rollout,
@@ -89,7 +89,8 @@ def train(params: Params, config: dict):
     else:
         obs_space = env.render(mode="rgb_array").shape
 
-    ac_dict = {agent_id: get_actor_critic(obs_space, params) for agent_id in env.agents}
+    num_rewards=len(env.par_env.get_reward_range())
+    ac_dict = {agent_id: get_actor_critic(obs_space, params, num_rewards ) for agent_id in env.agents}
 
     optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
     optim_params = chain.from_iterable(optim_params)
@@ -155,7 +156,8 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action = action_log_probs.multinomial(1).squeeze()
                 action_dict[agent_id] = int(action)
                 values_dict[agent_id] = int(value_logit)
-                action_log_probs_list.append(action_log_probs.unsqueeze(dim=-1))
+                action_log_probs=torch.log(action_log_probs).unsqueeze(dim=-1)
+                action_log_probs_list.append(action_log_probs)
 
             ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, _ = env.step(action_dict)
@@ -234,7 +236,6 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
 
         value_loss = (return_batch - values).pow(2).mean()
 
-        # fixme: actually using softmax probs (not log) check if different
         # take last old_action_prob/adv_targ since is the prob of the last frame in the sequence of num_frames
         old_action_log_probs_batch= old_action_log_probs_batch[:,-1]
         adv_targ= adv_targ[:, -1:, :]

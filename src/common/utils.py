@@ -7,8 +7,6 @@ from .Params import Params
 
 def get_env_configs(params: Params):
     env_config = dict(
-        num_agents=params.agents,
-        num_landmarks=params.landmarks,
         max_cycles=params.horizon,
         continuous_actions=False,
         name=params.env_name,
@@ -17,6 +15,8 @@ def get_env_configs(params: Params):
             landmark_reward=1,
             max_landmark_counter=4,
             landmark_penalty=-2,
+            num_agents=params.agents,
+            num_landmarks=params.landmarks,
         )
     )
 

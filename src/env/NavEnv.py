@@ -9,7 +9,7 @@ from .Scenario import Scenario, is_collision
 from .TimerLandmark import TimerLandmark
 
 
-def get_env(kwargs):
+def get_env(kwargs) -> ParallelPettingZooEnv:
     """Initialize rawEnv and wrap it in parallel petting zoo"""
     env = RawEnv(**kwargs)
     env = ParallelPettingZooEnv(env)
@@ -22,17 +22,15 @@ def rgb2gray(rgb):
 
 class RawEnv(SimpleEnv):
     def __init__(
-        self,
-        name,
-        scenario_kwargs,
-        num_agents,
-        num_landmarks,
-        max_cycles,
-        continuous_actions,
-        gray_scale=False,
+            self,
+            name,
+            scenario_kwargs,
+            max_cycles,
+            continuous_actions,
+            gray_scale=False,
     ):
         scenario = Scenario(**scenario_kwargs)
-        world = scenario.make_world(num_agents, num_landmarks)
+        world = scenario.make_world()
         super().__init__(
             scenario,
             world,
@@ -43,6 +41,9 @@ class RawEnv(SimpleEnv):
         self.metadata["name"] = name
         self.gray_scale = gray_scale
         self.agents_dict = {agent.name: agent for agent in world.agents}
+
+    def get_reward_range(self):
+        return self.scenario.get_reward_range()
 
     def reset(self):
         super(RawEnv, self).reset()

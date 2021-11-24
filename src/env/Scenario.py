@@ -13,23 +13,31 @@ def is_collision(agent1, agent2):
 
 
 class Scenario(BaseScenario):
-    def __init__(self, landmark_reward=1, max_landmark_counter=4, landmark_penalty=2):
+    def __init__(self, num_agents, num_landmarks, landmark_reward=1, max_landmark_counter=4, landmark_penalty=2):
         self.registered_collisions = {}
         self.landmarks = {}
         self.max_landmark_counter = max_landmark_counter
         self.landmark_reward = landmark_reward
         self.landmark_penalty = landmark_penalty
+        self.num_agents = num_agents
+        self.num_landmarks = num_landmarks
+
+    def get_reward_range(self):
+
+        lower_bound = self.num_landmarks * self.landmark_penalty * self.max_landmark_counter
+        upper_bound = self.landmark_reward
+
+        return list(range(lower_bound, upper_bound))
 
     def make_world(
-        self,
-        num_agents=1,
-        num_landmarks=2,
+            self,
+
     ):
         world = World()
         # set any world properties first
         world.dim_c = 2
         # add agents
-        world.agents = [Agent() for _ in range(num_agents)]
+        world.agents = [Agent() for _ in range(self.num_agents)]
 
         for i, agent in enumerate(world.agents):
             agent.name = f"agent_{i}"
@@ -43,7 +51,7 @@ class Scenario(BaseScenario):
         self.registered_collisions = {agent.name: [] for agent in world.agents}
 
         # add landmarks
-        world.landmarks = [TimerLandmark() for _ in range(num_landmarks)]
+        world.landmarks = [TimerLandmark() for _ in range(self.num_landmarks)]
         for i, landmark in enumerate(world.landmarks):
             landmark.name = f"landmark_{i}"
             landmark.collide = False
@@ -73,6 +81,11 @@ class Scenario(BaseScenario):
         return [agent for agent in world.agents]
 
     def reward(self, agent, world):
+        """
+        Rewards are now bounded between
+        [- num_landmarks * landmark_penalty * max_landmark_counter ; landmark_reward]
+        Assuming only integer values
+        """
         rew = 0
 
         # check for every landmark
