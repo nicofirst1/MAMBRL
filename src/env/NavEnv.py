@@ -32,6 +32,7 @@ class RawEnv(SimpleEnv):
         )
         self.metadata["name"] = name
         self.gray_scale = gray_scale
+        self.agents_dict={agent.name:agent for agent in world.agents}
 
     @staticmethod
     def is_collision(agent1, agent2):
@@ -60,20 +61,19 @@ class RawEnv(SimpleEnv):
             self.agent_selection = agent_id
             super(RawEnv, self).step(action)
 
-        for landmark in self.world.landmarks:
+            for landmark in self.world.landmarks:
 
-            visited = False
+                visited = False
 
-            # check if one agent has visited the landmark
-            for agent in self.world.agents:
-                if self.is_collision(agent, landmark):
+                # check if one agent has visited the landmark
+                if self.is_collision(self.agents_dict[agent_id], landmark):
                     visited = True
                     break
 
-            # if visited reset else increase
-            if visited:
-                landmark.reset_timer()
-            else:
-                landmark.step()
+                # if visited reset else increase
+                if visited:
+                    landmark.reset_timer()
+                else:
+                    landmark.step()
 
         return self.observe(), self.rewards, self.dones, self.infos
