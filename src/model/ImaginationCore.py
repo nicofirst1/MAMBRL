@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,16 +7,8 @@ from src.model import EnvModel
 from src.model.ModelFree import ModelFree
 
 
-def target_to_pix(num_colors, gray_scale=False):
-    color_index = [  # map index to RGB colors
-        (0, 255, 0),  # green -> landmarks
-        (0, 0, 255),  # blue -> agents
-        (255, 255, 255),  # white -> background
-    ]
-
+def target_to_pix(color_index, gray_scale=False):
     color_index = [torch.as_tensor(x) for x in color_index]
-
-    assert num_colors == len(color_index), "The number of colors in param does not match colors in list"
 
     def inner(imagined_states):
         batch_size = imagined_states.shape[0]
@@ -28,21 +19,20 @@ def target_to_pix(num_colors, gray_scale=False):
         # remove channel dim since is 1
         imagined_states = imagined_states.squeeze(1)
 
-        for c in range(num_colors):
+        for c in range(len(color_index)):
             indices = imagined_states == c
             new_imagined_state[indices] = color_index[c]
 
         new_imagined_state = new_imagined_state.view(batch_size, 3, *image_shape)
 
-        if False: #debug, show image
+        if False:  # debug, show image
             from PIL import Image
-            img=new_imagined_state[0].cpu().view(32,32,3)
-            img=Image.fromarray(img.numpy(), mode = "RGB")
+            img = new_imagined_state[0].cpu().view(32, 32, 3)
+            img = Image.fromarray(img.numpy(), mode="RGB")
             img.show()
 
         if gray_scale:
-            new_imagined_state= rgb2gray(new_imagined_state, dimension=1)
-
+            new_imagined_state = rgb2gray(new_imagined_state, dimension=1)
 
         return new_imagined_state
 

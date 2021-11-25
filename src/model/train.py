@@ -48,9 +48,15 @@ def get_actor_critic(obs_space, params, num_rewards):
     Create all the modules to build the i2a
     """
 
-    num_colors=3
+    color_index = [  # map index to RGB colors
+        (0, 255, 0),  # green -> landmarks
+        (0, 0, 255),  # blue -> agents
+        (255, 255, 255),  # white -> background
+    ]
 
-    t2p=target_to_pix(num_colors, gray_scale=params.gray_scale)
+    num_colors=len(color_index)
+
+    t2p=target_to_pix(color_index, gray_scale=params.gray_scale)
 
     env_model = EnvModel(
         obs_space, num_rewards=num_rewards, num_frames=params.num_frames, num_actions=5, num_colors=num_colors,

@@ -1,17 +1,6 @@
 import torch
 import torch.nn as nn
 
-"""
-    Here something is not working.. the outputs of self.conv1 and self.conv2 
-    do not have the same dimension, in particular one is (1, 16, x, y) and the
-    other is (1, 32, z, z). Thus, it's not possible in the forward function to
-    apply the cat function. I've replaced the self.conv1 with another version
-    to make it work for now, but this problem must be investigated
-    
-    Nico: IMO it is not important if we copy exactly the conv structure as long as it serve its purpose
-     (extract features from image)
-"""
-
 
 class BasicBlock(nn.Module):
     """
@@ -73,7 +62,7 @@ class EnvModel(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(
                 num_channels * num_frames + num_actions, 64, kernel_size=1
-            ),  # 8 = 3 frames + 5 actions
+            ),
             nn.ReLU(),
         )
 
@@ -110,7 +99,6 @@ class EnvModel(nn.Module):
         # [batch size, img_w, img_h, features] -> [whatever, 256] with view
         image = image.permute(0, 2, 3, 1).contiguous().view(-1, 256)
         image = self.image_fc(image)
-        #image = image.view(batch_size, -1, image.shape[-1])
 
         reward = self.reward_conv(x)
         reward = reward.view(batch_size, -1)
