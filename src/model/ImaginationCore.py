@@ -3,16 +3,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.common.utils import rgb2gray
 from src.model import EnvModel
 from src.model.ModelFree import ModelFree
 
-"""
-    Here this has to be clarified.. what is this pixels and how the function
-    target_to_pix is used!
-"""
 
-
-def target_to_pix(num_colors):
+def target_to_pix(num_colors, gray_scale=False):
     color_index = [  # map index to RGB colors
         (0, 255, 0),  # green -> landmarks
         (0, 0, 255),  # blue -> agents
@@ -20,15 +16,6 @@ def target_to_pix(num_colors):
     ]
 
     color_index = [torch.as_tensor(x) for x in color_index]
-
-    """
-        To pixel will become this:
-            {0: (0.0, 1.0, 0.0), 1: (0.0, 1.0, 1.0), 2: (0.0, 0.0, 1.0), 3: (1.0, 1.0, 1.0), 4: (1.0, 1.0, 0.0), 5: (0.0, 0.0, 0.0), 6: (1.0, 0.0, 0.0)}
-    
-        so this means that the imagined_states coming as input should have values only
-        in the range 0 - 6. This is weird!
-        N.B. with paras.out_shape = (3, 32, 32), the input imagined_states has shape (1024,)
-    """
 
     assert num_colors == len(color_index), "The number of colors in param does not match colors in list"
 
@@ -50,8 +37,11 @@ def target_to_pix(num_colors):
         if False: #debug, show image
             from PIL import Image
             img=new_imagined_state[0].cpu().view(32,32,3)
-            img=Image.fromarray(img)
+            img=Image.fromarray(img.numpy(), mode = "RGB")
             img.show()
+
+        if gray_scale:
+            new_imagined_state= rgb2gray(new_imagined_state, dimension=1)
 
 
         return new_imagined_state
@@ -62,7 +52,7 @@ def target_to_pix(num_colors):
 class ImaginationCore(nn.Module):
     def __init__(
             self,
-            num_rolouts: int,
+            num_rollouts: int,
             in_shape,
             num_actions: int,
             num_rewards: int,
@@ -74,7 +64,7 @@ class ImaginationCore(nn.Module):
             full_rollout=True,
     ):
         super().__init__()
-        self.num_rolouts = num_rolouts
+        self.num_rollouts = num_rollouts
         self.in_shape = in_shape
         self.num_actions = num_actions
         self.num_rewards = num_rewards
@@ -111,7 +101,7 @@ class ImaginationCore(nn.Module):
             action = action.detach()
             rollout_batch_size = batch_size
 
-        for step in range(self.num_rolouts):
+        for step in range(self.num_rollouts):
             """
             propagate action on "image" (aka tensor of same shape as image)
             this tensor (onehot_action) has the same shape as the image on the last two dimension

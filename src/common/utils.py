@@ -1,7 +1,7 @@
 import gym
 import numpy as np
 from src.env.NavEnv import get_env
-
+import torch
 from .Params import Params
 
 
@@ -84,3 +84,15 @@ def trial_name_creator(something):
     name = str(something).rsplit("_", 1)[0]
     name = f"{name}_{Params.unique_id}"
     return name
+
+
+def rgb2gray(rgb, dimension):
+    rgb=rgb.transpose(dimension,-1)
+    const= torch.as_tensor([0.2989, 0.5870, 0.1140])
+
+    rgb=rgb*const
+    rgb= rgb.sum(dim=-1).unsqueeze(dim=-1)
+    rgb=rgb.transpose(-1,dimension)
+
+    return rgb
+

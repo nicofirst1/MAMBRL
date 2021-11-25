@@ -2,6 +2,7 @@ import itertools
 
 import numpy as np
 from ray.rllib.env import ParallelPettingZooEnv
+from ray.rllib.utils.images import rgb2gray
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 
@@ -15,9 +16,6 @@ def get_env(kwargs) -> ParallelPettingZooEnv:
     env = ParallelPettingZooEnv(env)
     return env
 
-
-def rgb2gray(rgb):
-    return np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
 
 
 class RawEnv(SimpleEnv):

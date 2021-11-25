@@ -48,7 +48,7 @@ def get_actor_critic(obs_space, params, num_rewards):
 
     num_colors=3
 
-    t2p=target_to_pix(num_colors)
+    t2p=target_to_pix(num_colors, gray_scale=params.gray_scale)
 
     env_model = EnvModel(
         obs_space, num_rewards=num_rewards, num_frames=params.num_frames, num_actions=5, num_colors=num_colors,
