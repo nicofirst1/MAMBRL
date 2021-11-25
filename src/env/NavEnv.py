@@ -1,9 +1,9 @@
 import itertools
 
 import numpy as np
-from ray.rllib.env import ParallelPettingZooEnv
-
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
+from ray.rllib.env import ParallelPettingZooEnv
+from ray.rllib.utils.images import rgb2gray
 
 from .Scenario import Scenario, is_collision
 from .TimerLandmark import TimerLandmark
@@ -16,18 +16,14 @@ def get_env(kwargs) -> ParallelPettingZooEnv:
     return env
 
 
-def rgb2gray(rgb):
-    return np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
-
-
 class RawEnv(SimpleEnv):
     def __init__(
-            self,
-            name,
-            scenario_kwargs,
-            max_cycles,
-            continuous_actions,
-            gray_scale=False,
+        self,
+        name,
+        scenario_kwargs,
+        max_cycles,
+        continuous_actions,
+        gray_scale=False,
     ):
         scenario = Scenario(**scenario_kwargs)
         world = scenario.make_world()
@@ -36,7 +32,7 @@ class RawEnv(SimpleEnv):
             world,
             max_cycles,
             continuous_actions,
-            #color_entities=TimerLandmark,
+            # color_entities=TimerLandmark,
         )
         self.metadata["name"] = name
         self.gray_scale = gray_scale

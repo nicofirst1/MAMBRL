@@ -4,9 +4,6 @@ import cv2
 import torch
 import torch.nn.functional as F
 from rich.progress import track
-from torch import optim
-from torch.nn.utils import clip_grad_norm_
-
 from src.common import Params
 from src.env.NavEnv import get_env
 from src.model.EnvModel import EnvModel
@@ -14,6 +11,8 @@ from src.model.I2A import I2A
 from src.model.ImaginationCore import ImaginationCore, target_to_pix
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
+from torch import optim
+from torch.nn.utils import clip_grad_norm_
 
 
 # just an hack for adding 3 frames, actually not needed
@@ -25,10 +24,15 @@ def parametrize_state(params):
     def inner(state):
         if params.resize:
             state = state.squeeze()
-            state = cv2.resize(state, dsize=(
-                params.obs_shape[2], params.obs_shape[1]), interpolation=cv2.INTER_CUBIC)
+            state = cv2.resize(
+                state,
+                dsize=(params.obs_shape[2], params.obs_shape[1]),
+                interpolation=cv2.INTER_CUBIC,
+            )
 
+        # fixme: why are we not using long instead of floats?
         state = torch.FloatTensor(state).unsqueeze(dim=0)
+        # fixme: fix using window
         state = state.repeat([params.num_frames, 1, 1])
         return state
 
@@ -48,12 +52,22 @@ def get_actor_critic(obs_space, params, num_rewards):
     Create all the modules to build the i2a
     """
 
-    num_colors = 3
+    color_index = [  # map index to RGB colors
+        (0, 255, 0),  # green -> landmarks
+        (0, 0, 255),  # blue -> agents
+        (255, 255, 255),  # white -> background
+    ]
 
-    t2p = target_to_pix(num_colors)
+    num_colors = len(color_index)
+
+    t2p = target_to_pix(color_index, gray_scale=params.gray_scale)
 
     env_model = EnvModel(
-        obs_space, num_rewards=num_rewards, num_frames=params.num_frames, num_actions=5, num_colors=num_colors,
+        obs_space,
+        num_rewards=num_rewards,
+        num_frames=params.num_frames,
+        num_actions=5,
+        num_colors=num_colors,
     )
     env_model = env_model.to(params.device)
 
@@ -64,7 +78,7 @@ def get_actor_critic(obs_space, params, num_rewards):
     model_free = model_free.to(params.device)
 
     imagination = ImaginationCore(
-        num_rolouts=1,
+        num_rollouts=1,
         in_shape=obs_space,
         num_actions=5,
         num_rewards=num_rewards,
@@ -100,10 +114,11 @@ def train(params: Params, config: dict):
     else:
         obs_space = env.render(mode="rgb_array").shape
 
-    # reward from [-16 to 0]
     num_rewards = len(env.par_env.get_reward_range())
-    ac_dict = {agent_id: get_actor_critic(
-        obs_space, params, num_rewards) for agent_id in env.agents}
+    ac_dict = {
+        agent_id: get_actor_critic(obs_space, params, num_rewards)
+        for agent_id in env.agents
+    }
 
     optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
     optim_params = chain.from_iterable(optim_params)
@@ -118,7 +133,7 @@ def train(params: Params, config: dict):
         num_agents=params.agents,
         gamma=config["gamma"],
         size_mini_batch=params.minibatch,
-        num_actions=5
+        num_actions=5,
     )
     rollout.to(params.device)
 
@@ -175,8 +190,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action = action_log_probs.multinomial(1).squeeze()
                 action_dict[agent_id] = int(action)
                 values_dict[agent_id] = int(value_logit)
-                action_log_probs = torch.log(
-                    action_log_probs).unsqueeze(dim=-1)
+                action_log_probs = torch.log(action_log_probs).unsqueeze(dim=-1)
                 action_log_probs_list.append(action_log_probs)
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
@@ -269,34 +283,19 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
                 ratio,
                 1.0 - params.configs["ppo_clip_param"],
                 1.0 + params.configs["ppo_clip_param"],
-            ) *
-            adv_targ
+            )
+            * adv_targ
         )
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-            value_loss * params.configs["value_loss_coef"] +
-            action_loss -
-            entropys * params.configs["entropy_coef"]
+            value_loss * params.configs["value_loss_coef"]
+            + action_loss
+            - entropys * params.configs["entropy_coef"]
         )
         loss = loss.mean()
         loss.backward()
 
         clip_grad_norm_(optim_params, params.configs["max_grad_norm"])
         optimizer.step()
-
-    #
-    # # estiamte other loss and backpropag
-    #
-    # action_log_probs = action_log_probs.view(params.agents, params.num_steps, -1)
-    #
-    # action_loss = -(advantages.data * action_log_probs).mean()
-    #
-
-    #
-    #
-    #
-    # all_rewards.append(final_rewards.mean())
-    # all_losses.append(loss.item())
-    # print("Update {}:".format(i))

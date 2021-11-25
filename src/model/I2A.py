@@ -65,7 +65,6 @@ class I2A(OnPolicy):
         hidden = self.encoder(imagined_state, imagined_reward)
         hidden = hidden.view(batch_size, -1)
 
-
         x = torch.cat([state, hidden], 1)
         x = self.fc(x)
 

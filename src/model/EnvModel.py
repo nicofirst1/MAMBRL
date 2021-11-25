@@ -1,17 +1,6 @@
 import torch
 import torch.nn as nn
 
-"""
-    Here something is not working.. the outputs of self.conv1 and self.conv2 
-    do not have the same dimension, in particular one is (1, 16, x, y) and the
-    other is (1, 32, z, z). Thus, it's not possible in the forward function to
-    apply the cat function. I've replaced the self.conv1 with another version
-    to make it work for now, but this problem must be investigated
-    
-    Nico: IMO it is not important if we copy exactly the conv structure as long as it serve its purpose
-     (extract features from image)
-"""
-
 
 class BasicBlock(nn.Module):
     """
@@ -72,19 +61,15 @@ class EnvModel(nn.Module):
         # fixme: imo this are way to many conv for a 32x32 image,
         #  we have 3 in each basicBlock + 1 conv + 1 if image or 2 if reward = 8/9
         self.conv = nn.Sequential(
-            nn.Conv2d(
-                num_channels * num_frames + num_actions, 64, kernel_size=1
-            ),  # 8 = 3 frames + 5 actions
+            nn.Conv2d(num_channels * num_frames + num_actions, 64, kernel_size=1),
             nn.ReLU(),
         )
 
         self.basic_block1 = BasicBlock((64, width, height), 16, 32, 64)
         self.basic_block2 = BasicBlock((128, width, height), 16, 32, 64)
 
-        self.image_conv = nn.Sequential(
-            nn.Conv2d(192, 256, kernel_size=1), nn.ReLU())
-        # num_channels * num_pixels)
-        self.image_fc = nn.Linear(256, num_colors)
+        self.image_conv = nn.Sequential(nn.Conv2d(192, 256, kernel_size=1), nn.ReLU())
+        self.image_fc = nn.Linear(256, num_colors)  # num_channels * num_pixels)
 
         self.reward_conv = nn.Sequential(
             nn.Conv2d(192, 64, kernel_size=1),
@@ -113,7 +98,6 @@ class EnvModel(nn.Module):
         # [batch size, img_w, img_h, features] -> [whatever, 256] with view
         image = image.permute(0, 2, 3, 1).contiguous().view(-1, 256)
         image = self.image_fc(image)
-        #image = image.view(batch_size, -1, image.shape[-1])
 
         reward = self.reward_conv(x)
         reward = reward.view(batch_size, -1)

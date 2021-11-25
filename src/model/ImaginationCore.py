@@ -1,37 +1,13 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from src.common.utils import rgb2gray
 from src.model import EnvModel
 from src.model.ModelFree import ModelFree
 
-"""
-    Here this has to be clarified.. what is this pixels and how the function
-    target_to_pix is used!
-"""
 
-
-def target_to_pix(num_colors):
-    color_index = [  # map index to RGB colors
-        (0, 255, 0),  # green -> landmarks
-        (0, 0, 255),  # blue -> agents
-        (255, 255, 255),  # white -> background
-    ]
-
+def target_to_pix(color_index, gray_scale=False):
     color_index = [torch.as_tensor(x) for x in color_index]
-
-    """
-        To pixel will become this:
-            {0: (0.0, 1.0, 0.0), 1: (0.0, 1.0, 1.0), 2: (0.0, 0.0, 1.0), 3: (1.0, 1.0, 1.0), 4: (1.0, 1.0, 0.0), 5: (0.0, 0.0, 0.0), 6: (1.0, 0.0, 0.0)}
-    
-        so this means that the imagined_states coming as input should have values only
-        in the range 0 - 6. This is weird!
-        N.B. with paras.out_shape = (3, 32, 32), the input imagined_states has shape (1024,)
-    """
-
-    assert num_colors == len(
-        color_index), "The number of colors in param does not match colors in list"
 
     def inner(imagined_states):
         batch_size = imagined_states.shape[0]
@@ -42,7 +18,7 @@ def target_to_pix(num_colors):
         # remove channel dim since is 1
         imagined_states = imagined_states.squeeze(1)
 
-        for c in range(num_colors):
+        for c in range(len(color_index)):
             indices = imagined_states == c
             new_imagined_state[indices] = color_index[c]
 
@@ -51,9 +27,13 @@ def target_to_pix(num_colors):
 
         if False:  # debug, show image
             from PIL import Image
+
             img = new_imagined_state[0].cpu().view(32, 32, 3)
-            img = Image.fromarray(img)
+            img = Image.fromarray(img.numpy(), mode="RGB")
             img.show()
+
+        if gray_scale:
+            new_imagined_state = rgb2gray(new_imagined_state, dimension=1)
 
         return new_imagined_state
 
@@ -62,20 +42,20 @@ def target_to_pix(num_colors):
 
 class ImaginationCore(nn.Module):
     def __init__(
-            self,
-            num_rolouts: int,
-            in_shape,
-            num_actions: int,
-            num_rewards: int,
-            env_model: EnvModel,
-            model_free: ModelFree,
-            device,
-            num_frames: int,
-            target2pix,
-            full_rollout=True,
+        self,
+        num_rollouts: int,
+        in_shape,
+        num_actions: int,
+        num_rewards: int,
+        env_model: EnvModel,
+        model_free: ModelFree,
+        device,
+        num_frames: int,
+        target2pix,
+        full_rollout=True,
     ):
         super().__init__()
-        self.num_rolouts = num_rolouts
+        self.num_rollouts = num_rollouts
         self.in_shape = in_shape
         self.num_actions = num_actions
         self.num_rewards = num_rewards
@@ -107,12 +87,12 @@ class ImaginationCore(nn.Module):
             rollout_batch_size = batch_size * self.num_actions
         else:
             # get last state (discard num_frames)
-            last_state = state[:, -self.in_shape[0]:, :]
+            last_state = state[:, -self.in_shape[0] :, :]
             action = self.model_free.act(last_state)
             action = action.detach()
             rollout_batch_size = batch_size
 
-        for step in range(self.num_rolouts):
+        for step in range(self.num_rollouts):
             """
             propagate action on "image" (aka tensor of same shape as image)
             this tensor (onehot_action) has the same shape as the image on the last two dimension
