@@ -40,7 +40,8 @@ class BasicBlock(nn.Module):
             nn.Conv2d(n2, n2, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
         )
-        self.conv3 = nn.Sequential(nn.Conv2d(n1 + n2, n3, kernel_size=1), nn.ReLU())
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(n1 + n2, n3, kernel_size=1), nn.ReLU())
 
     def forward(self, inputs):
         x = self.pool_and_inject(inputs)
@@ -80,8 +81,10 @@ class EnvModel(nn.Module):
         self.basic_block1 = BasicBlock((64, width, height), 16, 32, 64)
         self.basic_block2 = BasicBlock((128, width, height), 16, 32, 64)
 
-        self.image_conv = nn.Sequential(nn.Conv2d(192, 256, kernel_size=1), nn.ReLU())
-        self.image_fc = nn.Linear(256, num_colors) #num_channels * num_pixels)
+        self.image_conv = nn.Sequential(
+            nn.Conv2d(192, 256, kernel_size=1), nn.ReLU())
+        # num_channels * num_pixels)
+        self.image_fc = nn.Linear(256, num_colors)
 
         self.reward_conv = nn.Sequential(
             nn.Conv2d(192, 64, kernel_size=1),
@@ -117,5 +120,3 @@ class EnvModel(nn.Module):
         reward = self.reward_fc(reward)
 
         return image, reward
-
-

@@ -16,6 +16,7 @@ from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
 
 
+# just an hack for adding 3 frames, actually not needed
 def parametrize_state(params):
     """
     Function used to fix image coming from env
@@ -24,7 +25,8 @@ def parametrize_state(params):
     def inner(state):
         if params.resize:
             state = state.squeeze()
-            state = cv2.resize(state, dsize=(params.obs_shape[2], params.obs_shape[1]), interpolation=cv2.INTER_CUBIC)
+            state = cv2.resize(state, dsize=(
+                params.obs_shape[2], params.obs_shape[1]), interpolation=cv2.INTER_CUBIC)
 
         state = torch.FloatTensor(state).unsqueeze(dim=0)
         state = state.repeat([params.num_frames, 1, 1])
@@ -46,16 +48,19 @@ def get_actor_critic(obs_space, params, num_rewards):
     Create all the modules to build the i2a
     """
 
-    num_colors=3
+    num_colors = 3
 
-    t2p=target_to_pix(num_colors)
+    t2p = target_to_pix(num_colors)
 
     env_model = EnvModel(
         obs_space, num_rewards=num_rewards, num_frames=params.num_frames, num_actions=5, num_colors=num_colors,
     )
     env_model = env_model.to(params.device)
 
-    model_free = ModelFree(obs_space, num_actions=5, num_frames=params.num_frames)
+    # fix: perchè passiamo il num_frames al model free ma poi non li usa
+    # all'interno?
+    model_free = ModelFree(obs_space, num_actions=5,
+                           num_frames=params.num_frames)
     model_free = model_free.to(params.device)
 
     imagination = ImaginationCore(
@@ -95,8 +100,10 @@ def train(params: Params, config: dict):
     else:
         obs_space = env.render(mode="rgb_array").shape
 
-    num_rewards=len(env.par_env.get_reward_range())
-    ac_dict = {agent_id: get_actor_critic(obs_space, params, num_rewards ) for agent_id in env.agents}
+    # reward from [-16 to 0]
+    num_rewards = len(env.par_env.get_reward_range())
+    ac_dict = {agent_id: get_actor_critic(
+        obs_space, params, num_rewards) for agent_id in env.agents}
 
     optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
     optim_params = chain.from_iterable(optim_params)
@@ -133,13 +140,19 @@ def collect_trajectories(params, env, ac_dict, rollout):
     # set all i2a to eval
     [model.eval() for model in ac_dict.values()]
 
-    for _ in track(range(params.episodes), description="Sample collection episode "):
+    # fix : commented for debug
+    # for _ in track(range(params.episodes), description="Sample collection episode "):
+    for _ in range(params.episodes):
         # init dicts and reset env
         dones = {agent_id: False for agent_id in env.agents}
         action_dict = {agent_id: False for agent_id in env.agents}
         values_dict = {agent_id: False for agent_id in env.agents}
 
         state = env.reset()
+        # fix: why we copy-paste 3 times the same frame? If it's for
+        # simulating the rgb channel it's ok, otherwise i don't get why we copy
+        # 3 times the same state, but still we use just 1 to return the action
+        # in model free
         current_state = state_fn(state)
 
         for step in range(params.horizon):
@@ -162,10 +175,11 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action = action_log_probs.multinomial(1).squeeze()
                 action_dict[agent_id] = int(action)
                 values_dict[agent_id] = int(value_logit)
-                action_log_probs=torch.log(action_log_probs).unsqueeze(dim=-1)
+                action_log_probs = torch.log(
+                    action_log_probs).unsqueeze(dim=-1)
                 action_log_probs_list.append(action_log_probs)
 
-            ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
+            # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, _ = env.step(action_dict)
 
             # if done for all agents end episode
@@ -201,13 +215,16 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
     # get data generation that splits rollout in batches
-    data_generator = rollouts.recurrent_generator(advantages, params.num_frames)
+    data_generator = rollouts.recurrent_generator(
+        advantages, params.num_frames)
     num_batches = rollouts.get_num_batches(params.num_frames)
 
     # set model to train mode
     [model.train() for model in ac_dict.values()]
 
-    for sample in track(data_generator, description="Batches", total=num_batches):
+    # fix: commented for debug
+    # for sample in track(data_generator, description="Batches", total=num_batches):
+    for sample in data_generator:
         (
             states_batch,
             actions_batch,
@@ -243,32 +260,31 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
         value_loss = (return_batch - values).pow(2).mean()
 
         # take last old_action_prob/adv_targ since is the prob of the last frame in the sequence of num_frames
-        old_action_log_probs_batch= old_action_log_probs_batch[:,-1]
-        adv_targ= adv_targ[:, -1:, :]
+        old_action_log_probs_batch = old_action_log_probs_batch[:, -1]
+        adv_targ = adv_targ[:, -1:, :]
         ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
         surr1 = ratio * adv_targ
         surr2 = (
-                torch.clamp(
-                    ratio,
-                    1.0 - params.configs["ppo_clip_param"],
-                    1.0 + params.configs["ppo_clip_param"],
-                )
-                * adv_targ
+            torch.clamp(
+                ratio,
+                1.0 - params.configs["ppo_clip_param"],
+                1.0 + params.configs["ppo_clip_param"],
+            ) *
+            adv_targ
         )
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-                value_loss * params.configs["value_loss_coef"]
-                + action_loss
-                - entropys * params.configs["entropy_coef"]
+            value_loss * params.configs["value_loss_coef"] +
+            action_loss -
+            entropys * params.configs["entropy_coef"]
         )
         loss = loss.mean()
         loss.backward()
 
         clip_grad_norm_(optim_params, params.configs["max_grad_norm"])
         optimizer.step()
-
 
     #
     # # estiamte other loss and backpropag

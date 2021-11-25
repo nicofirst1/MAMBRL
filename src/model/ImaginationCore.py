@@ -30,7 +30,8 @@ def target_to_pix(num_colors):
         N.B. with paras.out_shape = (3, 32, 32), the input imagined_states has shape (1024,)
     """
 
-    assert num_colors == len(color_index), "The number of colors in param does not match colors in list"
+    assert num_colors == len(
+        color_index), "The number of colors in param does not match colors in list"
 
     def inner(imagined_states):
         batch_size = imagined_states.shape[0]
@@ -45,14 +46,14 @@ def target_to_pix(num_colors):
             indices = imagined_states == c
             new_imagined_state[indices] = color_index[c]
 
-        new_imagined_state = new_imagined_state.view(batch_size, 3, *image_shape)
+        new_imagined_state = new_imagined_state.view(
+            batch_size, 3, *image_shape)
 
-        if False: #debug, show image
+        if False:  # debug, show image
             from PIL import Image
-            img=new_imagined_state[0].cpu().view(32,32,3)
-            img=Image.fromarray(img)
+            img = new_imagined_state[0].cpu().view(32, 32, 3)
+            img = Image.fromarray(img)
             img.show()
-
 
         return new_imagined_state
 
@@ -96,8 +97,8 @@ class ImaginationCore(nn.Module):
             # esegui un rollout per ogni azione
             state = (
                 state.unsqueeze(0)
-                    .repeat(self.num_actions, 1, 1, 1, 1)
-                    .view(-1, *self.in_shape)
+                .repeat(self.num_actions, 1, 1, 1, 1)
+                .view(-1, *self.in_shape)
             )
             action = torch.LongTensor(
                 [[i] for i in range(self.num_actions)] * batch_size
@@ -128,7 +129,8 @@ class ImaginationCore(nn.Module):
             imagined_state, imagined_reward = self.env_model(inputs)
 
             imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
-            imagined_state = imagined_state.view(rollout_batch_size, *self.in_shape)
+            imagined_state = imagined_state.view(
+                rollout_batch_size, *self.in_shape)
             imagined_state = self.target2pix(imagined_state)
 
             imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
@@ -140,7 +142,10 @@ class ImaginationCore(nn.Module):
             rollout_states.append(imagined_state.unsqueeze(0))
             rollout_rewards.append(onehot_reward.unsqueeze(0))
 
+            # fix: we need 3 dimension when passing state to model free, hence
+            # we squeeze it
             state = imagined_state.to(self.device)
+
             action = self.model_free.act(state)
             action = action.detach()
 
