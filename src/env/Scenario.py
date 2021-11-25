@@ -25,7 +25,7 @@ class Scenario(BaseScenario):
     def get_reward_range(self):
 
         lower_bound = self.num_landmarks * self.landmark_penalty * self.max_landmark_counter
-        upper_bound = self.landmark_reward
+        upper_bound = self.landmark_reward +1
 
         return list(range(lower_bound, upper_bound))
 

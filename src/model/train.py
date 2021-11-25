@@ -26,7 +26,9 @@ def parametrize_state(params):
             state = state.squeeze()
             state = cv2.resize(state, dsize=(params.obs_shape[2], params.obs_shape[1]), interpolation=cv2.INTER_CUBIC)
 
+        #fixme: why are we not using long instead of floats?
         state = torch.FloatTensor(state).unsqueeze(dim=0)
+        # fixme: fix using window
         state = state.repeat([params.num_frames, 1, 1])
         return state
 
@@ -59,7 +61,7 @@ def get_actor_critic(obs_space, params, num_rewards):
     model_free = model_free.to(params.device)
 
     imagination = ImaginationCore(
-        num_rolouts=1,
+        num_rollouts=1,
         in_shape=obs_space,
         num_actions=5,
         num_rewards=num_rewards,
@@ -269,18 +271,3 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
         clip_grad_norm_(optim_params, params.configs["max_grad_norm"])
         optimizer.step()
 
-
-    #
-    # # estiamte other loss and backpropag
-    #
-    # action_log_probs = action_log_probs.view(params.agents, params.num_steps, -1)
-    #
-    # action_loss = -(advantages.data * action_log_probs).mean()
-    #
-
-    #
-    #
-    #
-    # all_rewards.append(final_rewards.mean())
-    # all_losses.append(loss.item())
-    # print("Update {}:".format(i))
