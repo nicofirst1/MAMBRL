@@ -1,7 +1,8 @@
 import gym
 import numpy as np
-from src.env.NavEnv import get_env
 import torch
+from src.env.NavEnv import get_env
+
 from .Params import Params
 
 
@@ -17,7 +18,7 @@ def get_env_configs(params: Params):
             landmark_penalty=-2,
             num_agents=params.agents,
             num_landmarks=params.landmarks,
-        )
+        ),
     )
 
     # register_env(params.env_name, lambda config: get_env(config))
@@ -87,12 +88,11 @@ def trial_name_creator(something):
 
 
 def rgb2gray(rgb, dimension):
-    rgb=rgb.transpose(dimension,-1)
-    const= torch.as_tensor([0.2989, 0.5870, 0.1140])
+    rgb = rgb.transpose(dimension, -1)
+    const = torch.as_tensor([0.2989, 0.5870, 0.1140])
 
-    rgb=rgb*const
-    rgb= rgb.sum(dim=-1).unsqueeze(dim=-1)
-    rgb=rgb.transpose(-1,dimension)
+    rgb = rgb * const
+    rgb = rgb.sum(dim=-1).unsqueeze(dim=-1)
+    rgb = rgb.transpose(-1, dimension)
 
     return rgb
-

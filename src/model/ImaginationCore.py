@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from src.common.utils import rgb2gray
 from src.model import EnvModel
 from src.model.ModelFree import ModelFree
@@ -27,6 +26,7 @@ def target_to_pix(color_index, gray_scale=False):
 
         if False:  # debug, show image
             from PIL import Image
+
             img = new_imagined_state[0].cpu().view(32, 32, 3)
             img = Image.fromarray(img.numpy(), mode="RGB")
             img.show()
@@ -41,17 +41,17 @@ def target_to_pix(color_index, gray_scale=False):
 
 class ImaginationCore(nn.Module):
     def __init__(
-            self,
-            num_rollouts: int,
-            in_shape,
-            num_actions: int,
-            num_rewards: int,
-            env_model: EnvModel,
-            model_free: ModelFree,
-            device,
-            num_frames: int,
-            target2pix,
-            full_rollout=True,
+        self,
+        num_rollouts: int,
+        in_shape,
+        num_actions: int,
+        num_rewards: int,
+        env_model: EnvModel,
+        model_free: ModelFree,
+        device,
+        num_frames: int,
+        target2pix,
+        full_rollout=True,
     ):
         super().__init__()
         self.num_rollouts = num_rollouts
@@ -76,8 +76,8 @@ class ImaginationCore(nn.Module):
             # esegui un rollout per ogni azione
             state = (
                 state.unsqueeze(0)
-                    .repeat(self.num_actions, 1, 1, 1, 1)
-                    .view(-1, *self.in_shape)
+                .repeat(self.num_actions, 1, 1, 1, 1)
+                .view(-1, *self.in_shape)
             )
             action = torch.LongTensor(
                 [[i] for i in range(self.num_actions)] * batch_size
@@ -86,7 +86,7 @@ class ImaginationCore(nn.Module):
             rollout_batch_size = batch_size * self.num_actions
         else:
             # get last state (discard num_frames)
-            last_state = state[:, -self.in_shape[0]:, :]
+            last_state = state[:, -self.in_shape[0] :, :]
             action = self.model_free.act(last_state)
             action = action.detach()
             rollout_batch_size = batch_size

@@ -60,9 +60,7 @@ class EnvModel(nn.Module):
         # fixme: imo this are way to many conv for a 32x32 image,
         #  we have 3 in each basicBlock + 1 conv + 1 if image or 2 if reward = 8/9
         self.conv = nn.Sequential(
-            nn.Conv2d(
-                num_channels * num_frames + num_actions, 64, kernel_size=1
-            ),
+            nn.Conv2d(num_channels * num_frames + num_actions, 64, kernel_size=1),
             nn.ReLU(),
         )
 
@@ -70,7 +68,7 @@ class EnvModel(nn.Module):
         self.basic_block2 = BasicBlock((128, width, height), 16, 32, 64)
 
         self.image_conv = nn.Sequential(nn.Conv2d(192, 256, kernel_size=1), nn.ReLU())
-        self.image_fc = nn.Linear(256, num_colors) #num_channels * num_pixels)
+        self.image_fc = nn.Linear(256, num_colors)  # num_channels * num_pixels)
 
         self.reward_conv = nn.Sequential(
             nn.Conv2d(192, 64, kernel_size=1),
@@ -105,5 +103,3 @@ class EnvModel(nn.Module):
         reward = self.reward_fc(reward)
 
         return image, reward
-
-

@@ -1,7 +1,6 @@
 import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, World
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
-
 from src.env.TimerLandmark import TimerLandmark
 
 
@@ -13,7 +12,14 @@ def is_collision(agent1, agent2):
 
 
 class Scenario(BaseScenario):
-    def __init__(self, num_agents, num_landmarks, landmark_reward=1, max_landmark_counter=4, landmark_penalty=2):
+    def __init__(
+        self,
+        num_agents,
+        num_landmarks,
+        landmark_reward=1,
+        max_landmark_counter=4,
+        landmark_penalty=2,
+    ):
         self.registered_collisions = {}
         self.landmarks = {}
         self.max_landmark_counter = max_landmark_counter
@@ -24,14 +30,15 @@ class Scenario(BaseScenario):
 
     def get_reward_range(self):
 
-        lower_bound = self.num_landmarks * self.landmark_penalty * self.max_landmark_counter
-        upper_bound = self.landmark_reward +1
+        lower_bound = (
+            self.num_landmarks * self.landmark_penalty * self.max_landmark_counter
+        )
+        upper_bound = self.landmark_reward + 1
 
         return list(range(lower_bound, upper_bound))
 
     def make_world(
-            self,
-
+        self,
     ):
         world = World()
         # set any world properties first

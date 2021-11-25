@@ -4,9 +4,6 @@ import cv2
 import torch
 import torch.nn.functional as F
 from rich.progress import track
-from torch import optim
-from torch.nn.utils import clip_grad_norm_
-
 from src.common import Params
 from src.env.NavEnv import get_env
 from src.model.EnvModel import EnvModel
@@ -14,6 +11,8 @@ from src.model.I2A import I2A
 from src.model.ImaginationCore import ImaginationCore, target_to_pix
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
+from torch import optim
+from torch.nn.utils import clip_grad_norm_
 
 
 def parametrize_state(params):
@@ -24,9 +23,13 @@ def parametrize_state(params):
     def inner(state):
         if params.resize:
             state = state.squeeze()
-            state = cv2.resize(state, dsize=(params.obs_shape[2], params.obs_shape[1]), interpolation=cv2.INTER_CUBIC)
+            state = cv2.resize(
+                state,
+                dsize=(params.obs_shape[2], params.obs_shape[1]),
+                interpolation=cv2.INTER_CUBIC,
+            )
 
-        #fixme: why are we not using long instead of floats?
+        # fixme: why are we not using long instead of floats?
         state = torch.FloatTensor(state).unsqueeze(dim=0)
         # fixme: fix using window
         state = state.repeat([params.num_frames, 1, 1])
@@ -54,12 +57,16 @@ def get_actor_critic(obs_space, params, num_rewards):
         (255, 255, 255),  # white -> background
     ]
 
-    num_colors=len(color_index)
+    num_colors = len(color_index)
 
-    t2p=target_to_pix(color_index, gray_scale=params.gray_scale)
+    t2p = target_to_pix(color_index, gray_scale=params.gray_scale)
 
     env_model = EnvModel(
-        obs_space, num_rewards=num_rewards, num_frames=params.num_frames, num_actions=5, num_colors=num_colors,
+        obs_space,
+        num_rewards=num_rewards,
+        num_frames=params.num_frames,
+        num_actions=5,
+        num_colors=num_colors,
     )
     env_model = env_model.to(params.device)
 
@@ -103,8 +110,11 @@ def train(params: Params, config: dict):
     else:
         obs_space = env.render(mode="rgb_array").shape
 
-    num_rewards=len(env.par_env.get_reward_range())
-    ac_dict = {agent_id: get_actor_critic(obs_space, params, num_rewards ) for agent_id in env.agents}
+    num_rewards = len(env.par_env.get_reward_range())
+    ac_dict = {
+        agent_id: get_actor_critic(obs_space, params, num_rewards)
+        for agent_id in env.agents
+    }
 
     optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
     optim_params = chain.from_iterable(optim_params)
@@ -119,7 +129,7 @@ def train(params: Params, config: dict):
         num_agents=params.agents,
         gamma=config["gamma"],
         size_mini_batch=params.minibatch,
-        num_actions=5
+        num_actions=5,
     )
     rollout.to(params.device)
 
@@ -170,7 +180,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action = action_log_probs.multinomial(1).squeeze()
                 action_dict[agent_id] = int(action)
                 values_dict[agent_id] = int(value_logit)
-                action_log_probs=torch.log(action_log_probs).unsqueeze(dim=-1)
+                action_log_probs = torch.log(action_log_probs).unsqueeze(dim=-1)
                 action_log_probs_list.append(action_log_probs)
 
             ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
@@ -251,29 +261,28 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
         value_loss = (return_batch - values).pow(2).mean()
 
         # take last old_action_prob/adv_targ since is the prob of the last frame in the sequence of num_frames
-        old_action_log_probs_batch= old_action_log_probs_batch[:,-1]
-        adv_targ= adv_targ[:, -1:, :]
+        old_action_log_probs_batch = old_action_log_probs_batch[:, -1]
+        adv_targ = adv_targ[:, -1:, :]
         ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
         surr1 = ratio * adv_targ
         surr2 = (
-                torch.clamp(
-                    ratio,
-                    1.0 - params.configs["ppo_clip_param"],
-                    1.0 + params.configs["ppo_clip_param"],
-                )
-                * adv_targ
+            torch.clamp(
+                ratio,
+                1.0 - params.configs["ppo_clip_param"],
+                1.0 + params.configs["ppo_clip_param"],
+            )
+            * adv_targ
         )
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-                value_loss * params.configs["value_loss_coef"]
-                + action_loss
-                - entropys * params.configs["entropy_coef"]
+            value_loss * params.configs["value_loss_coef"]
+            + action_loss
+            - entropys * params.configs["entropy_coef"]
         )
         loss = loss.mean()
         loss.backward()
 
         clip_grad_norm_(optim_params, params.configs["max_grad_norm"])
         optimizer.step()
-
