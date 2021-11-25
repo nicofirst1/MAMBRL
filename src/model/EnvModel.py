@@ -59,7 +59,7 @@ class BasicBlock(nn.Module):
 
 
 class EnvModel(nn.Module):
-    def __init__(self, in_shape, num_rewards, num_frames, num_actions):
+    def __init__(self, in_shape, num_rewards, num_frames, num_actions, num_colors):
         super(EnvModel, self).__init__()
 
         width = in_shape[1]
@@ -81,7 +81,7 @@ class EnvModel(nn.Module):
         self.basic_block2 = BasicBlock((128, width, height), 16, 32, 64)
 
         self.image_conv = nn.Sequential(nn.Conv2d(192, 256, kernel_size=1), nn.ReLU())
-        self.image_fc = nn.Linear(256, num_channels * num_pixels)
+        self.image_fc = nn.Linear(256, num_colors) #num_channels * num_pixels)
 
         self.reward_conv = nn.Sequential(
             nn.Conv2d(192, 64, kernel_size=1),
@@ -89,12 +89,7 @@ class EnvModel(nn.Module):
             nn.Conv2d(64, 64, kernel_size=1),
             nn.ReLU(),
         )
-        # fixme: qui il num rewards dipende dal gioco pacman su cui e' stato fatto il paper.
-        #  In pratica hanno una lista con dentro possibili rewards per ogni azione.
-        #  Noi invece (al momento) abbiamo un float... Gli approcci possono essere 2:
-        #  1) rendiamo la nostra reward statica (ad ogni step puoi ricevere solo un numero finito di interi)
-        #  2) Rendiamo il problema una regressione, e a quel punto rimane un solo numero
-        #  (ma perche non lo hanno fatto loro?)
+
         self.reward_fc = nn.Linear(64 * width * height, num_rewards)
 
     def forward(self, inputs):
@@ -110,15 +105,17 @@ class EnvModel(nn.Module):
         # [batch size, features, img_w, img_h]
 
         image = self.image_conv(x)
-        # [batch size, features, img_w, img_h] ->[batch size, img_w, img_h, features] with permutation
+
+        # [batch size, features, img_w, img_h] -> [batch size, img_w, img_h, features] with permutation
         # [batch size, img_w, img_h, features] -> [whatever, 256] with view
-        # fixme: why 256 is so arbitrary? Maybe bc is the pixel interval?
         image = image.permute(0, 2, 3, 1).contiguous().view(-1, 256)
         image = self.image_fc(image)
-        image = image.view(batch_size, -1, image.shape[-1])
+        #image = image.view(batch_size, -1, image.shape[-1])
 
         reward = self.reward_conv(x)
         reward = reward.view(batch_size, -1)
         reward = self.reward_fc(reward)
 
         return image, reward
+
+

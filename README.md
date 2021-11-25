@@ -9,7 +9,7 @@ pip install PettingZoo
 pip install .
 
 ```
-If you wish to modify the library while coding use `pip install . -e` instead.
+If you wish to modify the library while coding use `pip install -e .` instead.
 
 
 ## Training on colab

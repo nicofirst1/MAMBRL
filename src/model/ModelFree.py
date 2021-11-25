@@ -28,15 +28,15 @@ class OnPolicy(nn.Module):
 
     def evaluate_actions(self, frames, action):
 
-        logit, value = self.forward(frames)
+        action_logit, value = self.forward(frames)
 
-        probs = F.softmax(logit, dim=0)
-        log_probs = F.log_softmax(logit, dim=0)
+        probs = F.softmax(action_logit, dim=1)
+        log_probs = F.log_softmax(action_logit, dim=1)
 
         action_log_probs = log_probs.gather(1, action)
         entropy = -(probs * log_probs).sum(1).mean()
 
-        return logit, action_log_probs, value, entropy
+        return action_logit, probs, value, entropy
 
 
 class ModelFree(OnPolicy):

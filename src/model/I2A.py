@@ -55,14 +55,16 @@ class I2A(OnPolicy):
         self.critic = nn.Linear(256, 1)
         self.actor = nn.Linear(256, num_actions)
 
-    def forward(self, state):
-        batch_size = state.size(0)
-        imagined_state, imagined_reward = self.imagination(state)
+    def forward(self, input):
+        batch_size = input.size(0)
+
+        state = self.features(input)
+        state = state.view(state.size(0), -1)
+
+        imagined_state, imagined_reward = self.imagination(input)
         hidden = self.encoder(imagined_state, imagined_reward)
         hidden = hidden.view(batch_size, -1)
 
-        state = self.features(state)
-        state = state.view(state.size(0), -1)
 
         x = torch.cat([state, hidden], 1)
         x = self.fc(x)

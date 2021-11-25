@@ -12,7 +12,7 @@ class RolloutStorage(object):
         self.actions = torch.zeros(num_steps, num_agents).long()
         self.values = torch.zeros(num_steps + 1, num_agents).long()
         self.returns = torch.zeros(num_steps + 1, num_agents)
-        self.action_log_probs = torch.zeros(num_steps+1, num_actions)
+        self.action_log_probs = torch.zeros(num_steps+1, num_actions, num_agents)
         self.gamma = gamma
         self.size_mini_batch = size_mini_batch
 
@@ -60,6 +60,7 @@ class RolloutStorage(object):
         perm = torch.randperm(total_samples)
 
         minibatch_frames = self.size_mini_batch * num_frames
+        done=False
 
         for start_ind in range(0, total_samples, minibatch_frames):
             states_batch = []
@@ -70,6 +71,12 @@ class RolloutStorage(object):
             adv_targ = []
 
             for offset in range(minibatch_frames):
+
+                if start_ind + offset >= len(perm):
+                    # skip last batch if not divisible
+                    done=True
+                    continue
+
                 ind = perm[start_ind + offset]
                 states_batch.append(self.states[ind].unsqueeze(0))
                 return_batch.append(self.returns[ind].unsqueeze(0))
@@ -79,6 +86,10 @@ class RolloutStorage(object):
                     self.action_log_probs[ind].unsqueeze(0)
                 )
                 adv_targ.append(advantages[ind].unsqueeze(0))
+
+
+            if done:
+                break
 
             # cat on firt dimension
             states_batch = torch.cat(states_batch, 0)

@@ -11,7 +11,7 @@ from src.common import Params
 from src.env.NavEnv import get_env
 from src.model.EnvModel import EnvModel
 from src.model.I2A import I2A
-from src.model.ImaginationCore import ImaginationCore
+from src.model.ImaginationCore import ImaginationCore, target_to_pix
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
 
@@ -24,7 +24,7 @@ def parametrize_state(params):
     def inner(state):
         if params.resize:
             state = state.squeeze()
-            state = cv2.resize(state, dsize=params.obs_shape[1:], interpolation=cv2.INTER_CUBIC)
+            state = cv2.resize(state, dsize=(params.obs_shape[2], params.obs_shape[1]), interpolation=cv2.INTER_CUBIC)
 
         state = torch.FloatTensor(state).unsqueeze(dim=0)
         state = state.repeat([params.num_frames, 1, 1])
@@ -41,12 +41,17 @@ def mas_dict2tensor(agent_dict):
     return torch.as_tensor(tensor)
 
 
-def get_actor_critic(obs_space, params):
+def get_actor_critic(obs_space, params, num_rewards):
     """
     Create all the modules to build the i2a
     """
+
+    num_colors=3
+
+    t2p=target_to_pix(num_colors)
+
     env_model = EnvModel(
-        obs_space, num_rewards=1, num_frames=params.num_frames, num_actions=5
+        obs_space, num_rewards=num_rewards, num_frames=params.num_frames, num_actions=5, num_colors=num_colors,
     )
     env_model = env_model.to(params.device)
 
@@ -57,19 +62,20 @@ def get_actor_critic(obs_space, params):
         num_rolouts=1,
         in_shape=obs_space,
         num_actions=5,
-        num_rewards=1,
+        num_rewards=num_rewards,
         env_model=env_model,
         model_free=model_free,
         device=params.device,
         num_frames=params.num_frames,
         full_rollout=params.full_rollout,
+        target2pix=t2p,
     )
     imagination = imagination.to(params.device)
 
     actor_critic = I2A(
         in_shape=obs_space,
         num_actions=5,
-        num_rewards=1,
+        num_rewards=num_rewards,
         hidden_size=256,
         imagination=imagination,
         full_rollout=params.full_rollout,
@@ -89,7 +95,8 @@ def train(params: Params, config: dict):
     else:
         obs_space = env.render(mode="rgb_array").shape
 
-    ac_dict = {agent_id: get_actor_critic(obs_space, params) for agent_id in env.agents}
+    num_rewards=len(env.par_env.get_reward_range())
+    ac_dict = {agent_id: get_actor_critic(obs_space, params, num_rewards ) for agent_id in env.agents}
 
     optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
     optim_params = chain.from_iterable(optim_params)
@@ -111,7 +118,6 @@ def train(params: Params, config: dict):
     for ep in range(params.epochs):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, ac_dict, rollout)
-        exit(0)
         # train for all the trajectories collected so far
         train_epoch(rollout, ac_dict, env, params, optimizer, optim_params)
         rollout.after_update()
@@ -137,7 +143,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
         current_state = state_fn(state)
 
         for step in range(params.horizon):
-
+            action_log_probs_list = []
             current_state = current_state.to(params.device).unsqueeze(dim=0)
 
             # let every agent act
@@ -152,10 +158,12 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action_logit, value_logit = ac_dict[agent_id](current_state)
 
                 # get action with softmax and multimodal (stochastic)
-                action_log_probs = F.softmax(action_logit, dim=0)
-                actions = action_log_probs.multinomial(1)
-                action_dict[agent_id] = int(actions)
+                action_log_probs = F.softmax(action_logit, dim=1)
+                action = action_log_probs.multinomial(1).squeeze()
+                action_dict[agent_id] = int(action)
                 values_dict[agent_id] = int(value_logit)
+                action_log_probs=torch.log(action_log_probs).unsqueeze(dim=-1)
+                action_log_probs_list.append(action_log_probs)
 
             ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, _ = env.step(action_dict)
@@ -169,6 +177,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
             rewards = mas_dict2tensor(rewards)
             actions = mas_dict2tensor(action_dict)
             values = mas_dict2tensor(values_dict)
+            action_log_probs = torch.cat(action_log_probs_list, dim=-1)
 
             current_state = state_fn(next_state)
             rollout.insert(
@@ -233,7 +242,9 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
 
         value_loss = (return_batch - values).pow(2).mean()
 
-        # fixme: actually using softmax probs (not log) check if different
+        # take last old_action_prob/adv_targ since is the prob of the last frame in the sequence of num_frames
+        old_action_log_probs_batch= old_action_log_probs_batch[:,-1]
+        adv_targ= adv_targ[:, -1:, :]
         ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
         surr1 = ratio * adv_targ
         surr2 = (
@@ -258,19 +269,7 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
         clip_grad_norm_(optim_params, params.configs["max_grad_norm"])
         optimizer.step()
 
-    # distil_logit, _, _, _ = distil_policy.evaluate_actions(
-    #     rollouts.states[:-1],
-    #     rollouts.actions
-    # )
-    #
-    # # estiamte distil loss and backpropag
-    # distil_loss = F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)
-    # distil_loss = distil_loss.sum(1).mean()
-    # distil_loss *= 0.01
-    #
-    # distil_optimizer.zero_grad()
-    # distil_loss.backward()
-    # distil_optimizer.step()
+
     #
     # # estiamte other loss and backpropag
     #

@@ -7,7 +7,7 @@ rich==10.12.0
 wandb==0.12.5
 numpy==1.19.5
 pettingzoo==1.11.2
-matplotlib==3.4.3
+matplotlib==3.5.0
 torch==1.10.0
 gym==0.21.0
 scipy==1.7.1

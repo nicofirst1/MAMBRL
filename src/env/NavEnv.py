@@ -1,13 +1,16 @@
+import itertools
+
 import numpy as np
 from ray.rllib.env import ParallelPettingZooEnv
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
-from .Scenario import Scenario
+
+from .Scenario import Scenario, is_collision
 from .TimerLandmark import TimerLandmark
 
 
-def get_env(kwargs):
-    """ Initialize rawEnv and wrap it in parallel petting zoo"""
+def get_env(kwargs) -> ParallelPettingZooEnv:
+    """Initialize rawEnv and wrap it in parallel petting zoo"""
     env = RawEnv(**kwargs)
     env = ParallelPettingZooEnv(env)
     return env
@@ -19,26 +22,28 @@ def rgb2gray(rgb):
 
 class RawEnv(SimpleEnv):
     def __init__(
-            self, name, N, landmarks, max_cycles, continuous_actions, gray_scale=False
+            self,
+            name,
+            scenario_kwargs,
+            max_cycles,
+            continuous_actions,
+            gray_scale=False,
     ):
-        scenario = Scenario()
-        world = scenario.make_world(N, landmarks)
+        scenario = Scenario(**scenario_kwargs)
+        world = scenario.make_world()
         super().__init__(
             scenario,
             world,
             max_cycles,
             continuous_actions,
-            color_entities=TimerLandmark,
+            #color_entities=TimerLandmark,
         )
         self.metadata["name"] = name
         self.gray_scale = gray_scale
+        self.agents_dict = {agent.name: agent for agent in world.agents}
 
-    @staticmethod
-    def is_collision(agent1, agent2):
-        delta_pos = agent1.state.p_pos - agent2.state.p_pos
-        dist = np.sqrt(np.sum(np.square(delta_pos)))
-        dist_min = agent1.size + agent2.size
-        return True if dist < dist_min else False
+    def get_reward_range(self):
+        return self.scenario.get_reward_range()
 
     def reset(self):
         super(RawEnv, self).reset()
@@ -60,21 +65,16 @@ class RawEnv(SimpleEnv):
             self.agent_selection = agent_id
             super(RawEnv, self).step(action)
 
-        for landmark in self.world.landmarks:
+        # update landmarks status
+        visited_landmarks = list(self.scenario.registered_collisions.values())
+        visited_landmarks = set(itertools.chain(*visited_landmarks))
 
-            visited = False
+        not_visited = set(self.scenario.landmarks.keys()) - visited_landmarks
 
-            # check if one agent has visited the landmark
-            for agent in self.world.agents:
-                if self.is_collision(agent, landmark):
-                    visited = True
-                    break
-
-            # if visited reset else increase
-            if visited:
-                landmark.reset_timer()
-            else:
-                landmark.step()
+        for lndmrk_id in visited_landmarks:
+            self.scenario.landmarks[lndmrk_id].reset_counter()
+        for lndmrk_id in not_visited:
+            self.scenario.landmarks[lndmrk_id].step()
 
         # __all__ did not go True when all agents were done
         avail_agents = 0

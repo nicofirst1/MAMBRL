@@ -2,7 +2,6 @@ import multiprocessing
 import os
 import uuid
 
-import tensorflow as tf
 import torch
 
 
@@ -20,9 +19,9 @@ class Params:
     debug = True
     device = torch.device("cuda")
     resize = True
-    obs_shape = (3, 32, 32)
+    obs_shape = [3, 32, 32]
     num_workers = multiprocessing.cpu_count() - 1
-    num_gpus = len(tf.config.list_physical_devices("GPU"))
+    num_gpus = torch.cuda.device_count()
     framework = "torch"
     minibatch = 2
     epochs = 1
@@ -58,4 +57,4 @@ class Params:
             torch.autograd.set_detect_anomaly(True)
 
         if self.gray_scale:
-            self.obs_shape = (1, 32, 32)
+            self.obs_shape[0] = 1
