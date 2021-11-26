@@ -34,7 +34,7 @@ class Params:
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
-    num_frames = 3
+    num_frames = 1
     num_steps = horizon // num_frames
     full_rollout = False
     gray_scale = True

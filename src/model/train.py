@@ -31,8 +31,6 @@ def parametrize_state(params):
 
         # fixme: why are we not using long instead of floats?
         state = torch.FloatTensor(state).unsqueeze(dim=0)
-        # fixme: fix using window
-        state = state.repeat([params.num_frames, 1, 1])
         return state
 
     return inner
@@ -124,7 +122,7 @@ def train(params: Params, config: dict):
     )
 
     rollout = RolloutStorage(
-        params.horizon,
+        params.horizon*params.episodes,
         obs_space,
         num_agents=params.agents,
         gamma=config["gamma"],
@@ -133,25 +131,29 @@ def train(params: Params, config: dict):
     )
     rollout.to(params.device)
 
+    obs_shape = (params.obs_shape[0] * params.num_frames, params.obs_shape[1], params.obs_shape[2])
     for ep in range(params.epochs):
         # fill rollout storage with trajcetories
-        collect_trajectories(params, env, ac_dict, rollout)
+        collect_trajectories(params, env, ac_dict, rollout, obs_shape)
+        print('\n')
         # train for all the trajectories collected so far
-        train_epoch(rollout, ac_dict, env, params, optimizer, optim_params)
+        train_epoch(rollout, ac_dict, env, params, optimizer, optim_params, obs_shape)
         rollout.after_update()
 
 
 # todo: this can be done in parallel
-def collect_trajectories(params, env, ac_dict, rollout):
+def collect_trajectories(params, env, ac_dict, rollout, obs_shape):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
     """
     state_fn = parametrize_state(params)
+    state_channel = int(params.obs_shape[0])
 
     # set all i2a to eval
     [model.eval() for model in ac_dict.values()]
 
-    for _ in track(range(params.episodes), description="Sample collection episode "):
+
+    for episode in track(range(params.episodes), description="Sample collection episode "):
         # init dicts and reset env
         dones = {agent_id: False for agent_id in env.agents}
         action_dict = {agent_id: False for agent_id in env.agents}
@@ -160,9 +162,15 @@ def collect_trajectories(params, env, ac_dict, rollout):
         state = env.reset()
         current_state = state_fn(state)
 
+        # Insert first state
+        rollout.states[episode*params.horizon] = current_state.unsqueeze(dim=0)
+
+        ## Initialize Observation
+        observation = torch.zeros(obs_shape)
+        observation[-state_channel:, :, :] = current_state
         for step in range(params.horizon):
             action_log_probs_list = []
-            current_state = current_state.to(params.device).unsqueeze(dim=0)
+            observation = observation.to(params.device).unsqueeze(dim=0)
 
             # let every agent act
             for agent_id in env.agents:
@@ -173,7 +181,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
                     continue
 
                 # call forward method
-                action_logit, value_logit = ac_dict[agent_id](current_state)
+                action_logit, value_logit = ac_dict[agent_id](observation)
 
                 # get action with softmax and multimodal (stochastic)
                 action_log_probs = F.softmax(action_logit, dim=1)
@@ -199,7 +207,7 @@ def collect_trajectories(params, env, ac_dict, rollout):
 
             current_state = state_fn(next_state)
             rollout.insert(
-                step=step,
+                step=step + episode*params.horizon,
                 state=current_state,
                 action=actions,
                 values=values,
@@ -208,8 +216,12 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action_log_probs=action_log_probs.detach().squeeze(),
             )
 
+            # Update observation
+            observation = observation.squeeze(dim=0)
+            observation = torch.cat([observation[state_channel:, :, :], current_state], dim=0)
 
-def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
+
+def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_shape):
     # todo: add logging in wandb
 
     # estimate advantages
@@ -219,7 +231,7 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
     # get data generation that splits rollout in batches
-    data_generator = rollouts.recurrent_generator(advantages, params.num_frames)
+    data_generator = rollouts.recurrent_generator(advantages, params.num_frames, obs_shape)
     num_batches = rollouts.get_num_batches(params.num_frames)
 
     # set model to train mode
@@ -239,7 +251,7 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
 
         for agent_id in env.agents:
             agent_index = env.agents.index(agent_id)
-            agent_action = actions_batch[:, :, agent_index]
+            agent_action = actions_batch[:, agent_index]
 
             agent = ac_dict[agent_id]
             logit, action_log_prob, value, entropy = agent.evaluate_actions(
@@ -261,9 +273,11 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
         value_loss = (return_batch - values).pow(2).mean()
 
         # take last old_action_prob/adv_targ since is the prob of the last frame in the sequence of num_frames
-        old_action_log_probs_batch = old_action_log_probs_batch[:, -1]
-        adv_targ = adv_targ[:, -1:, :]
+        #old_action_log_probs_batch = old_action_log_probs_batch[:, -1]
+        #adv_targ = adv_targ[:, -1:, :]
         ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
+
+        adv_targ = adv_targ.view(adv_targ.shape[0], -1, adv_targ.shape[1])
         surr1 = ratio * adv_targ
         surr2 = (
             torch.clamp(
