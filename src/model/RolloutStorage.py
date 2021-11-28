@@ -14,7 +14,8 @@ class RolloutStorage(object):
         self.actions = torch.zeros(num_steps, num_agents).long()
         self.values = torch.zeros(num_steps + 1, num_agents).long()
         self.returns = torch.zeros(num_steps + 1, num_agents)
-        self.action_log_probs = torch.zeros(num_steps + 1, num_actions, num_agents)
+        self.action_log_probs = torch.zeros(
+            num_steps + 1, num_actions, num_agents)
         self.gamma = gamma
         self.size_mini_batch = size_mini_batch
 
@@ -44,9 +45,9 @@ class RolloutStorage(object):
         gae = 0
         for step in reversed(range(self.rewards.size(0))):
             delta = (
-                self.rewards[step]
-                + self.gamma * self.values[step + 1] * self.masks[step + 1]
-                - self.values[step]
+                self.rewards[step] +
+                self.gamma * self.values[step + 1] * self.masks[step + 1] -
+                self.values[step]
             )
             gae = delta + self.gamma * tau * self.masks[step + 1] * gae
             self.returns[step] = gae + self.values[step]
@@ -58,6 +59,10 @@ class RolloutStorage(object):
         return total_samples // minibatch_frames
 
     def recurrent_generator(self, advantages, num_frames):
+        """recurrent_generator method.
+
+
+        """
         total_samples = self.rewards.size(0) - 1
         perm = torch.randperm(total_samples)
 
@@ -97,7 +102,8 @@ class RolloutStorage(object):
             actions_batch = torch.cat(actions_batch, 0)
             return_batch = torch.cat(return_batch, 0)
             masks_batch = torch.cat(masks_batch, 0)
-            old_action_log_probs_batch = torch.cat(old_action_log_probs_batch, 0)
+            old_action_log_probs_batch = torch.cat(
+                old_action_log_probs_batch, 0)
             adv_targ = torch.cat(adv_targ, 0)
 
             # split per num frame
@@ -105,9 +111,12 @@ class RolloutStorage(object):
             states_batch = states_batch.view(
                 -1, self.num_channels * num_frames, *states_batch.shape[2:]
             )
-            actions_batch = actions_batch.view(-1, num_frames, *actions_batch.shape[1:])
-            return_batch = return_batch.view(-1, num_frames, *return_batch.shape[1:])
-            masks_batch = masks_batch.view(-1, num_frames, *masks_batch.shape[1:])
+            actions_batch = actions_batch.view(-1,
+                                               num_frames, *actions_batch.shape[1:])
+            return_batch = return_batch.view(-1,
+                                             num_frames, *return_batch.shape[1:])
+            masks_batch = masks_batch.view(-1,
+                                           num_frames, *masks_batch.shape[1:])
             old_action_log_probs_batch = old_action_log_probs_batch.view(
                 -1, num_frames, *old_action_log_probs_batch.shape[1:]
             )

@@ -155,7 +155,8 @@ def collect_trajectories(params, env, ac_dict, rollout):
     # set all i2a to eval
     [model.eval() for model in ac_dict.values()]
 
-    # fix : commented for debug
+    # fix : if we insert elements like this we are only rewriting previous
+    # episodes
     # for _ in track(range(params.episodes), description="Sample collection episode "):
     for _ in range(params.episodes):
         # init dicts and reset env
@@ -190,7 +191,8 @@ def collect_trajectories(params, env, ac_dict, rollout):
                 action = action_log_probs.multinomial(1).squeeze()
                 action_dict[agent_id] = int(action)
                 values_dict[agent_id] = int(value_logit)
-                action_log_probs = torch.log(action_log_probs).unsqueeze(dim=-1)
+                action_log_probs = torch.log(
+                    action_log_probs).unsqueeze(dim=-1)
                 action_log_probs_list.append(action_log_probs)
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
@@ -283,16 +285,16 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params):
                 ratio,
                 1.0 - params.configs["ppo_clip_param"],
                 1.0 + params.configs["ppo_clip_param"],
-            )
-            * adv_targ
+            ) *
+            adv_targ
         )
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-            value_loss * params.configs["value_loss_coef"]
-            + action_loss
-            - entropys * params.configs["entropy_coef"]
+            value_loss * params.configs["value_loss_coef"] +
+            action_loss -
+            entropys * params.configs["entropy_coef"]
         )
         loss = loss.mean()
         loss.backward()

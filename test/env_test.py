@@ -46,13 +46,18 @@ while count <= 1000:
     print(f"step {count}:")
     print(done)
     print(reward)
-    print("Press a CTRL+C to continue...")
-    try:
-        while True:
-            env.render("human")
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        pass
+    # print("Press a CTRL+C to continue...")
+    # try:
+    #     while True:
+    #         env.render()
+    #         time.sleep(0.1)
+    # except KeyboardInterrupt:
+    #     pass
+    # count += 1
+
+    env.render()
+    time.sleep(0.4)
+
     count += 1
 
 env.close()
