@@ -1,78 +1,24 @@
 from random import randint
+from typing import Tuple
 
 import torch
 import torch.nn.functional as F
-from rich.progress import track
 from torch import optim, nn
 from torch.autograd import Variable
 from torch.nn.utils import clip_grad_norm_
 
-from src.common import Params, get_env_configs, parametrize_state, mas_dict2tensor
+from src.common import Params, get_env_configs
 from src.env import get_env
 from src.model import EnvModel, target_to_pix, RolloutStorage
+from src.trainers.train_utils import collect_trajectories
 
 
-def collect_random_trajectories(params, env, rollout, obs_shape):
-    """
-    Collect a number of samples from the environment based on the current model (in eval mode)
-    """
-    state_fn = parametrize_state(params)
-    state_channel = int(params.obs_shape[0])
+def traj_collection_policy(agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    action = randint(0, params.num_actions - 1)
+    value = 0
+    action_log_probs = torch.zeros((1, params.num_actions))
 
-    for episode in track(range(params.episodes), description="Sample collection episode "):
-        # init dicts and reset env
-        dones = {agent_id: False for agent_id in env.agents}
-        action_dict = {agent_id: False for agent_id in env.agents}
-
-        state = env.reset()
-        current_state = state_fn(state)
-
-        # Insert first state
-        rollout.states[episode * params.horizon] = current_state.unsqueeze(dim=0)
-
-        ## Initialize Observation
-        observation = torch.zeros(obs_shape)
-        observation[-state_channel:, :, :] = current_state
-        for step in range(params.horizon):
-            observation = observation.to(params.device).unsqueeze(dim=0)
-
-            # let every agent act
-            for agent_id in env.agents:
-
-                # skip action for done agents
-                if dones[agent_id]:
-                    action_dict[agent_id] = None
-                    continue
-
-                else:
-                    action_dict[agent_id] = randint(0, params.num_actions - 1)
-
-            # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
-            next_state, rewards, dones, _ = env.step(action_dict)
-
-            # if done for all agents end episode
-            if dones.pop("__all__"):
-                break
-
-            # sort in agent orders and convert to list of int for tensor
-            masks = 1 - mas_dict2tensor(dones)
-            rewards = mas_dict2tensor(rewards)
-            actions = mas_dict2tensor(action_dict)
-
-            current_state = state_fn(next_state)
-            rollout.insert(
-                step=step + episode * params.horizon,
-                state=current_state,
-                action=actions,
-                values=torch.zeros(actions.shape),
-                reward=rewards,
-                mask=masks,
-                action_log_probs=torch.zeros(actions.shape),
-            )
-
-            # Update observation
-            observation = observation.squeeze(dim=0)
-            observation = torch.cat([observation[state_channel:, :, :], current_state], dim=0)
+    return action, value, action_log_probs
 
 
 def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shape):
@@ -195,11 +141,9 @@ if __name__ == '__main__':
     env_model = env_model.train()
     for ep in range(params.epochs):
         # fill rollout storage with trajcetories
-        collect_random_trajectories(params, env, rollout, obs_space)
+        collect_trajectories(params, env, traj_collection_policy, rollout, obs_space)
         print('\n')
         # train for all the trajectories collected so far
         train_env_model(rollout, env_model, t2p, params, optimizer, obs_space)
         rollout.after_update()
         torch.save(env_model.state_dict(), "env_model.pt")
-
-
