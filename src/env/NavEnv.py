@@ -1,12 +1,12 @@
 import itertools
+from copy import copy
 
 import numpy as np
-from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from ray.rllib.env import ParallelPettingZooEnv
 from ray.rllib.utils.images import rgb2gray
 
-from .Scenario import Scenario, is_collision
-from .TimerLandmark import TimerLandmark
+from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
+from .Scenario import Scenario
 
 
 def get_env(kwargs) -> ParallelPettingZooEnv:
@@ -18,12 +18,12 @@ def get_env(kwargs) -> ParallelPettingZooEnv:
 
 class RawEnv(SimpleEnv):
     def __init__(
-        self,
-        name,
-        scenario_kwargs,
-        max_cycles,
-        continuous_actions,
-        gray_scale=False,
+            self,
+            name,
+            scenario_kwargs,
+            max_cycles,
+            continuous_actions,
+            gray_scale=False,
     ):
         scenario = Scenario(**scenario_kwargs)
         world = scenario.make_world()
@@ -73,17 +73,11 @@ class RawEnv(SimpleEnv):
         for lndmrk_id in not_visited:
             self.scenario.landmarks[lndmrk_id].step()
 
-        # __all__ did not go True when all agents were done
-        avail_agents = 0
-        for agent in self.dones:
-            if agent == "__all__":
-                continue
-            if self.dones[agent] is False:
-                avail_agents += 1
-
-        if avail_agents == 0:
-            self.dones["__all__"] = True
-
         observation = self.observe()  # self.render(mode="rgb_array")
+        # copy done so __all__ is not appended
+        dones = copy(self.dones)
 
-        return observation, self.rewards, self.dones, self.infos
+        # add agent state to infos
+        self.infos = {k: self.agents_dict[k].state for k in self.infos.keys()}
+
+        return observation, self.rewards, dones, self.infos

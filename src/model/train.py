@@ -163,10 +163,6 @@ def collect_trajectories(params, env, ac_dict, rollout, obs_shape):
         values_dict = {agent_id: False for agent_id in env.agents}
 
         state = env.reset()
-        # fix: why we copy-paste 3 times the same frame? If it's for
-        # simulating the rgb channel it's ok, otherwise i don't get why we copy
-        # 3 times the same state, but still we use just 1 to return the action
-        # in model free
         current_state = state_fn(state)
 
         # Insert first state
