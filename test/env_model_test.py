@@ -12,7 +12,6 @@ from src.common.utils import get_env_configs, parametrize_state, mas_dict2tensor
 from src.env.NavEnv import get_env
 from src.model.EnvModel import EnvModel
 from src.model.ImaginationCore import target_to_pix
-# todo: this can be done in parallel
 from src.model.RolloutStorage import RolloutStorage
 
 
@@ -90,9 +89,9 @@ def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shap
 
     # get data generation that splits rollout in batches
     data_generator = rollouts.recurrent_generator(advantages, params.num_frames)
-    num_batches = rollouts.get_num_batches(params.num_frames)
 
     criterion = nn.MSELoss()
+
 
     # fix: commented for debug
     # for sample in track(data_generator, description="Batches", total=num_batches):
@@ -144,6 +143,7 @@ def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shap
 
         clip_grad_norm_(env_model.parameters(), params.configs["max_grad_norm"])
         optimizer.step()
+        print(loss)
 
 
 if __name__ == '__main__':
@@ -197,5 +197,13 @@ if __name__ == '__main__':
 
     env_model = env_model.to(params.device)
     env_model = env_model.train()
-    collect_random_trajectories(params, env, rollout, obs_space)
-    train_env_model(rollout, env_model, t2p, params, optimizer, obs_space)
+    for ep in range(params.epochs):
+        # fill rollout storage with trajcetories
+        collect_random_trajectories(params, env, rollout, obs_space)
+        print('\n')
+        # train for all the trajectories collected so far
+        train_env_model(rollout, env_model, t2p, params, optimizer, obs_space)
+        rollout.after_update()
+        torch.save(env_model.state_dict(), "env_model.pt")
+
+

@@ -5,8 +5,6 @@ import uuid
 import torch
 
 
-
-
 class Params:
     unique_id = str(uuid.uuid1())[:8]
 
@@ -25,14 +23,22 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
-    minibatch = 4
-    epochs = 1
+    minibatch = 32
+    epochs = 100
+
+    ### Optimizer
+    lr = 3e-4
+    eps = 1e-5
+    alpha = 0.99
+
+    ### Algo parameters
+    gamma= 0.998
 
     #### ENVIRONMENT ####
     agents = 2
     landmarks = 2
-    horizon = 21
-    episodes = 3
+    horizon = 30
+    episodes = 10
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
@@ -40,7 +46,7 @@ class Params:
     num_steps = horizon // num_frames
     full_rollout = False
     gray_scale = True
-    num_actions=5
+    num_actions = 5
 
     #### EVALUATION ####
     log_step = 500
@@ -57,7 +63,6 @@ class Params:
         "max_grad_norm": 5,
         "rollout_fragment_length": 50,
         # PPO parameter
-        "lr": 3e-4,
         "lambda": 0.95,
         "gamma": 0.998,
         "clip_param": 0.2,
@@ -65,8 +70,7 @@ class Params:
         "use_gae": True,
         "grad_clip": 5,
         "num_sgd_iter": 10,
-        "eps": 1e-5,
-        "alpha": 0.99,
+
     }
 
     color_index = [  # map index to RGB colors
@@ -74,7 +78,6 @@ class Params:
         (0, 0, 255),  # blue -> agents
         (255, 255, 255),  # white -> background
     ]
-
 
     def __init__(self):
         if self.debug:
