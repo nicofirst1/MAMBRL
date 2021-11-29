@@ -1,22 +1,16 @@
-from random import randint
-from typing import Tuple
-
 import torch
-import torch.nn.functional as F
 from torch import optim, nn
 from torch.autograd import Variable
 from torch.nn.utils import clip_grad_norm_
 
+from logging_callbacks import EnvModelWandb
 from src.common import Params, get_env_configs
 from src.env import get_env
-from src.model import EnvModel, target_to_pix, RolloutStorage
+from src.model import EnvModel, RolloutStorage, target_to_pix
 from src.trainers.train_utils import collect_trajectories
 
 
-
-
-
-def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shape):
+def train_env_model(rollouts, env_model, params, optimizer, obs_shape):
     # todo: add logging_callbacks in wandb
 
     # estimate advantages
@@ -30,8 +24,6 @@ def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shap
 
     criterion = nn.MSELoss()
 
-    # fix: commented for debug
-    # for sample in track(data_generator, description="Batches", total=num_batches):
     for sample in data_generator:
         (
             states_batch,
@@ -48,27 +40,9 @@ def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shap
         actions_batch = actions_batch[:-1]
         return_batch = return_batch[:-1]
 
-        onehot_action = torch.zeros(
-            params.minibatch - 1, params.num_actions, *obs_shape[1:]
-        )
-        onehot_action[:, actions_batch] = 1
-        inputs = torch.cat([input_states_batch, onehot_action], 1)
-        inputs = inputs.to(params.device)
-
         # call forward method
-        imagined_state, reward = env_model(inputs)
-
-        # ========================================
-        # from imagined state to real
-        # ========================================
-        # imagined outputs to real one
-        imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
-        imagined_state = imagined_state.view(
-            params.minibatch - 1
-            , *obs_shape)
-        imagined_state = target2pix(imagined_state)
-
-        imagined_reward = F.softmax(reward, dim=1).max(dim=1)[1]
+        imagined_state, imagined_reward = env_model.full_pipeline(actions_batch,
+                                                                  input_states_batch)
 
         reward_loss = (return_batch - imagined_reward).pow(2).mean()
         reward_loss = Variable(reward_loss, requires_grad=True)
@@ -80,7 +54,6 @@ def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shap
 
         clip_grad_norm_(env_model.parameters(), params.configs["max_grad_norm"])
         optimizer.step()
-        print(loss)
 
 
 if __name__ == '__main__':
@@ -110,9 +83,9 @@ if __name__ == '__main__':
         params.horizon * params.episodes,
         obs_space,
         num_agents=params.agents,
-        gamma=0.998,
+        gamma=params.gamma,
         size_mini_batch=params.minibatch,
-        num_actions=5,
+        num_actions=params.num_actions,
     )
     rollout.to(params.device)
 
@@ -124,8 +97,10 @@ if __name__ == '__main__':
         obs_space,
         num_rewards=num_rewards,
         num_frames=params.num_frames,
-        num_actions=5,
+        num_actions=params.num_actions,
         num_colors=num_colors,
+        target2pix=t2p,
+
     )
 
     optimizer = optim.RMSprop(
@@ -134,11 +109,20 @@ if __name__ == '__main__':
 
     env_model = env_model.to(params.device)
     env_model = env_model.train()
+
+    wandb_callback = EnvModelWandb(train_log_step=10,
+                                   val_log_step=5,
+                                   project="env_model",
+                                   model_config=params,
+                                   out_dir=params.WANDB_DIR,
+                                   opts={},
+                                   mode="disabled" if params.debug else "online",
+                                   )
+
     for ep in range(params.epochs):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, rollout, obs_space)
-        print('\n')
         # train for all the trajectories collected so far
-        train_env_model(rollout, env_model, t2p, params, optimizer, obs_space)
+        train_env_model(rollout, env_model, params, optimizer, obs_space)
         rollout.after_update()
         torch.save(env_model.state_dict(), "env_model.pt")

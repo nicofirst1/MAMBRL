@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+from src.common import rgb2gray
 
 
 class BasicBlock(nn.Module):
@@ -48,8 +51,42 @@ class BasicBlock(nn.Module):
         return out
 
 
+def target_to_pix(color_index, gray_scale=False):
+    color_index = [torch.as_tensor(x) for x in color_index]
+
+    def inner(imagined_states):
+        batch_size = imagined_states.shape[0]
+        image_shape = imagined_states.shape[-2:]
+
+        new_imagined_state = torch.zeros([batch_size, *image_shape, 3]).long()
+
+        # remove channel dim since is 1
+        imagined_states = imagined_states.squeeze(1)
+
+        for c in range(len(color_index)):
+            indices = imagined_states == c
+            new_imagined_state[indices] = color_index[c]
+
+        new_imagined_state = new_imagined_state.view(
+            batch_size, 3, *image_shape)
+
+        if False:  # debug, show image
+            from PIL import Image
+
+            img = new_imagined_state[0].cpu().view(32, 32, 3)
+            img = Image.fromarray(img.numpy(), mode="RGB")
+            img.show()
+
+        if gray_scale:
+            new_imagined_state = rgb2gray(new_imagined_state, dimension=1)
+
+        return new_imagined_state
+
+    return inner
+
+
 class EnvModel(nn.Module):
-    def __init__(self, in_shape, num_rewards, num_frames, num_actions, num_colors):
+    def __init__(self, in_shape, num_rewards, num_frames, num_actions, num_colors, target2pix):
         super(EnvModel, self).__init__()
 
         width = in_shape[1]
@@ -57,6 +94,10 @@ class EnvModel(nn.Module):
         num_pixels = width * height
 
         num_channels = in_shape[0]
+
+        self.num_actions = num_actions
+        self.in_shape = in_shape
+        self.target2pix = target2pix
 
         # fixme: imo this are way to many conv for a 32x32 image,
         #  we have 3 in each basicBlock + 1 conv + 1 if image or 2 if reward = 8/9
@@ -104,3 +145,26 @@ class EnvModel(nn.Module):
         reward = self.reward_fc(reward)
 
         return image, reward
+
+    def full_pipeline(self, actions: torch.Tensor, states: torch.Tensor):
+        batch_size = actions.shape[0]
+
+        onehot_action = torch.zeros(
+            batch_size, self.num_actions, *self.in_shape[1:]
+        )
+
+        onehot_action[:, actions] = 1
+        inputs = torch.cat([states, onehot_action], 1)
+        # inputs = inputs.to(self.device)
+
+        imagined_state, reward = self.forward(inputs)
+
+        imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
+        imagined_state = imagined_state.view(
+            batch_size
+            , *self.in_shape[1:])
+        imagined_state = self.target2pix(imagined_state)
+
+        imagined_reward = F.softmax(reward, dim=1).max(dim=1)[1]
+
+        return imagined_state, imagined_reward

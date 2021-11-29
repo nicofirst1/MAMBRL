@@ -25,20 +25,22 @@ def get_actor_critic(obs_space, params, num_rewards):
         obs_space,
         num_rewards=num_rewards,
         num_frames=params.num_frames,
-        num_actions=5,
+        num_actions=params.num_actions,
         num_colors=num_colors,
+        target2pix=t2p,
+
     )
     env_model = env_model.to(params.device)
 
     # fix: perchè passiamo il num_frames al model free ma poi non li usa
     # all'interno?
-    model_free = ModelFree(obs_space, num_actions=5, )
+    model_free = ModelFree(obs_space, num_actions=params.num_actions)
     model_free = model_free.to(params.device)
 
     imagination = ImaginationCore(
         num_rollouts=1,
         in_shape=obs_space,
-        num_actions=5,
+        num_actions=params.num_actions,
         num_rewards=num_rewards,
         env_model=env_model,
         model_free=model_free,
@@ -51,7 +53,7 @@ def get_actor_critic(obs_space, params, num_rewards):
 
     actor_critic = I2A(
         in_shape=obs_space,
-        num_actions=5,
+        num_actions=params.num_actions,
         num_rewards=num_rewards,
         hidden_size=256,
         imagination=imagination,
@@ -91,7 +93,7 @@ def train(params: Params):
         num_agents=params.agents,
         gamma=params.gamma,
         size_mini_batch=params.minibatch,
-        num_actions=5,
+        num_actions=params.num_actions,
     )
     rollout.to(params.device)
 
