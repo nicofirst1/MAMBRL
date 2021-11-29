@@ -27,3 +27,5 @@ src/wandb/**
 dist/
 build/
 mambrl.egg-info/
+
+*.pt

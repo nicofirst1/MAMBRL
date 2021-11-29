@@ -24,8 +24,8 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
-    minibatch = 32
-    epochs = 100
+    minibatch = 128
+    epochs = 500
 
     ### Optimizer
     lr = 3e-4
@@ -36,7 +36,7 @@ class Params:
     gamma= 0.998
 
     #### ENVIRONMENT ####
-    agents = 2
+    agents = 1
     landmarks = 2
     horizon = 30
     episodes = 10

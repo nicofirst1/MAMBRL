@@ -48,7 +48,6 @@ class EnvModelWandb(WandbLogger):
             f"{flag}_loss": loss,
             f"{flag}_reward_loss": logs['reward_loss'],
             f"{flag}_image_loss": logs['image_loss'],
-            f"{flag}_step": batch_id,
             f"{flag}_epoch": self.epoch,
         }
 

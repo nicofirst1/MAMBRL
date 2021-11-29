@@ -33,7 +33,7 @@ def collect_trajectories(params, env, rollout, obs_shape, policy_fn=random_actio
         action_dict = {agent_id: False for agent_id in env.agents}
         values_dict = {agent_id: False for agent_id in env.agents}
 
-        state = env.reset()
+        state = env.reset(mode="rgb_array")
         current_state = state_fn(state)
 
         # Insert first state
@@ -61,8 +61,7 @@ def collect_trajectories(params, env, rollout, obs_shape, policy_fn=random_actio
 
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
-                action_log_probs = torch.log(
-                    action_probs).unsqueeze(dim=-1)
+                action_log_probs = action_probs.unsqueeze(dim=-1)
                 action_log_probs_list.append(action_log_probs)
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}

@@ -3,6 +3,7 @@ from typing import Tuple
 
 import torch
 import torch.nn.functional as F
+from rich.progress import track
 from torch import optim
 from torch.nn.utils import clip_grad_norm_
 
@@ -12,18 +13,19 @@ from src.model import RolloutStorage, ModelFree, ImaginationCore, target_to_pix,
 from src.trainers.train_utils import collect_trajectories
 
 
-def get_actor_critic(obs_space, params, num_rewards):
+def get_actor_critic(obs_space, params, reward_range):
     """
     Create all the modules to build the i2a
     """
 
     num_colors = len(params.color_index)
+    num_rewards=len(reward_range)
 
     t2p = target_to_pix(params.color_index, gray_scale=params.gray_scale)
 
     env_model = EnvModel(
         obs_space,
-        num_rewards=num_rewards,
+        reward_range=reward_range,
         num_frames=params.num_frames,
         num_actions=params.num_actions,
         num_colors=num_colors,
@@ -67,16 +69,18 @@ def get_actor_critic(obs_space, params, num_rewards):
 
 
 def train(params: Params):
-    env = get_env(get_env_configs(params))
+    configs= get_env_configs(params)
+    configs['mode']="rgb_array"
+    env = get_env(configs)
 
     if params.resize:
         obs_space = params.obs_shape
     else:
         obs_space = env.render(mode="rgb_array").shape
 
-    num_rewards = len(env.par_env.get_reward_range())
+    reward_range = env.get_reward_range()
     ac_dict = {
-        agent_id: get_actor_critic(obs_space, params, num_rewards)
+        agent_id: get_actor_critic(obs_space, params, reward_range)
         for agent_id in env.agents
     }
 
@@ -100,10 +104,9 @@ def train(params: Params):
     policy_fn = traj_collection_policy(ac_dict)
 
     obs_shape = (params.obs_shape[0] * params.num_frames, params.obs_shape[1], params.obs_shape[2])
-    for ep in range(params.epochs):
+    for ep in track(range(params.epochs), description=f"Epochs"):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, rollout, obs_shape, policy_fn=policy_fn)
-        print('\n')
         # train for all the trajectories collected so far
         train_epoch(rollout, ac_dict, env, params, optimizer, optim_params, obs_shape)
         rollout.after_update()

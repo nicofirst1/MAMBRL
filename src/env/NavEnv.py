@@ -2,18 +2,11 @@ import itertools
 from copy import copy
 
 import numpy as np
-from ray.rllib.env import ParallelPettingZooEnv
 from ray.rllib.utils.images import rgb2gray
 
+from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from .Scenario import Scenario
-
-
-def get_env(kwargs) -> ParallelPettingZooEnv:
-    """Initialize rawEnv and wrap it in parallel petting zoo"""
-    env = RawEnv(**kwargs)
-    env = ParallelPettingZooEnv(env)
-    return env
 
 
 class RawEnv(SimpleEnv):
@@ -24,6 +17,7 @@ class RawEnv(SimpleEnv):
             max_cycles,
             continuous_actions,
             gray_scale=False,
+            mode="human"
     ):
         scenario = Scenario(**scenario_kwargs)
         world = scenario.make_world()
@@ -38,19 +32,23 @@ class RawEnv(SimpleEnv):
         self.gray_scale = gray_scale
         self.agents_dict = {agent.name: agent for agent in world.agents}
 
+        visible = True if mode == "human" else False
+        self.viewer = rendering.Viewer(700, 700, visible=visible)
+        self.viewer.set_max_size(5)
+
     def get_reward_range(self):
         return self.scenario.get_reward_range()
 
-    def reset(self):
+    def reset(self, mode="human"):
         super(RawEnv, self).reset()
 
-        return self.observe()
+        return self.observe(mode=mode)
 
-    def observe(self):
+    def observe(self, mode):
 
-        observation = self.render(mode="rgb_array")
+        observation = self.render(mode=mode)
 
-        if self.gray_scale:
+        if self.gray_scale and observation is not None:
             observation = rgb2gray(observation)
             observation = np.expand_dims(observation, axis=0)
 
@@ -73,11 +71,18 @@ class RawEnv(SimpleEnv):
         for lndmrk_id in not_visited:
             self.scenario.landmarks[lndmrk_id].step()
 
-        observation = self.observe()  # self.render(mode="rgb_array")
+        observation = self.observe(mode="rgb_array")
         # copy done so __all__ is not appended
         dones = copy(self.dones)
+        dones["__all__"] = all(dones.values())
 
         # add agent state to infos
         self.infos = {k: self.agents_dict[k].state for k in self.infos.keys()}
 
         return observation, self.rewards, dones, self.infos
+
+
+def get_env(kwargs) -> RawEnv:
+    """Initialize rawEnv and wrap it in parallel petting zoo"""
+    env = RawEnv(**kwargs)
+    return env

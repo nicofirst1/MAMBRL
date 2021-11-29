@@ -53,6 +53,8 @@ while count <= 1000:
     print(f"step {count}:\n")
     print(output)
 
+    env.render()
+
     time.sleep(0.4)
 
     count += 1
