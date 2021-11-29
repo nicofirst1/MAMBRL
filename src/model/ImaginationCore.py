@@ -22,7 +22,8 @@ def target_to_pix(color_index, gray_scale=False):
             indices = imagined_states == c
             new_imagined_state[indices] = color_index[c]
 
-        new_imagined_state = new_imagined_state.view(batch_size, 3, *image_shape)
+        new_imagined_state = new_imagined_state.view(
+            batch_size, 3, *image_shape)
 
         if False:  # debug, show image
             from PIL import Image
@@ -108,7 +109,8 @@ class ImaginationCore(nn.Module):
             imagined_state, imagined_reward = self.env_model(inputs)
 
             imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
-            imagined_state = imagined_state.view(rollout_batch_size, *self.in_shape)
+            imagined_state = imagined_state.view(
+                rollout_batch_size, *self.in_shape)
             imagined_state = self.target2pix(imagined_state)
 
             imagined_reward = F.softmax(imagined_reward, dim=1).max(dim=1)[1]
@@ -120,7 +122,10 @@ class ImaginationCore(nn.Module):
             rollout_states.append(imagined_state.unsqueeze(0))
             rollout_rewards.append(onehot_reward.unsqueeze(0))
 
+            # fix: we need 3 dimension when passing state to model free, hence
+            # we squeeze it
             state = imagined_state.to(self.device)
+
             action = self.model_free.act(state)
             action = action.detach()
 

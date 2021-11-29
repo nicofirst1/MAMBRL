@@ -26,13 +26,21 @@ class OnPolicy(nn.Module):
 
         return action
 
+    # fix: check if it works
     def evaluate_actions(self, frames, action):
+        """evaluate_actions method.
 
+        compute the actions logit, value and actions probability based on the
+        the actual state and then compute the entropy with respect to the 
+        action that we passed as a parameter. 
+        """
         action_logit, value = self.forward(frames)
 
         probs = F.softmax(action_logit, dim=1)
+
         log_probs = F.log_softmax(action_logit, dim=1)
 
+        action_log_probs = log_probs.gather(1, action)
         entropy = -(probs * log_probs).sum(1).mean()
 
         return action_logit, probs, value, entropy
@@ -43,7 +51,7 @@ class ModelFree(OnPolicy):
     This class is responsible for choosing an action and assigning a value given a state
     """
 
-    def __init__(self, in_shape, num_actions, num_frames):
+    def __init__(self, in_shape, num_actions):
         super(ModelFree, self).__init__()
 
         self.in_shape = in_shape

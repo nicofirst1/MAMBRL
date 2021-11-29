@@ -29,7 +29,8 @@ class BasicBlock(nn.Module):
             nn.Conv2d(n2, n2, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
         )
-        self.conv3 = nn.Sequential(nn.Conv2d(n1 + n2, n3, kernel_size=1), nn.ReLU())
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(n1 + n2, n3, kernel_size=1), nn.ReLU())
 
     def forward(self, inputs):
         x = self.pool_and_inject(inputs)

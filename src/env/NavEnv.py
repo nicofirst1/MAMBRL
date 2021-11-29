@@ -47,7 +47,11 @@ class RawEnv(SimpleEnv):
         return self.observe()
 
     def observe(self):
-        observation = self.render(mode="rgb_array")
+        # fix: this is called when the environment is created and it doesn't
+        # allow the environment to render on screen since the viewer is set to
+        # not visible if the mode is not "human". Fixed by adding a separate
+        # visible parameter in self.render
+        observation = self.render(mode="rgb_array", visible=False)
 
         if self.gray_scale:
             observation = rgb2gray(observation)
@@ -72,4 +76,17 @@ class RawEnv(SimpleEnv):
         for lndmrk_id in not_visited:
             self.scenario.landmarks[lndmrk_id].step()
 
-        return self.observe(), self.rewards, self.dones, self.infos
+        # __all__ did not go True when all agents were done
+        avail_agents = 0
+        for agent in self.dones:
+            if agent == "__all__":
+                continue
+            if self.dones[agent] is False:
+                avail_agents += 1
+
+        if avail_agents == 0:
+            self.dones["__all__"] = True
+
+        observation = self.observe()  # self.render(mode="rgb_array")
+
+        return observation, self.rewards, self.dones, self.infos

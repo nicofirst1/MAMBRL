@@ -15,6 +15,7 @@ from torch import optim
 from torch.nn.utils import clip_grad_norm_
 
 
+# just an hack for adding 3 frames, actually not needed
 def parametrize_state(params):
     """
     Function used to fix image coming from env
@@ -68,7 +69,10 @@ def get_actor_critic(obs_space, params, num_rewards):
     )
     env_model = env_model.to(params.device)
 
-    model_free = ModelFree(obs_space, num_actions=5, num_frames=params.num_frames)
+    # fix: perchè passiamo il num_frames al model free ma poi non li usa
+    # all'interno?
+    model_free = ModelFree(obs_space, num_actions=5,
+                           num_frames=params.num_frames)
     model_free = model_free.to(params.device)
 
     imagination = ImaginationCore(
@@ -160,6 +164,10 @@ def collect_trajectories(params, env, ac_dict, rollout, obs_shape):
         values_dict = {agent_id: False for agent_id in env.agents}
 
         state = env.reset()
+        # fix: why we copy-paste 3 times the same frame? If it's for
+        # simulating the rgb channel it's ok, otherwise i don't get why we copy
+        # 3 times the same state, but still we use just 1 to return the action
+        # in model free
         current_state = state_fn(state)
 
         # Insert first state
@@ -188,10 +196,11 @@ def collect_trajectories(params, env, ac_dict, rollout, obs_shape):
                 action = action_log_probs.multinomial(1).squeeze()
                 action_dict[agent_id] = int(action)
                 values_dict[agent_id] = int(value_logit)
-                action_log_probs = torch.log(action_log_probs).unsqueeze(dim=-1)
+                action_log_probs = torch.log(
+                    action_log_probs).unsqueeze(dim=-1)
                 action_log_probs_list.append(action_log_probs)
 
-            ## Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
+            # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, _ = env.step(action_dict)
 
             # if done for all agents end episode
@@ -237,7 +246,9 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_sha
     # set model to train mode
     [model.train() for model in ac_dict.values()]
 
-    for sample in track(data_generator, description="Batches", total=num_batches):
+    # fix: commented for debug
+    # for sample in track(data_generator, description="Batches", total=num_batches):
+    for sample in data_generator:
         (
             states_batch,
             actions_batch,
@@ -284,16 +295,16 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_sha
                 ratio,
                 1.0 - params.configs["ppo_clip_param"],
                 1.0 + params.configs["ppo_clip_param"],
-            )
-            * adv_targ
+            ) *
+            adv_targ
         )
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-            value_loss * params.configs["value_loss_coef"]
-            + action_loss
-            - entropys * params.configs["entropy_coef"]
+            value_loss * params.configs["value_loss_coef"] +
+            action_loss -
+            entropys * params.configs["entropy_coef"]
         )
         loss = loss.mean()
         loss.backward()

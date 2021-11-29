@@ -14,7 +14,8 @@ class RolloutStorage(object):
         self.actions = torch.zeros(num_steps, num_agents).long()
         self.values = torch.zeros(num_steps + 1, num_agents).long()
         self.returns = torch.zeros(num_steps + 1, num_agents)
-        self.action_log_probs = torch.zeros(num_steps + 1, num_actions, num_agents)
+        self.action_log_probs = torch.zeros(
+            num_steps + 1, num_actions, num_agents)
         self.gamma = gamma
         self.size_mini_batch = size_mini_batch
 
@@ -43,9 +44,9 @@ class RolloutStorage(object):
         gae = 0
         for step in reversed(range(self.rewards.size(0))):
             delta = (
-                self.rewards[step]
-                + self.gamma * self.values[step + 1] * self.masks[step + 1]
-                - self.values[step]
+                self.rewards[step] +
+                self.gamma * self.values[step + 1] * self.masks[step + 1] -
+                self.values[step]
             )
             gae = delta + self.gamma * tau * self.masks[step + 1] * gae
             self.returns[step] = gae + self.values[step]
@@ -56,7 +57,11 @@ class RolloutStorage(object):
 
         return total_samples // minibatch_frames
 
-    def recurrent_generator(self, advantages, num_frames, obs_shape):
+    def recurrent_generator(self, advantages, num_frames):
+        """recurrent_generator method.
+
+
+        """
         total_samples = self.rewards.size(0) - 1
         #perm = torch.randperm(total_samples)
 

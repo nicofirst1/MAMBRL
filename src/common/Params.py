@@ -46,8 +46,13 @@ class Params:
     alternating = False
     max_checkpoint_keep = 10
 
-    #### Config Dict
-    configs = {}
+    # Config Dict
+    configs = {
+        "ppo_clip_param": 0.1,
+        "value_loss_coef": 1.0,
+        "entropy_coef": 0.01,
+        "max_grad_norm": 5
+    }
 
     def __init__(self):
         if self.debug:
