@@ -1,11 +1,22 @@
+from random import randint
+from typing import Tuple
+
 import torch
 from rich.progress import track
 
-from src.common import parametrize_state, mas_dict2tensor
+from src.common import parametrize_state, mas_dict2tensor, Params
+
+
+def random_action(agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    action = randint(0, Params.num_actions - 1)
+    value = 0
+    action_log_probs = torch.zeros((1, Params.num_actions))
+
+    return action, value, action_log_probs
 
 
 # todo: this can be done in parallel
-def collect_trajectories(params, env, policy_fn, rollout, obs_shape):
+def collect_trajectories(params, env, rollout, obs_shape, policy_fn=random_action, ):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
     policy_fn: should be a function that gets an agent_id and an observation and returns

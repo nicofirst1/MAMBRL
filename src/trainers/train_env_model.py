@@ -13,12 +13,7 @@ from src.model import EnvModel, target_to_pix, RolloutStorage
 from src.trainers.train_utils import collect_trajectories
 
 
-def traj_collection_policy(agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
-    action = randint(0, params.num_actions - 1)
-    value = 0
-    action_log_probs = torch.zeros((1, params.num_actions))
 
-    return action, value, action_log_probs
 
 
 def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shape):
@@ -141,7 +136,7 @@ if __name__ == '__main__':
     env_model = env_model.train()
     for ep in range(params.epochs):
         # fill rollout storage with trajcetories
-        collect_trajectories(params, env, traj_collection_policy, rollout, obs_space)
+        collect_trajectories(params, env, rollout, obs_space)
         print('\n')
         # train for all the trajectories collected so far
         train_env_model(rollout, env_model, t2p, params, optimizer, obs_space)

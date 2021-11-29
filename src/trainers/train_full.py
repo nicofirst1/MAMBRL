@@ -1,5 +1,5 @@
 from itertools import chain
-from typing import Any, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn.functional as F
@@ -100,7 +100,7 @@ def train(params: Params):
     obs_shape = (params.obs_shape[0] * params.num_frames, params.obs_shape[1], params.obs_shape[2])
     for ep in range(params.epochs):
         # fill rollout storage with trajcetories
-        collect_trajectories(params, env, policy_fn, rollout, obs_shape)
+        collect_trajectories(params, env, rollout, obs_shape, policy_fn=policy_fn)
         print('\n')
         # train for all the trajectories collected so far
         train_epoch(rollout, ac_dict, env, params, optimizer, optim_params, obs_shape)
