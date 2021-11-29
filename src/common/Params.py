@@ -5,6 +5,8 @@ import uuid
 import torch
 
 
+
+
 class Params:
     unique_id = str(uuid.uuid1())[:8]
 
@@ -23,7 +25,7 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
-    minibatch = 2
+    minibatch = 4
     epochs = 1
 
     #### ENVIRONMENT ####
@@ -38,6 +40,7 @@ class Params:
     num_steps = horizon // num_frames
     full_rollout = False
     gray_scale = True
+    num_actions=5
 
     #### EVALUATION ####
     log_step = 500
@@ -51,8 +54,27 @@ class Params:
         "ppo_clip_param": 0.1,
         "value_loss_coef": 1.0,
         "entropy_coef": 0.01,
-        "max_grad_norm": 5
+        "max_grad_norm": 5,
+        "rollout_fragment_length": 50,
+        # PPO parameter
+        "lr": 3e-4,
+        "lambda": 0.95,
+        "gamma": 0.998,
+        "clip_param": 0.2,
+        "use_critic": True,
+        "use_gae": True,
+        "grad_clip": 5,
+        "num_sgd_iter": 10,
+        "eps": 1e-5,
+        "alpha": 0.99,
     }
+
+    color_index = [  # map index to RGB colors
+        (0, 255, 0),  # green -> landmarks
+        (0, 0, 255),  # blue -> agents
+        (255, 255, 255),  # white -> background
+    ]
+
 
     def __init__(self):
         if self.debug:

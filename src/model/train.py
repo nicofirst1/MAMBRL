@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from rich.progress import track
 from src.common import Params
+from src.common.utils import parametrize_state, mas_dict2tensor
 from src.env.NavEnv import get_env
 from src.model.EnvModel import EnvModel
 from src.model.I2A import I2A
@@ -15,34 +16,9 @@ from torch import optim
 from torch.nn.utils import clip_grad_norm_
 
 
-# just an hack for adding 3 frames, actually not needed
-def parametrize_state(params):
-    """
-    Function used to fix image coming from env
-    """
-
-    def inner(state):
-        if params.resize:
-            state = state.squeeze()
-            state = cv2.resize(
-                state,
-                dsize=(params.obs_shape[2], params.obs_shape[1]),
-                interpolation=cv2.INTER_CUBIC,
-            )
-
-        # fixme: why are we not using long instead of floats?
-        state = torch.FloatTensor(state).unsqueeze(dim=0)
-        return state
-
-    return inner
 
 
-def mas_dict2tensor(agent_dict):
-    # sort in agent orders and convert to list of int for tensor
 
-    tensor = sorted(agent_dict.items())
-    tensor = [int(elem[1]) for elem in tensor]
-    return torch.as_tensor(tensor)
 
 
 def get_actor_critic(obs_space, params, num_rewards):
@@ -50,15 +26,10 @@ def get_actor_critic(obs_space, params, num_rewards):
     Create all the modules to build the i2a
     """
 
-    color_index = [  # map index to RGB colors
-        (0, 255, 0),  # green -> landmarks
-        (0, 0, 255),  # blue -> agents
-        (255, 255, 255),  # white -> background
-    ]
 
-    num_colors = len(color_index)
+    num_colors = len(params.color_index)
 
-    t2p = target_to_pix(color_index, gray_scale=params.gray_scale)
+    t2p = target_to_pix(params.color_index, gray_scale=params.gray_scale)
 
     env_model = EnvModel(
         obs_space,
