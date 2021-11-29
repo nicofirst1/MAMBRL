@@ -185,7 +185,7 @@ def collect_trajectories(params, env, ac_dict, rollout, obs_shape):
 
 
 def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_shape):
-    # todo: add logging in wandb
+    # todo: add logging_callbacks in wandb
 
     # estimate advantages
     rollouts.compute_returns(rollouts.values[-1])

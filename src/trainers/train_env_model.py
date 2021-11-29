@@ -12,7 +12,6 @@ from src.env import get_env
 from src.model import EnvModel, target_to_pix, RolloutStorage
 
 
-
 def collect_random_trajectories(params, env, rollout, obs_shape):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
@@ -77,7 +76,7 @@ def collect_random_trajectories(params, env, rollout, obs_shape):
 
 
 def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shape):
-    # todo: add logging in wandb
+    # todo: add logging_callbacks in wandb
 
     # estimate advantages
     rollouts.compute_returns(rollouts.values[-1])
@@ -89,7 +88,6 @@ def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shap
     data_generator = rollouts.recurrent_generator(advantages, params.num_frames)
 
     criterion = nn.MSELoss()
-
 
     # fix: commented for debug
     # for sample in track(data_generator, description="Batches", total=num_batches):
@@ -131,7 +129,7 @@ def train_env_model(rollouts, env_model, target2pix, params, optimizer, obs_shap
 
         imagined_reward = F.softmax(reward, dim=1).max(dim=1)[1]
 
-        reward_loss= (return_batch - imagined_reward).pow(2).mean()
+        reward_loss = (return_batch - imagined_reward).pow(2).mean()
         reward_loss = Variable(reward_loss, requires_grad=True)
         image_loss = criterion(imagined_state, output_states_batch)
 

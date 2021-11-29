@@ -5,7 +5,7 @@ This project requires python>= 3.6
 We are using a custom version of the PettingZoo library, in order to install it execute:
 
 ```
-pip install PettingZoo
+pip install PettingZoo/
 pip install .
 
 ```
