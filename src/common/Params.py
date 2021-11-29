@@ -14,6 +14,7 @@ class Params:
     LOG_DIR = os.path.join(WORKING_DIR, "log_dir")
     RAY_DIR = os.path.join(LOG_DIR, "ray_results")
     EVAL_DIR = os.path.join(LOG_DIR, "eval")
+    WANDB_DIR = os.path.join(LOG_DIR, "wandb")
 
     #### TRAINING ####
     debug = True
@@ -88,3 +89,18 @@ class Params:
 
         if self.gray_scale:
             self.obs_shape[0] = 1
+
+        self.__initialize_dirs()
+
+    def __initialize_dirs(self):
+        """
+        Initialize all the directories  listed above
+        :return:
+        """
+        variables = [attr for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")]
+        for var in variables:
+            if var.lower().endswith('dir'):
+                path = getattr(self, var)
+                if not os.path.exists(path):
+                    print(f"Mkdir {path}")
+                    os.makedirs(path)
