@@ -47,11 +47,8 @@ class RawEnv(SimpleEnv):
         return self.observe()
 
     def observe(self):
-        # fix: this is called when the environment is created and it doesn't
-        # allow the environment to render on screen since the viewer is set to
-        # not visible if the mode is not "human". Fixed by adding a separate
-        # visible parameter in self.render
-        observation = self.render(mode="rgb_array", visible=False)
+
+        observation = self.render(mode="rgb_array")
 
         if self.gray_scale:
             observation = rgb2gray(observation)

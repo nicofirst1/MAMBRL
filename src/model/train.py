@@ -71,8 +71,7 @@ def get_actor_critic(obs_space, params, num_rewards):
 
     # fix: perchè passiamo il num_frames al model free ma poi non li usa
     # all'interno?
-    model_free = ModelFree(obs_space, num_actions=5,
-                           num_frames=params.num_frames)
+    model_free = ModelFree(obs_space, num_actions=5,)
     model_free = model_free.to(params.device)
 
     imagination = ImaginationCore(
@@ -240,7 +239,7 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_sha
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
     # get data generation that splits rollout in batches
-    data_generator = rollouts.recurrent_generator(advantages, params.num_frames, obs_shape)
+    data_generator = rollouts.recurrent_generator(advantages, params.num_frames)
     num_batches = rollouts.get_num_batches(params.num_frames)
 
     # set model to train mode
