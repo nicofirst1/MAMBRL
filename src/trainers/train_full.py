@@ -147,6 +147,7 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_sha
             states_batch,
             actions_batch,
             return_batch,
+            reward_batch,
             masks_batch,
             old_action_log_probs_batch,
             adv_targ,

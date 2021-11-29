@@ -24,6 +24,9 @@ class RolloutStorage(object):
         self.rewards = self.rewards.to(device)
         self.masks = self.masks.to(device)
         self.actions = self.actions.to(device)
+        self.action_log_probs = self.action_log_probs.to(device)
+        self.values = self.values.to(device)
+        self.returns = self.returns.to(device)
 
     def insert(self, step, state, action, values, reward, mask, action_log_probs):
         self.states[step + 1].copy_(state[: self.state_shape[0]])
@@ -70,12 +73,13 @@ class RolloutStorage(object):
 
         obs_shape = (self.state_shape[0]*num_frames, self.state_shape[1], self.state_shape[2])
         state_channel = self.state_shape[0]
-        observation = torch.zeros(obs_shape)
+        observation = torch.zeros(obs_shape).to(self.states.device)
 
         for start_ind in range(0, total_samples, minibatch_frames):
             states_batch = []
             actions_batch = []
             return_batch = []
+            reward_batch = []
             masks_batch = []
             old_action_log_probs_batch = []
             adv_targ = []
@@ -91,6 +95,7 @@ class RolloutStorage(object):
 
                 states_batch.append(observation.unsqueeze(0))
                 return_batch.append(self.returns[ind].unsqueeze(0))
+                reward_batch.append(self.rewards[ind].unsqueeze(0))
                 masks_batch.append(self.masks[ind].unsqueeze(0))
                 actions_batch.append(self.actions[ind].unsqueeze(0))
                 old_action_log_probs_batch.append(
@@ -105,6 +110,7 @@ class RolloutStorage(object):
             states_batch = torch.cat(states_batch, dim=0)
             actions_batch = torch.cat(actions_batch, dim=0)
             return_batch = torch.cat(return_batch, dim=0)
+            reward_batch = torch.cat(reward_batch, dim=0)
             masks_batch = torch.cat(masks_batch, dim=0)
             old_action_log_probs_batch = torch.cat(old_action_log_probs_batch, dim=0)
             adv_targ = torch.cat(adv_targ, dim=0)
@@ -122,7 +128,7 @@ class RolloutStorage(object):
             #)
             #adv_targ = adv_targ.view(-1, num_frames, *adv_targ.shape[1:])
 
-            yield states_batch, actions_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
+            yield states_batch, actions_batch, return_batch, reward_batch, masks_batch, old_action_log_probs_batch, adv_targ
 
     def after_update(self):
         self.states[0].copy_(self.states[-1])

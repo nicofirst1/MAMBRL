@@ -8,9 +8,11 @@ from src.common import parametrize_state, mas_dict2tensor, Params
 
 
 def random_action(agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+
     action = randint(0, Params.num_actions - 1)
     value = 0
     action_log_probs = torch.zeros((1, Params.num_actions))
+    action_log_probs= action_log_probs.to(Params.device)
 
     return action, value, action_log_probs
 
@@ -25,7 +27,7 @@ def collect_trajectories(params, env, rollout, obs_shape, policy_fn=random_actio
     state_fn = parametrize_state(params)
     state_channel = int(params.obs_shape[0])
 
-    for episode in track(range(params.episodes), description="Sample collection episode "):
+    for episode in range(params.episodes):
         # init dicts and reset env
         dones = {agent_id: False for agent_id in env.agents}
         action_dict = {agent_id: False for agent_id in env.agents}

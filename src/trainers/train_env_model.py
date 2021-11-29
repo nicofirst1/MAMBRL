@@ -1,4 +1,5 @@
 import torch
+from rich.progress import track
 from torch import optim, nn
 from torch.autograd import Variable
 from torch.nn.utils import clip_grad_norm_
@@ -10,9 +11,7 @@ from src.model import EnvModel, RolloutStorage, target_to_pix
 from src.trainers.train_utils import collect_trajectories
 
 
-def train_env_model(rollouts, env_model, params, optimizer, obs_shape):
-    # todo: add logging_callbacks in wandb
-
+def train_env_model(rollouts, env_model, params, optimizer, callback_fn):
     # estimate advantages
     rollouts.compute_returns(rollouts.values[-1])
     advantages = rollouts.returns - rollouts.values
@@ -24,11 +23,14 @@ def train_env_model(rollouts, env_model, params, optimizer, obs_shape):
 
     criterion = nn.MSELoss()
 
-    for sample in data_generator:
+    mean_loss = 0
+
+    for batch_id, sample in enumerate(data_generator):
         (
             states_batch,
             actions_batch,
-            return_batch,
+            _,
+            reward_batch,
             _,
             _,
             _,
@@ -38,13 +40,13 @@ def train_env_model(rollouts, env_model, params, optimizer, obs_shape):
         input_states_batch = states_batch[:-1]
         output_states_batch = states_batch[1:]
         actions_batch = actions_batch[:-1]
-        return_batch = return_batch[:-1]
+        reward_batch = reward_batch[:-1]
 
         # call forward method
         imagined_state, imagined_reward = env_model.full_pipeline(actions_batch,
                                                                   input_states_batch)
 
-        reward_loss = (return_batch - imagined_reward).pow(2).mean()
+        reward_loss = (reward_batch - imagined_reward).pow(2).mean()
         reward_loss = Variable(reward_loss, requires_grad=True)
         image_loss = criterion(imagined_state, output_states_batch)
 
@@ -52,8 +54,22 @@ def train_env_model(rollouts, env_model, params, optimizer, obs_shape):
         loss = reward_loss + image_loss
         loss.backward()
 
+        mean_loss += loss.detach()
+
+        logs = dict(
+            reward_loss=reward_loss,
+            image_loss=image_loss,
+            imagined_state=imagined_state[0],
+            actual_state=output_states_batch[0],
+
+        )
+
+        callback_fn(logs=logs, loss=loss, batch_id=batch_id, is_training=True)
+
         clip_grad_norm_(env_model.parameters(), params.configs["max_grad_norm"])
         optimizer.step()
+
+    return mean_loss / batch_id
 
 
 if __name__ == '__main__':
@@ -73,7 +89,6 @@ if __name__ == '__main__':
     else:
         obs_space = env.render(mode="rgb_array").shape
 
-    num_rewards = len(env.par_env.get_reward_range())
 
     num_colors = len(params.color_index)
 
@@ -95,7 +110,7 @@ if __name__ == '__main__':
 
     env_model = EnvModel(
         obs_space,
-        num_rewards=num_rewards,
+        reward_range=env.par_env.get_reward_range(),
         num_frames=params.num_frames,
         num_actions=params.num_actions,
         num_colors=num_colors,
@@ -110,19 +125,24 @@ if __name__ == '__main__':
     env_model = env_model.to(params.device)
     env_model = env_model.train()
 
-    wandb_callback = EnvModelWandb(train_log_step=10,
-                                   val_log_step=5,
+    num_batches= rollout.get_num_batches(num_frames=params.num_frames)
+    num_batches= int(num_batches*0.01)+1
+
+    wandb_callback = EnvModelWandb(train_log_step=num_batches,
+                                   val_log_step=num_batches,
                                    project="env_model",
-                                   model_config=params,
+                                   model_config=params.__dict__,
                                    out_dir=params.WANDB_DIR,
                                    opts={},
                                    mode="disabled" if params.debug else "online",
                                    )
 
-    for ep in range(params.epochs):
+    for ep in track(range(params.epochs), description=f"Epochs"):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, rollout, obs_space)
+        rollout.to(params.device)
         # train for all the trajectories collected so far
-        train_env_model(rollout, env_model, params, optimizer, obs_space)
+        mean_loss = train_env_model(rollout, env_model, params, optimizer, wandb_callback.on_batch_end)
         rollout.after_update()
         torch.save(env_model.state_dict(), "env_model.pt")
+        wandb_callback.on_epoch_end(loss=mean_loss, logs={}, model_path="env_model.pt")

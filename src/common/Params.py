@@ -17,7 +17,7 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
 
     #### TRAINING ####
-    debug = True
+    debug = False
     device = torch.device("cuda")
     resize = True
     obs_shape = [3, 32, 32]

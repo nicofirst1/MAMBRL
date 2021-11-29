@@ -79,6 +79,7 @@ def target_to_pix(color_index, gray_scale=False):
 
         if gray_scale:
             new_imagined_state = rgb2gray(new_imagined_state, dimension=1)
+            new_imagined_state=new_imagined_state.ceil()
 
         return new_imagined_state
 
@@ -86,7 +87,7 @@ def target_to_pix(color_index, gray_scale=False):
 
 
 class EnvModel(nn.Module):
-    def __init__(self, in_shape, num_rewards, num_frames, num_actions, num_colors, target2pix):
+    def __init__(self, in_shape, reward_range, num_frames, num_actions, num_colors, target2pix):
         super(EnvModel, self).__init__()
 
         width = in_shape[1]
@@ -98,6 +99,7 @@ class EnvModel(nn.Module):
         self.num_actions = num_actions
         self.in_shape = in_shape
         self.target2pix = target2pix
+        self.reward_range= reward_range
 
         # fixme: imo this are way to many conv for a 32x32 image,
         #  we have 3 in each basicBlock + 1 conv + 1 if image or 2 if reward = 8/9
@@ -119,7 +121,7 @@ class EnvModel(nn.Module):
             nn.ReLU(),
         )
 
-        self.reward_fc = nn.Linear(64 * width * height, num_rewards)
+        self.reward_fc = nn.Linear(64 * width * height, len(reward_range))
 
     def forward(self, inputs):
         """
@@ -147,6 +149,10 @@ class EnvModel(nn.Module):
         return image, reward
 
     def full_pipeline(self, actions: torch.Tensor, states: torch.Tensor):
+        """
+        Create the onhot action image and feed it to the forward method.
+        Compute softmax and reshape bach to right dims
+        """
         batch_size = actions.shape[0]
 
         onehot_action = torch.zeros(
@@ -154,6 +160,7 @@ class EnvModel(nn.Module):
         )
 
         onehot_action[:, actions] = 1
+        onehot_action = onehot_action.to(states.device)
         inputs = torch.cat([states, onehot_action], 1)
         # inputs = inputs.to(self.device)
 
@@ -164,7 +171,10 @@ class EnvModel(nn.Module):
             batch_size
             , *self.in_shape[1:])
         imagined_state = self.target2pix(imagined_state)
+        imagined_state= imagined_state.to(states.device)
 
         imagined_reward = F.softmax(reward, dim=1).max(dim=1)[1]
+        imagined_reward= [self.reward_range[x] for x in imagined_reward]
+        imagined_reward=torch.as_tensor(imagined_reward).to(states.device)
 
         return imagined_state, imagined_reward

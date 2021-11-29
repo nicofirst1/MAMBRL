@@ -122,6 +122,7 @@ def parametrize_state(params):
 
         # fixme: why are we not using long instead of floats?
         state = torch.FloatTensor(state).unsqueeze(dim=0)
+        state= state.to(params.device)
         return state
 
     return inner
