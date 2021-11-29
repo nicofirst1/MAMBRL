@@ -82,6 +82,7 @@ if __name__ == '__main__':
 
     params.agents = 1
     env_config = get_env_configs(params)
+    env_config['mode']= "rgb_array"
     env = get_env(env_config)
 
     if params.resize:
@@ -110,7 +111,7 @@ if __name__ == '__main__':
 
     env_model = EnvModel(
         obs_space,
-        reward_range=env.par_env.get_reward_range(),
+        reward_range=env.get_reward_range(),
         num_frames=params.num_frames,
         num_actions=params.num_actions,
         num_colors=num_colors,
@@ -125,6 +126,7 @@ if __name__ == '__main__':
     env_model = env_model.to(params.device)
     env_model = env_model.train()
 
+    # get logging step based on num of batches
     num_batches= rollout.get_num_batches(num_frames=params.num_frames)
     num_batches= int(num_batches*0.01)+1
 
@@ -134,15 +136,18 @@ if __name__ == '__main__':
                                    model_config=params.__dict__,
                                    out_dir=params.WANDB_DIR,
                                    opts={},
-                                   mode="disabled" if params.debug else "online",
+                                   mode="disabled" #if params.debug else "online",
                                    )
 
     for ep in track(range(params.epochs), description=f"Epochs"):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, rollout, obs_space)
         rollout.to(params.device)
+
         # train for all the trajectories collected so far
         mean_loss = train_env_model(rollout, env_model, params, optimizer, wandb_callback.on_batch_end)
         rollout.after_update()
+
+        # save result and log
         torch.save(env_model.state_dict(), "env_model.pt")
         wandb_callback.on_epoch_end(loss=mean_loss, logs={}, model_path="env_model.pt")

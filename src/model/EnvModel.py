@@ -55,6 +55,7 @@ def target_to_pix(color_index, gray_scale=False):
     color_index = [torch.as_tensor(x) for x in color_index]
 
     def inner(imagined_states):
+        #fixme: anche questo e' sbagliato
         batch_size = imagined_states.shape[0]
         image_shape = imagined_states.shape[-2:]
 
@@ -159,6 +160,7 @@ class EnvModel(nn.Module):
             batch_size, self.num_actions, *self.in_shape[1:]
         )
 
+        # fixme: this does not work
         onehot_action[:, actions] = 1
         onehot_action = onehot_action.to(states.device)
         inputs = torch.cat([states, onehot_action], 1)
