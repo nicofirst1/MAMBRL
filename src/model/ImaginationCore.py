@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.common.utils import rgb2gray
+from src.common import rgb2gray
 from src.model import EnvModel
 from src.model.ModelFree import ModelFree
 

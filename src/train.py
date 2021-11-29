@@ -1,31 +1,20 @@
 from itertools import chain
 
-import cv2
 import torch
 import torch.nn.functional as F
 from rich.progress import track
-from src.common import Params
-from src.common.utils import parametrize_state, mas_dict2tensor
-from src.env.NavEnv import get_env
-from src.model.EnvModel import EnvModel
-from src.model.I2A import I2A
-from src.model.ImaginationCore import ImaginationCore, target_to_pix
-from src.model.ModelFree import ModelFree
-from src.model.RolloutStorage import RolloutStorage
 from torch import optim
 from torch.nn.utils import clip_grad_norm_
 
-
-
-
-
+from src.common import parametrize_state, mas_dict2tensor, get_env_configs, Params
+from src.env import get_env
+from src.model import RolloutStorage, ModelFree, ImaginationCore, target_to_pix, I2A, EnvModel
 
 
 def get_actor_critic(obs_space, params, num_rewards):
     """
     Create all the modules to build the i2a
     """
-
 
     num_colors = len(params.color_index)
 
@@ -42,7 +31,7 @@ def get_actor_critic(obs_space, params, num_rewards):
 
     # fix: perchè passiamo il num_frames al model free ma poi non li usa
     # all'interno?
-    model_free = ModelFree(obs_space, num_actions=5,)
+    model_free = ModelFree(obs_space, num_actions=5, )
     model_free = model_free.to(params.device)
 
     imagination = ImaginationCore(
@@ -74,8 +63,8 @@ def get_actor_critic(obs_space, params, num_rewards):
     return actor_critic
 
 
-def train(params: Params, config: dict):
-    env = get_env(config["env_config"])
+def train(params: Params):
+    env = get_env(get_env_configs(params))
 
     if params.resize:
         obs_space = params.obs_shape
@@ -92,14 +81,14 @@ def train(params: Params, config: dict):
     optim_params = chain.from_iterable(optim_params)
 
     optimizer = optim.RMSprop(
-        optim_params, config["lr"], eps=config["eps"], alpha=config["alpha"]
+        optim_params, params.lr, eps=params.eps, alpha=params.alpha
     )
 
     rollout = RolloutStorage(
-        params.horizon*params.episodes,
+        params.horizon * params.episodes,
         obs_space,
         num_agents=params.agents,
-        gamma=config["gamma"],
+        gamma=params.gamma,
         size_mini_batch=params.minibatch,
         num_actions=5,
     )
@@ -126,7 +115,6 @@ def collect_trajectories(params, env, ac_dict, rollout, obs_shape):
     # set all i2a to eval
     [model.eval() for model in ac_dict.values()]
 
-
     for episode in track(range(params.episodes), description="Sample collection episode "):
         # init dicts and reset env
         dones = {agent_id: False for agent_id in env.agents}
@@ -137,7 +125,7 @@ def collect_trajectories(params, env, ac_dict, rollout, obs_shape):
         current_state = state_fn(state)
 
         # Insert first state
-        rollout.states[episode*params.horizon] = current_state.unsqueeze(dim=0)
+        rollout.states[episode * params.horizon] = current_state.unsqueeze(dim=0)
 
         ## Initialize Observation
         observation = torch.zeros(obs_shape)
@@ -182,7 +170,7 @@ def collect_trajectories(params, env, ac_dict, rollout, obs_shape):
 
             current_state = state_fn(next_state)
             rollout.insert(
-                step=step + episode*params.horizon,
+                step=step + episode * params.horizon,
                 state=current_state,
                 action=actions,
                 values=values,
@@ -250,30 +238,35 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_sha
         value_loss = (return_batch - values).pow(2).mean()
 
         # take last old_action_prob/adv_targ since is the prob of the last frame in the sequence of num_frames
-        #old_action_log_probs_batch = old_action_log_probs_batch[:, -1]
-        #adv_targ = adv_targ[:, -1:, :]
+        # old_action_log_probs_batch = old_action_log_probs_batch[:, -1]
+        # adv_targ = adv_targ[:, -1:, :]
         ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
 
         adv_targ = adv_targ.view(adv_targ.shape[0], -1, adv_targ.shape[1])
         surr1 = ratio * adv_targ
         surr2 = (
-            torch.clamp(
-                ratio,
-                1.0 - params.configs["ppo_clip_param"],
-                1.0 + params.configs["ppo_clip_param"],
-            ) *
-            adv_targ
+                torch.clamp(
+                    ratio,
+                    1.0 - params.configs["ppo_clip_param"],
+                    1.0 + params.configs["ppo_clip_param"],
+                ) *
+                adv_targ
         )
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-            value_loss * params.configs["value_loss_coef"] +
-            action_loss -
-            entropys * params.configs["entropy_coef"]
+                value_loss * params.configs["value_loss_coef"] +
+                action_loss -
+                entropys * params.configs["entropy_coef"]
         )
         loss = loss.mean()
         loss.backward()
 
         clip_grad_norm_(optim_params, params.configs["max_grad_norm"])
         optimizer.step()
+
+
+if __name__ == '__main__':
+    params = Params()
+    train(params)

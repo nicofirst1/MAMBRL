@@ -2,7 +2,7 @@ import cv2
 import gym
 import numpy as np
 import torch
-from src.env.NavEnv import get_env
+from src.env import get_env
 from src.common.Params import Params
 
 

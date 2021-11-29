@@ -1,7 +1,7 @@
 import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, World
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
-from src.env.TimerLandmark import TimerLandmark
+from .TimerLandmark import TimerLandmark
 
 
 def is_collision(agent1, agent2):
