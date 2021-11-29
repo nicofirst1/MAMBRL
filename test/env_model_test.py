@@ -7,12 +7,10 @@ from torch import optim, nn
 from torch.autograd import Variable
 from torch.nn.utils import clip_grad_norm_
 
-from src.common.Params import Params
-from src.common.utils import get_env_configs, parametrize_state, mas_dict2tensor
-from src.env.NavEnv import get_env
-from src.model.EnvModel import EnvModel
-from src.model.ImaginationCore import target_to_pix
-from src.model.RolloutStorage import RolloutStorage
+from src.common import Params, get_env_configs, parametrize_state, mas_dict2tensor
+from src.env import get_env
+from src.model import EnvModel, target_to_pix, RolloutStorage
+
 
 
 def collect_random_trajectories(params, env, rollout, obs_shape):
@@ -192,7 +190,7 @@ if __name__ == '__main__':
     )
 
     optimizer = optim.RMSprop(
-        env_model.parameters(), params.configs["lr"], eps=params.configs["eps"], alpha=params.configs["alpha"]
+        env_model.parameters(), params.lr, eps=params.eps, alpha=params.alpha
     )
 
     env_model = env_model.to(params.device)

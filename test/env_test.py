@@ -16,9 +16,8 @@ import time
 
 from rich import print, print_json
 
-from src.common.Params import Params
-from src.common.utils import get_env_configs
-from src.env.NavEnv import get_env
+from src.common import Params, get_env_configs
+from src.env import get_env
 
 params = Params()
 # Get configs
