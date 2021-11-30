@@ -6,13 +6,6 @@ from src.env import get_env
 from src.common.Params import Params
 
 
-def mas_dict2tensor(agent_dict):
-    # sort in agent orders and convert to list of int for tensor
-
-    tensor = sorted(agent_dict.items())
-    tensor = [int(elem[1]) for elem in tensor]
-    return torch.as_tensor(tensor)
-
 def get_env_configs(params: Params):
     env_config = dict(
         max_cycles=params.horizon,
@@ -105,24 +98,3 @@ def rgb2gray(rgb, dimension):
     return rgb
 
 
-# just an hack for adding 3 frames, actually not needed
-def parametrize_state(params):
-    """
-    Function used to fix image coming from env
-    """
-
-    def inner(state):
-        if params.resize:
-            state = state.squeeze()
-            state = cv2.resize(
-                state,
-                dsize=(params.obs_shape[2], params.obs_shape[1]),
-                interpolation=cv2.INTER_CUBIC,
-            )
-
-        # fixme: why are we not using long instead of floats?
-        state = torch.FloatTensor(state).unsqueeze(dim=0)
-        state= state.to(params.device)
-        return state
-
-    return inner

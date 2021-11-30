@@ -1,19 +1,60 @@
 from random import randint
 from typing import Tuple
 
+import cv2
 import torch
 from rich.progress import track
 
-from src.common import parametrize_state, mas_dict2tensor, Params
+from src.common import Params
+
+
+def mas_dict2tensor(agent_dict):
+    # sort in agent orders and convert to list of int for tensor
+
+    tensor = sorted(agent_dict.items())
+    tensor = [int(elem[1]) for elem in tensor]
+    return torch.as_tensor(tensor)
+
+
+def parametrize_state(params):
+    """
+    Function used to resize image coming from env
+    """
+
+    def inner(state):
+
+        if params.resize:
+            state = state.squeeze()
+            # PIL.Image.fromarray(state).show()
+
+            state = cv2.resize(
+                state,
+                dsize=(params.obs_shape[2], params.obs_shape[1]),
+                interpolation=cv2.INTER_AREA,
+            )
+            # PIL.Image.fromarray(state).show()
+
+        # fixme: why are we not using long instead of floats?
+        state = torch.LongTensor(state)
+        # move channel on second dimension if present, else add 1
+        if len(state.shape) == 3:
+            state = state.permute(2, 0, 1)
+        else:
+            state = state.unsqueeze(dim=0)
+
+        state = state.to(params.device)
+        return state
+
+    return inner
 
 
 def random_action(agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
-    params=Params()
+    params = Params()
 
     action = randint(0, params.num_actions - 1)
     value = 0
     action_log_probs = torch.zeros((1, params.num_actions))
-    action_log_probs= action_log_probs.to(params.device)
+    action_log_probs = action_log_probs.to(params.device)
 
     return action, value, action_log_probs
 
