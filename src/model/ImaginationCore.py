@@ -79,7 +79,7 @@ class ImaginationCore(nn.Module):
 
             # fix: we need 3 dimension when passing state to model free, hence
             # we squeeze it
-            state = imagined_state.to(self.device)
+            state = imagined_state.to(self.device).float()
 
             action = self.model_free.act(state)
             action = action.detach()

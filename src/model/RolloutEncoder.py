@@ -21,7 +21,7 @@ class RolloutEncoder(nn.Module):
         num_steps = state.size(0)
         batch_size = state.size(1)
 
-        state = state.view(-1, *self.in_shape)
+        state = state.view(-1, *self.in_shape).float()
         state = self.features(state)
         state = state.view(num_steps, batch_size, -1)
         rnn_input = torch.cat([state, reward], 2)

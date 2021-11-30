@@ -115,6 +115,7 @@ def train(params: Params):
 
 
 def traj_collection_policy(ac_dict):
+
     def inner(
         agent_id: str, observation: torch.Tensor
     ) -> Tuple[int, int, torch.Tensor]:
