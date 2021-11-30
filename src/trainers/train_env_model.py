@@ -46,7 +46,7 @@ def train_env_model(rollouts, env_model, params, optimizer, callback_fn):
         imagined_state, imagined_reward = env_model.full_pipeline(actions_batch,
                                                                   input_states_batch)
 
-        reward_loss = (reward_batch - imagined_reward).pow(2).mean()
+        reward_loss = (reward_batch.float() - imagined_reward).pow(2).mean()
         reward_loss = Variable(reward_loss, requires_grad=True)
         image_loss = criterion(imagined_state, output_states_batch)
 
@@ -59,8 +59,8 @@ def train_env_model(rollouts, env_model, params, optimizer, callback_fn):
         logs = dict(
             reward_loss=reward_loss,
             image_loss=image_loss,
-            imagined_state=imagined_state[0],
-            actual_state=output_states_batch[0],
+            imagined_state=imagined_state[0].float(),
+            actual_state=output_states_batch[0].float(),
 
         )
 
