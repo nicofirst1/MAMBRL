@@ -34,7 +34,7 @@ class RawEnv(SimpleEnv):
 
         visible = True if mode == "human" else False
         self.viewer = rendering.Viewer(700, 700, visible=visible)
-        self.viewer.set_max_size(5)
+        self.viewer.set_max_size(3)
 
     def get_reward_range(self):
         return self.scenario.get_reward_range()
