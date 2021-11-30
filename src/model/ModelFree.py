@@ -42,7 +42,7 @@ class OnPolicy(nn.Module):
 
         log_probs = F.log_softmax(action_logit, dim=1)
 
-        action_log_probs = log_probs.gather(1, action)
+        action_log_probs = log_probs.gather(1, action.unsqueeze(dim=1))
         entropy = -(probs * log_probs).sum(1).mean()
 
         return action_logit, probs, value, entropy

@@ -6,7 +6,7 @@ class RolloutStorage(object):
         self, num_steps, state_shape, num_agents, gamma, size_mini_batch, num_actions
     ):
         self.num_steps = num_steps
-        self.num_channels = state_shape[0]
+        self.state_shape = state_shape
 
         self.states = torch.zeros(num_steps + 1, *state_shape)
         self.rewards = torch.zeros(num_steps, num_agents)
@@ -26,8 +26,7 @@ class RolloutStorage(object):
         self.actions = self.actions.to(device)
 
     def insert(self, step, state, action, values, reward, mask, action_log_probs):
-
-        self.states[step + 1].copy_(state[: self.num_channels])
+        self.states[step + 1].copy_(state[: self.state_shape[0]])
         self.actions[step].copy_(action)
         self.values[step].copy_(values)
         self.rewards[step].copy_(reward)
@@ -64,10 +63,14 @@ class RolloutStorage(object):
 
         """
         total_samples = self.rewards.size(0) - 1
-        perm = torch.randperm(total_samples)
+        #perm = torch.randperm(total_samples)
 
-        minibatch_frames = self.size_mini_batch * num_frames
+        minibatch_frames = self.size_mini_batch
         done = False
+
+        obs_shape = (self.state_shape[0]*num_frames, self.state_shape[1], self.state_shape[2])
+        state_channel = self.state_shape[0]
+        observation = torch.zeros(obs_shape)
 
         for start_ind in range(0, total_samples, minibatch_frames):
             states_batch = []
@@ -78,14 +81,15 @@ class RolloutStorage(object):
             adv_targ = []
 
             for offset in range(minibatch_frames):
-
-                if start_ind + offset >= len(perm):
+                if start_ind + offset >= total_samples:
                     # skip last batch if not divisible
                     done = True
                     continue
 
-                ind = perm[start_ind + offset]
-                states_batch.append(self.states[ind].unsqueeze(0))
+                ind = start_ind + offset
+                observation = torch.cat([observation[state_channel:, :, :], self.states[ind]], dim=0)
+
+                states_batch.append(observation.unsqueeze(0))
                 return_batch.append(self.returns[ind].unsqueeze(0))
                 masks_batch.append(self.masks[ind].unsqueeze(0))
                 actions_batch.append(self.actions[ind].unsqueeze(0))
@@ -98,29 +102,25 @@ class RolloutStorage(object):
                 break
 
             # cat on firt dimension
-            states_batch = torch.cat(states_batch, 0)
-            actions_batch = torch.cat(actions_batch, 0)
-            return_batch = torch.cat(return_batch, 0)
-            masks_batch = torch.cat(masks_batch, 0)
-            old_action_log_probs_batch = torch.cat(
-                old_action_log_probs_batch, 0)
-            adv_targ = torch.cat(adv_targ, 0)
+            states_batch = torch.cat(states_batch, dim=0)
+            actions_batch = torch.cat(actions_batch, dim=0)
+            return_batch = torch.cat(return_batch, dim=0)
+            masks_batch = torch.cat(masks_batch, dim=0)
+            old_action_log_probs_batch = torch.cat(old_action_log_probs_batch, dim=0)
+            adv_targ = torch.cat(adv_targ, dim=0)
 
             # split per num frame
             # [batch * num_frames , *shape] ->[batch, num_frames , *shape]
-            states_batch = states_batch.view(
-                -1, self.num_channels * num_frames, *states_batch.shape[2:]
-            )
-            actions_batch = actions_batch.view(-1,
-                                               num_frames, *actions_batch.shape[1:])
-            return_batch = return_batch.view(-1,
-                                             num_frames, *return_batch.shape[1:])
-            masks_batch = masks_batch.view(-1,
-                                           num_frames, *masks_batch.shape[1:])
-            old_action_log_probs_batch = old_action_log_probs_batch.view(
-                -1, num_frames, *old_action_log_probs_batch.shape[1:]
-            )
-            adv_targ = adv_targ.view(-1, num_frames, *adv_targ.shape[1:])
+            #states_batch = states_batch.view(
+            #    -1, self.state_shape[0] * num_frames, *states_batch.shape[2:]
+            #)
+            #actions_batch = actions_batch.view(-1, num_frames, *actions_batch.shape[1:])
+            #return_batch = return_batch.view(-1, num_frames, *return_batch.shape[1:])
+            #masks_batch = masks_batch.view(-1, num_frames, *masks_batch.shape[1:])
+            #old_action_log_probs_batch = old_action_log_probs_batch.view(
+            #    -1, num_frames, *old_action_log_probs_batch.shape[1:]
+            #)
+            #adv_targ = adv_targ.view(-1, num_frames, *adv_targ.shape[1:])
 
             yield states_batch, actions_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
 
