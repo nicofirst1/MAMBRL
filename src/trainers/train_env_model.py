@@ -1,6 +1,6 @@
 import torch
 from rich.progress import track
-from torch import optim, nn
+from torch import nn, optim
 from torch.autograd import Variable
 from torch.nn.utils import clip_grad_norm_
 
@@ -43,8 +43,9 @@ def train_env_model(rollouts, env_model, params, optimizer, callback_fn):
         reward_batch = reward_batch[:-1]
 
         # call forward method
-        imagined_state, imagined_reward = env_model.full_pipeline(actions_batch,
-                                                                  input_states_batch)
+        imagined_state, imagined_reward = env_model.full_pipeline(
+            actions_batch, input_states_batch
+        )
 
         reward_loss = (reward_batch.float() - imagined_reward).pow(2).mean()
         reward_loss = Variable(reward_loss, requires_grad=True)
@@ -61,7 +62,6 @@ def train_env_model(rollouts, env_model, params, optimizer, callback_fn):
             image_loss=image_loss,
             imagined_state=imagined_state[0].float(),
             actual_state=output_states_batch[0].float(),
-
         )
 
         callback_fn(logs=logs, loss=loss, batch_id=batch_id, is_training=True)
@@ -72,7 +72,7 @@ def train_env_model(rollouts, env_model, params, optimizer, callback_fn):
     return mean_loss / batch_id
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     params = Params()
 
@@ -82,14 +82,13 @@ if __name__ == '__main__':
 
     params.agents = 1
     env_config = get_env_configs(params)
-    env_config['mode']= "rgb_array"
+    env_config["mode"] = "rgb_array"
     env = get_env(env_config)
 
     if params.resize:
         obs_space = params.obs_shape
     else:
         obs_space = env.render(mode="rgb_array").shape
-
 
     num_colors = len(params.color_index)
 
@@ -116,7 +115,6 @@ if __name__ == '__main__':
         num_actions=params.num_actions,
         num_colors=num_colors,
         target2pix=t2p,
-
     )
 
     optimizer = optim.RMSprop(
@@ -127,17 +125,18 @@ if __name__ == '__main__':
     env_model = env_model.train()
 
     # get logging step based on num of batches
-    num_batches= rollout.get_num_batches(num_frames=params.num_frames)
-    num_batches= int(num_batches*0.01)+1
+    num_batches = rollout.get_num_batches(num_frames=params.num_frames)
+    num_batches = int(num_batches * 0.01) + 1
 
-    wandb_callback = EnvModelWandb(train_log_step=num_batches,
-                                   val_log_step=num_batches,
-                                   project="env_model",
-                                   model_config=params.__dict__,
-                                   out_dir=params.WANDB_DIR,
-                                   opts={},
-                                   mode="disabled" #if params.debug else "online",
-                                   )
+    wandb_callback = EnvModelWandb(
+        train_log_step=num_batches,
+        val_log_step=num_batches,
+        project="env_model",
+        model_config=params.__dict__,
+        out_dir=params.WANDB_DIR,
+        opts={},
+        mode="disabled",  # if params.debug else "online",
+    )
 
     for ep in track(range(params.epochs), description=f"Epochs"):
         # fill rollout storage with trajcetories
@@ -145,7 +144,9 @@ if __name__ == '__main__':
         rollout.to(params.device)
 
         # train for all the trajectories collected so far
-        mean_loss = train_env_model(rollout, env_model, params, optimizer, wandb_callback.on_batch_end)
+        mean_loss = train_env_model(
+            rollout, env_model, params, optimizer, wandb_callback.on_batch_end
+        )
         rollout.after_update()
 
         # save result and log

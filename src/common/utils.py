@@ -2,8 +2,9 @@ import cv2
 import gym
 import numpy as np
 import torch
-from src.env import get_env
+
 from src.common.Params import Params
+from src.env import get_env
 
 
 def get_env_configs(params: Params):
@@ -96,5 +97,3 @@ def rgb2gray(rgb, dimension):
     rgb = rgb.transpose(-1, dimension)
 
     return rgb
-
-

@@ -2,17 +2,18 @@
 
 train the model free network
 """
-import sys
 import os
+import sys
+
 import cv2
 import torch
-from torch import optim
 import torch.nn.functional as F
-project_dir = os.path.abspath(os.path.join(os.path.curdir,
-                                           os.path.pardir))
+from torch import optim
+
+project_dir = os.path.abspath(os.path.join(os.path.curdir, os.path.pardir))
 sys.path.insert(0, project_dir)
-from src.env.NavEnv import get_env
 from src.common.utils import *
+from src.env.NavEnv import get_env
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
 
@@ -80,25 +81,20 @@ alpha = 0.99
 PARAM_SHARING = False
 # Init a2c and rmsprop
 if not PARAM_SHARING:
-    ac_dict = {
-        agent_id: ModelFree(obs_space, num_actions)
-        for agent_id in env.agents
-    }
+    ac_dict = {agent_id: ModelFree(obs_space, num_actions) for agent_id in env.agents}
 
     opt_dict = {
-        agent_id: optim.RMSprop(ac_dict[agent_id].parameters(), lr, eps=eps,
-                                alpha=alpha)
+        agent_id: optim.RMSprop(
+            ac_dict[agent_id].parameters(), lr, eps=eps, alpha=alpha
+        )
         for agent_id in env.agents
     }
 else:
     raise NotImplementedError
 
-rollout = RolloutStorage(steps_per_episode,
-                         obs_space,
-                         num_agents,
-                         gamma,
-                         size_minibatch,
-                         num_actions)
+rollout = RolloutStorage(
+    steps_per_episode, obs_space, num_agents, gamma, size_minibatch, num_actions
+)
 
 
 # =============================================================================
@@ -140,8 +136,7 @@ for epoch in range(epochs):
             action = action_probs.multinomial(1).squeeze()
             action_dict[agent_id] = int(action)
             values_dict[agent_id] = int(value_logit)
-            action_log_probs = torch.log(
-                action_probs).unsqueeze(dim=-1)
+            action_log_probs = torch.log(action_probs).unsqueeze(dim=-1)
             action_log_probs_list.append(action_log_probs)
 
         # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
@@ -169,9 +164,9 @@ for epoch in range(epochs):
             mask=masks,
             action_log_probs=action_log_probs.detach().squeeze(),
         )
-# =============================================================================
-# TRAIN
-# =============================================================================
+    # =============================================================================
+    # TRAIN
+    # =============================================================================
     # estimate advantages
     rollout.compute_returns(rollout.values[-1])
     advantages = rollout.returns - rollout.values
@@ -179,8 +174,7 @@ for epoch in range(epochs):
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
     # # get data generation that splits rollout in batches
-    data_generator = rollout.recurrent_generator(
-        advantages, params.num_frames)
+    data_generator = rollout.recurrent_generator(advantages, params.num_frames)
     num_batches = rollout.get_num_batches(params.num_frames)
 
     # set model to train mode
@@ -218,12 +212,12 @@ for epoch in range(epochs):
                 #         single_state = single_state.unsqueeze(dim=0)
 
                 # fixed
-                logit, action_log_prob, value, entropy = \
-                    agent.evaluate_actions(
-                        states_batch[mini_batch].unsqueeze(
-                            dim=0).view(params.num_frames, *obs_space),
-                        actions_batch[mini_batch, :, agent_index].view(-1, 1)
-                    )
+                logit, action_log_prob, value, entropy = agent.evaluate_actions(
+                    states_batch[mini_batch]
+                    .unsqueeze(dim=0)
+                    .view(params.num_frames, *obs_space),
+                    actions_batch[mini_batch, :, agent_index].view(-1, 1),
+                )
 
                 # add multi agent dim
                 # logits.append(logit.unsqueeze(dim=-1))
@@ -231,23 +225,29 @@ for epoch in range(epochs):
                 # values.append(value.unsqueeze(dim=-1))
                 # entropys.append(entropy.unsqueeze(dim=-1))
 
-            # unpack all the calls from before
-            # logits = torch.cat(logits, dim=-1)
-            # action_log_probs = torch.cat(action_log_probs, dim=-1)
-            # values = torch.cat(values, dim=-1)
-            # entropys = torch.cat(entropys, dim=-1)
+                # unpack all the calls from before
+                # logits = torch.cat(logits, dim=-1)
+                # action_log_probs = torch.cat(action_log_probs, dim=-1)
+                # values = torch.cat(values, dim=-1)
+                # entropys = torch.cat(entropys, dim=-1)
 
-                value_loss = (return_batch[mini_batch, :, agent_index].view(-1, 1) -
-                              value).pow(2).mean()
+                value_loss = (
+                    (return_batch[mini_batch, :, agent_index].view(-1, 1) - value)
+                    .pow(2)
+                    .mean()
+                )
 
                 # take last old_action_prob/adv_targ since is the prob of the last
                 # frame in the sequence of num_frames
                 # old_action_log_probs_batch = old_action_log_probs_batch[:, -1]
                 # adv_targ = adv_targ[:, -1:, :]
-                ratio = torch.exp(action_log_prob -
-                                  old_action_log_probs_batch[mini_batch, :, :, agent_index])
-                current_adv_targ = adv_targ[mini_batch,
-                                            :, agent_index]  # .view(1, -1).repeat(5, 1)
+                ratio = torch.exp(
+                    action_log_prob
+                    - old_action_log_probs_batch[mini_batch, :, :, agent_index]
+                )
+                current_adv_targ = adv_targ[
+                    mini_batch, :, agent_index
+                ]  # .view(1, -1).repeat(5, 1)
                 surr1 = torch.zeros(ratio.shape)
                 surr2 = torch.zeros(ratio.shape)
                 for i in range(len(current_adv_targ)):
@@ -257,17 +257,16 @@ for epoch in range(epochs):
                             ratio[i],
                             1.0 - params.configs["ppo_clip_param"],
                             1.0 + params.configs["ppo_clip_param"],
-
-                        ) *
-                        current_adv_targ[i]
+                        )
+                        * current_adv_targ[i]
                     )
                 action_loss = -torch.min(surr1, surr2).mean()
 
                 optimizer.zero_grad()
                 loss = (
-                    value_loss * params.configs["value_loss_coef"] +
-                    action_loss -
-                    entropys * params.configs["entropy_coef"]
+                    value_loss * params.configs["value_loss_coef"]
+                    + action_loss
+                    - entropys * params.configs["entropy_coef"]
                 )
                 loss = loss.mean()
                 loss.backward()

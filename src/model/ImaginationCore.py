@@ -7,17 +7,17 @@ from src.model.ModelFree import ModelFree
 
 class ImaginationCore(nn.Module):
     def __init__(
-            self,
-            num_rollouts: int,
-            in_shape,
-            num_actions: int,
-            num_rewards: int,
-            env_model: EnvModel,
-            model_free: ModelFree,
-            device,
-            num_frames: int,
-            target2pix,
-            full_rollout=True,
+        self,
+        num_rollouts: int,
+        in_shape,
+        num_actions: int,
+        num_rewards: int,
+        env_model: EnvModel,
+        model_free: ModelFree,
+        device,
+        num_frames: int,
+        target2pix,
+        full_rollout=True,
     ):
         super().__init__()
         self.num_rollouts = num_rollouts
@@ -42,8 +42,8 @@ class ImaginationCore(nn.Module):
             # esegui un rollout per ogni azione
             state = (
                 state.unsqueeze(0)
-                    .repeat(self.num_actions, 1, 1, 1, 1)
-                    .view(-1, *self.in_shape)
+                .repeat(self.num_actions, 1, 1, 1, 1)
+                .view(-1, *self.in_shape)
             )
             action = torch.LongTensor(
                 [[i] for i in range(self.num_actions)] * batch_size
@@ -52,7 +52,7 @@ class ImaginationCore(nn.Module):
             rollout_batch_size = batch_size * self.num_actions
         else:
             # get last state (discard num_frames)
-            last_state = state[:, -self.in_shape[0]:, :]
+            last_state = state[:, -self.in_shape[0] :, :]
             action = self.model_free.act(last_state)
             action = action.detach()
             rollout_batch_size = batch_size
@@ -66,7 +66,9 @@ class ImaginationCore(nn.Module):
             the index [:,idx,:,:] corresponding to the action is chosen and the image is set to 1, the others are zero
             """
 
-            imagined_state, imagined_reward = self.env_model.full_pipeline(action, state)
+            imagined_state, imagined_reward = self.env_model.full_pipeline(
+                action, state
+            )
 
             onehot_reward = torch.zeros(rollout_batch_size, self.num_rewards)
             onehot_reward[range(rollout_batch_size), imagined_reward] = 1

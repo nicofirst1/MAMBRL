@@ -14,8 +14,7 @@ class RolloutStorage(object):
         self.actions = torch.zeros(num_steps, num_agents).long()
         self.values = torch.zeros(num_steps + 1, num_agents).long()
         self.returns = torch.zeros(num_steps + 1, num_agents)
-        self.action_log_probs = torch.zeros(
-            num_steps + 1, num_actions, num_agents)
+        self.action_log_probs = torch.zeros(num_steps + 1, num_actions, num_agents)
         self.gamma = gamma
         self.size_mini_batch = size_mini_batch
 
@@ -47,9 +46,9 @@ class RolloutStorage(object):
         gae = 0
         for step in reversed(range(self.rewards.size(0))):
             delta = (
-                self.rewards[step] +
-                self.gamma * self.values[step + 1] * self.masks[step + 1] -
-                self.values[step]
+                self.rewards[step]
+                + self.gamma * self.values[step + 1] * self.masks[step + 1]
+                - self.values[step]
             )
             gae = delta + self.gamma * tau * self.masks[step + 1] * gae
             self.returns[step] = gae + self.values[step]
@@ -61,17 +60,18 @@ class RolloutStorage(object):
         return total_samples // minibatch_frames
 
     def recurrent_generator(self, advantages, num_frames):
-        """recurrent_generator method.
-
-
-        """
+        """recurrent_generator method."""
         total_samples = self.rewards.size(0) - 1
-        #perm = torch.randperm(total_samples)
+        # perm = torch.randperm(total_samples)
 
         minibatch_frames = self.size_mini_batch
         done = False
 
-        obs_shape = (self.state_shape[0]*num_frames, self.state_shape[1], self.state_shape[2])
+        obs_shape = (
+            self.state_shape[0] * num_frames,
+            self.state_shape[1],
+            self.state_shape[2],
+        )
         state_channel = self.state_shape[0]
         observation = torch.zeros(obs_shape).to(self.states.device)
 
@@ -91,7 +91,9 @@ class RolloutStorage(object):
                     continue
 
                 ind = start_ind + offset
-                observation = torch.cat([observation[state_channel:, :, :], self.states[ind]], dim=0)
+                observation = torch.cat(
+                    [observation[state_channel:, :, :], self.states[ind]], dim=0
+                )
 
                 states_batch.append(observation.unsqueeze(0))
                 return_batch.append(self.returns[ind].unsqueeze(0))
@@ -117,16 +119,16 @@ class RolloutStorage(object):
 
             # split per num frame
             # [batch * num_frames , *shape] ->[batch, num_frames , *shape]
-            #states_batch = states_batch.view(
+            # states_batch = states_batch.view(
             #    -1, self.state_shape[0] * num_frames, *states_batch.shape[2:]
-            #)
-            #actions_batch = actions_batch.view(-1, num_frames, *actions_batch.shape[1:])
-            #return_batch = return_batch.view(-1, num_frames, *return_batch.shape[1:])
-            #masks_batch = masks_batch.view(-1, num_frames, *masks_batch.shape[1:])
-            #old_action_log_probs_batch = old_action_log_probs_batch.view(
+            # )
+            # actions_batch = actions_batch.view(-1, num_frames, *actions_batch.shape[1:])
+            # return_batch = return_batch.view(-1, num_frames, *return_batch.shape[1:])
+            # masks_batch = masks_batch.view(-1, num_frames, *masks_batch.shape[1:])
+            # old_action_log_probs_batch = old_action_log_probs_batch.view(
             #    -1, num_frames, *old_action_log_probs_batch.shape[1:]
-            #)
-            #adv_targ = adv_targ.view(-1, num_frames, *adv_targ.shape[1:])
+            # )
+            # adv_targ = adv_targ.view(-1, num_frames, *adv_targ.shape[1:])
 
             yield states_batch, actions_batch, return_batch, reward_batch, masks_batch, old_action_log_probs_batch, adv_targ
 

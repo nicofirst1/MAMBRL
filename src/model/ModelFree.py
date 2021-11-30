@@ -31,8 +31,8 @@ class OnPolicy(nn.Module):
         """evaluate_actions method.
 
         compute the actions logit, value and actions probability based on the
-        the actual state and then compute the entropy with respect to the 
-        action that we passed as a parameter. 
+        the actual state and then compute the entropy with respect to the
+        action that we passed as a parameter.
         """
         action_logit, value = self.forward(frames)
 

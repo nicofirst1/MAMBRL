@@ -48,7 +48,9 @@ def parametrize_state(params):
     return inner
 
 
-def random_action(agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+def random_action(
+    agent_id: str, observation: torch.Tensor
+) -> Tuple[int, int, torch.Tensor]:
     params = Params()
 
     action = randint(0, params.num_actions - 1)
@@ -60,7 +62,13 @@ def random_action(agent_id: str, observation: torch.Tensor) -> Tuple[int, int, t
 
 
 # todo: this can be done in parallel
-def collect_trajectories(params, env, rollout, obs_shape, policy_fn=random_action, ):
+def collect_trajectories(
+    params,
+    env,
+    rollout,
+    obs_shape,
+    policy_fn=random_action,
+):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
     policy_fn: should be a function that gets an agent_id and an observation and returns
@@ -133,4 +141,6 @@ def collect_trajectories(params, env, rollout, obs_shape, policy_fn=random_actio
 
             # Update observation
             observation = observation.squeeze(dim=0)
-            observation = torch.cat([observation[state_channel:, :, :], current_state], dim=0)
+            observation = torch.cat(
+                [observation[state_channel:, :, :], current_state], dim=0
+            )

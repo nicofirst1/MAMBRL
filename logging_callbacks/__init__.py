@@ -1,9 +1,4 @@
-from .callbacks import (
-    Callback,
-    CheckpointSaver,
-    ConsoleLogger,
-)
-
+from .callbacks import Callback, CheckpointSaver, ConsoleLogger
 from .wandbLogger import EnvModelWandb
 
 __all__ = [

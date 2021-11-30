@@ -1,6 +1,7 @@
 import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, World
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
+
 from .TimerLandmark import TimerLandmark
 
 

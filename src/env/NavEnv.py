@@ -6,18 +6,19 @@ from ray.rllib.utils.images import rgb2gray
 
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
+
 from .Scenario import Scenario
 
 
 class RawEnv(SimpleEnv):
     def __init__(
-            self,
-            name,
-            scenario_kwargs,
-            max_cycles,
-            continuous_actions,
-            gray_scale=False,
-            mode="human"
+        self,
+        name,
+        scenario_kwargs,
+        max_cycles,
+        continuous_actions,
+        gray_scale=False,
+        mode="human",
     ):
         scenario = Scenario(**scenario_kwargs)
         world = scenario.make_world()

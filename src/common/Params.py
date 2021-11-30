@@ -31,15 +31,15 @@ class Params:
     lr = 3e-4
     eps = 1e-5
     alpha = 0.99
-    max_grad_norm = 5,
+    max_grad_norm = (5,)
 
     ### Algo parameters
-    gamma= 0.998
-    ppo_clip_param=  0.1,
+    gamma = 0.998
+    ppo_clip_param = (0.1,)
 
     ### Loss
-    value_loss_coef=1
-    entropy_coef= 0.01,
+    value_loss_coef = 1
+    entropy_coef = (0.01,)
 
     #### ENVIRONMENT ####
     agents = 1
@@ -64,7 +64,6 @@ class Params:
 
     # Config Dict
     configs = {
-
         "rollout_fragment_length": 50,
         # PPO parameter
         "lambda": 0.95,
@@ -74,7 +73,6 @@ class Params:
         "use_gae": True,
         "grad_clip": 5,
         "num_sgd_iter": 10,
-
     }
 
     color_index = [  # map index to RGB colors
@@ -100,9 +98,13 @@ class Params:
         Initialize all the directories  listed above
         :return:
         """
-        variables = [attr for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")]
+        variables = [
+            attr
+            for attr in dir(self)
+            if not callable(getattr(self, attr)) and not attr.startswith("__")
+        ]
         for var in variables:
-            if var.lower().endswith('dir'):
+            if var.lower().endswith("dir"):
                 path = getattr(self, var)
                 if not os.path.exists(path):
                     print(f"Mkdir {path}")

@@ -4,7 +4,8 @@ import os
 import pathlib
 import re
 import sys
-from typing import Dict, Any, Union, Optional, NamedTuple
+from typing import Any, Dict, NamedTuple, Optional, Union
+
 import torch
 import wandb
 
@@ -17,12 +18,12 @@ class Callback:
         pass
 
     def on_early_stopping(
-            self,
-            train_loss: float,
-            train_logs: Dict[str, Any],
-            epoch: int,
-            test_loss: float = None,
-            test_logs: Dict[str, Any] = None,
+        self,
+        train_loss: float,
+        train_logs: Dict[str, Any],
+        epoch: int,
+        test_loss: float = None,
+        test_logs: Dict[str, Any] = None,
     ):
         pass
 
@@ -39,7 +40,7 @@ class Callback:
         pass
 
     def on_batch_end(
-            self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
+        self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
     ):
         pass
 
@@ -62,21 +63,21 @@ class ConsoleLogger(Callback):
             output_message = f"{mode}: epoch {epoch}, loss {loss}, " + output_message
         print(output_message, flush=True)
 
-    def on_validation_end(self, loss: float, logs:  Dict[str, Any], epoch: int):
+    def on_validation_end(self, loss: float, logs: Dict[str, Any], epoch: int):
         self.aggregate_print(loss, logs, "test", epoch)
 
-    def on_epoch_end(self, loss: float, logs:  Dict[str, Any], epoch: int):
+    def on_epoch_end(self, loss: float, logs: Dict[str, Any], epoch: int):
         if self.print_train_loss:
             self.aggregate_print(loss, logs, "train", epoch)
 
 
 class WandbLogger(Callback):
     def __init__(
-            self,
-            opts: Union[argparse.ArgumentParser, Dict, str, None] = None,
-            project: Optional[str] = None,
-            run_id: Optional[str] = None,
-            **kwargs,
+        self,
+        opts: Union[argparse.ArgumentParser, Dict, str, None] = None,
+        project: Optional[str] = None,
+        run_id: Optional[str] = None,
+        **kwargs,
     ):
         # This callback logs to wandb the interaction as they are stored in the leader process.
         # When interactions are not aggregated in a multigpu run, each process will store
@@ -93,8 +94,6 @@ class WandbLogger(Callback):
         wandb.log(metrics, commit=commit, **kwargs)
 
 
-
-
 class Checkpoint(NamedTuple):
     epoch: int
     model_state_dict: Dict[str, Any]
@@ -104,11 +103,11 @@ class Checkpoint(NamedTuple):
 
 class CheckpointSaver(Callback):
     def __init__(
-            self,
-            checkpoint_path: Union[str, pathlib.Path],
-            checkpoint_freq: int = 1,
-            prefix: str = "",
-            max_checkpoints: int = sys.maxsize,
+        self,
+        checkpoint_path: Union[str, pathlib.Path],
+        checkpoint_freq: int = 1,
+        prefix: str = "",
+        max_checkpoints: int = sys.maxsize,
     ):
         """Saves a checkpoint file for training.
         :param checkpoint_path:  path to checkpoint directory, will be created if not present
