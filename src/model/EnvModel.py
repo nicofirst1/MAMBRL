@@ -55,7 +55,6 @@ def target_to_pix(color_index, gray_scale=False):
     color_index = [torch.as_tensor(x) for x in color_index]
 
     def inner(imagined_states):
-        #fixme: anche questo e' sbagliato
         batch_size = imagined_states.shape[0]
         image_shape = imagined_states.shape[-2:]
 
@@ -68,8 +67,8 @@ def target_to_pix(color_index, gray_scale=False):
             indices = imagined_states == c
             new_imagined_state[indices] = color_index[c]
 
-        new_imagined_state = new_imagined_state.view(
-            batch_size, 3, *image_shape)
+        # bring back channel as the second dimensio
+        new_imagined_state = new_imagined_state.permute(0, 3, 1, 2)
 
         if False:  # debug, show image
             from PIL import Image
@@ -181,6 +180,7 @@ class EnvModel(nn.Module):
         imagined_state = self.target2pix(imagined_state)
         imagined_state= imagined_state.to(states.device)
 
+        # compute softmax and get real value with index
         imagined_reward = F.softmax(reward, dim=1).max(dim=1)[1]
         imagined_reward= [self.reward_range[x] for x in imagined_reward]
         imagined_reward=torch.as_tensor(imagined_reward).to(states.device)
