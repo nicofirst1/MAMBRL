@@ -160,8 +160,14 @@ class EnvModel(nn.Module):
             batch_size, self.num_actions, *self.in_shape[1:]
         )
 
-        # fixme: this does not work
-        onehot_action[:, actions] = 1
+        onehot_action= onehot_action.view(batch_size, self.num_actions,-1)
+
+
+        # fixme: use toch, remove for loop
+        for b in range(onehot_action.shape[0]):
+            onehot_action[b, actions[b]] = 1
+
+        onehot_action= onehot_action.view(batch_size, self.num_actions, *self.in_shape[1:])
         onehot_action = onehot_action.to(states.device)
         inputs = torch.cat([states, onehot_action], 1)
         # inputs = inputs.to(self.device)

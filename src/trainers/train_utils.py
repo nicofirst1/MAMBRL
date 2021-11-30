@@ -8,11 +8,12 @@ from src.common import parametrize_state, mas_dict2tensor, Params
 
 
 def random_action(agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    params=Params()
 
-    action = randint(0, Params.num_actions - 1)
+    action = randint(0, params.num_actions - 1)
     value = 0
-    action_log_probs = torch.zeros((1, Params.num_actions))
-    action_log_probs= action_log_probs.to(Params.device)
+    action_log_probs = torch.zeros((1, params.num_actions))
+    action_log_probs= action_log_probs.to(params.device)
 
     return action, value, action_log_probs
 
