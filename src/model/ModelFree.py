@@ -33,6 +33,8 @@ class OnPolicy(nn.Module):
         compute the actions logit, value and actions probability based on the
         the actual state and then compute the entropy with respect to the 
         action that we passed as a parameter. 
+        Parameters
+        ---------
         """
         action_logit, value = self.forward(frames)
 
@@ -47,8 +49,10 @@ class OnPolicy(nn.Module):
 
 
 class ModelFree(OnPolicy):
-    """
-    This class is responsible for choosing an action and assigning a value given a state
+    """ModelFree class.
+
+    This class is responsible for choosing an action and assigning a value
+    given a state
     """
 
     def __init__(self, in_shape, num_actions):

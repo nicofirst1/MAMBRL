@@ -15,6 +15,9 @@ __pycache__/
 ### Log dir
 log_dir/**
 
+### tensorboard dir
+tensorboard/**
+
 ### .idea folder
 .idea/**
 
