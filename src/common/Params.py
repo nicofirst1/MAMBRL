@@ -17,7 +17,7 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
 
     #### TRAINING ####
-    debug = False
+    debug = True
     device = torch.device("cuda")
     resize = True
     obs_shape = [3, 32, 32]
@@ -31,9 +31,15 @@ class Params:
     lr = 3e-4
     eps = 1e-5
     alpha = 0.99
+    max_grad_norm = 5,
 
     ### Algo parameters
     gamma= 0.998
+    ppo_clip_param=  0.1,
+
+    ### Loss
+    value_loss_coef=1
+    entropy_coef= 0.01,
 
     #### ENVIRONMENT ####
     agents = 1
@@ -46,7 +52,7 @@ class Params:
     num_frames = 1
     num_steps = horizon // num_frames
     full_rollout = False
-    gray_scale = True
+    gray_scale = False
     num_actions = 5
 
     #### EVALUATION ####
@@ -58,10 +64,7 @@ class Params:
 
     # Config Dict
     configs = {
-        "ppo_clip_param": 0.1,
-        "value_loss_coef": 1.0,
-        "entropy_coef": 0.01,
-        "max_grad_norm": 5,
+
         "rollout_fragment_length": 50,
         # PPO parameter
         "lambda": 0.95,

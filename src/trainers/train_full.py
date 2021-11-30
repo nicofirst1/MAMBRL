@@ -19,7 +19,7 @@ def get_actor_critic(obs_space, params, reward_range):
     """
 
     num_colors = len(params.color_index)
-    num_rewards=len(reward_range)
+    num_rewards = len(reward_range)
 
     t2p = target_to_pix(params.color_index, gray_scale=params.gray_scale)
 
@@ -34,8 +34,6 @@ def get_actor_critic(obs_space, params, reward_range):
     )
     env_model = env_model.to(params.device)
 
-    # fix: perchè passiamo il num_frames al model free ma poi non li usa
-    # all'interno?
     model_free = ModelFree(obs_space, num_actions=params.num_actions)
     model_free = model_free.to(params.device)
 
@@ -69,8 +67,8 @@ def get_actor_critic(obs_space, params, reward_range):
 
 
 def train(params: Params):
-    configs= get_env_configs(params)
-    configs['mode']="rgb_array"
+    configs = get_env_configs(params)
+    configs['mode'] = "rgb_array"
     env = get_env(configs)
 
     if params.resize:
@@ -191,8 +189,8 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_sha
         surr2 = (
                 torch.clamp(
                     ratio,
-                    1.0 - params.configs["ppo_clip_param"],
-                    1.0 + params.configs["ppo_clip_param"],
+                    1.0 - params.ppo_clip_param,
+                    1.0 + params.ppo_clip_param,
                 ) *
                 adv_targ
         )
@@ -200,14 +198,14 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_sha
 
         optimizer.zero_grad()
         loss = (
-                value_loss * params.configs["value_loss_coef"] +
+                value_loss * params.value_loss_coef +
                 action_loss -
-                entropys * params.configs["entropy_coef"]
+                entropys * params.entropy_coef
         )
         loss = loss.mean()
         loss.backward()
 
-        clip_grad_norm_(optim_params, params.configs["max_grad_norm"])
+        clip_grad_norm_(optim_params, params.max_grad_norm)
         optimizer.step()
 
 

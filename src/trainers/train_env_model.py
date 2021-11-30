@@ -66,7 +66,7 @@ def train_env_model(rollouts, env_model, params, optimizer, callback_fn):
 
         callback_fn(logs=logs, loss=loss, batch_id=batch_id, is_training=True)
 
-        clip_grad_norm_(env_model.parameters(), params.configs["max_grad_norm"])
+        clip_grad_norm_(env_model.parameters(), params.max_grad_norm)
         optimizer.step()
 
     return mean_loss / batch_id
