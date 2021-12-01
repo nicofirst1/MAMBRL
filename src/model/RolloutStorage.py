@@ -6,16 +6,17 @@ class RolloutStorage(object):
         self, num_steps, state_shape, num_agents, gamma, size_mini_batch, num_actions
     ):
         self.num_steps = num_steps
-        self.state_shape = state_shape
+        self.num_channels = state_shape[0]
+        self.num_agents = num_agents
 
         self.states = torch.zeros(num_steps + 1, *state_shape)
         self.rewards = torch.zeros(num_steps, num_agents)
         self.masks = torch.ones(num_steps + 1, num_agents)
         self.actions = torch.zeros(num_steps, num_agents).long()
         self.values = torch.zeros(num_steps + 1, num_agents).long()
-        self.returns = torch.zeros(num_steps + 1, num_agents)
-        self.action_log_probs = torch.zeros(
-            num_steps + 1, num_actions, num_agents)
+        self.returns = torch.zeros(num_steps, num_agents)
+        self.gae = torch.zeros(num_steps+1, num_agents)
+        self.action_log_probs = torch.zeros(num_steps, num_agents)
         self.gamma = gamma
         self.size_mini_batch = size_mini_batch
 
@@ -26,11 +27,11 @@ class RolloutStorage(object):
         self.actions = self.actions.to(device)
 
     def insert(self, step, state, action, values, reward, mask, action_log_probs):
-        self.states[step + 1].copy_(state[: self.state_shape[0]])
+        self.states[step + 1].copy_(state)
         self.actions[step].copy_(action)
         self.values[step].copy_(values)
         self.rewards[step].copy_(reward)
-        self.masks[step + 1].copy_(mask)
+        self.masks[step].copy_(mask)
         self.action_log_probs[step].copy_(action_log_probs)
 
     def after_update(self):
@@ -38,92 +39,81 @@ class RolloutStorage(object):
         self.masks[0].copy_(self.masks[-1])
 
     def compute_returns(self, next_value, tau=0.95):
-        # todo: check if correct from formula
+        """compute_returns method.
 
+        compute both the return (Q-Value) and the generalizaed advantage
+        estimator https://arxiv.org/pdf/1506.02438.pdf by starting from the
+        last timestep and going backward.
+        """
+        self.gae[-1] = 0
         self.values[-1] = next_value
-        gae = 0
         for step in reversed(range(self.rewards.size(0))):
             delta = (
                 self.rewards[step] +
-                self.gamma * self.values[step + 1] * self.masks[step + 1] -
+                self.gamma * self.values[step + 1] * self.masks[step] -
                 self.values[step]
             )
-            gae = delta + self.gamma * tau * self.masks[step + 1] * gae
-            self.returns[step] = gae + self.values[step]
+            self.gae[step] = delta + self.gamma * \
+                tau * self.masks[step] * self.gae[step+1]
+            # Q-value function (Advantage + Value)
+            self.returns[step] = self.gae[step] + self.values[step]
 
-    def get_num_batches(self, num_frames):
-        total_samples = self.rewards.size(0) - 1
-        minibatch_frames = self.size_mini_batch * num_frames
+    def get_num_batches(self):
+        """get_num_batches method.
 
-        return total_samples // minibatch_frames
-
-    def recurrent_generator(self, advantages, num_frames):
-        """recurrent_generator method.
-
-
+        Returns the number of possible minibatches based on the number of
+        samples and the size of one minibatch
         """
         total_samples = self.rewards.size(0) - 1
-        #perm = torch.randperm(total_samples)
 
+        return total_samples // self.size_mini_batch
+
+    def recurrent_generator(self):
+        """recurrent_generator method.
+
+        Generates minibatches of size self.size_mini_batch
+        """
+        total_samples = self.rewards.size(0) - 1
+        perm = torch.randperm(total_samples)
         minibatch_frames = self.size_mini_batch
         done = False
 
-        obs_shape = (self.state_shape[0]*num_frames, self.state_shape[1], self.state_shape[2])
-        state_channel = self.state_shape[0]
-        observation = torch.zeros(obs_shape)
-
         for start_ind in range(0, total_samples, minibatch_frames):
-            states_batch = []
-            actions_batch = []
-            return_batch = []
-            masks_batch = []
-            old_action_log_probs_batch = []
-            adv_targ = []
+            states_mini_batch = []
+            actions_mini_batch = []
+            return_mini_batch = []
+            masks_mini_batch = []
+            old_action_log_probs_mini_batch = []
+            adv_targ_mini_batch = []
 
             for offset in range(minibatch_frames):
-                if start_ind + offset >= total_samples:
+                if start_ind + minibatch_frames >= total_samples:
                     # skip last batch if not divisible
                     done = True
                     continue
 
-                ind = start_ind + offset
-                observation = torch.cat([observation[state_channel:, :, :], self.states[ind]], dim=0)
-
-                states_batch.append(observation.unsqueeze(0))
-                return_batch.append(self.returns[ind].unsqueeze(0))
-                masks_batch.append(self.masks[ind].unsqueeze(0))
-                actions_batch.append(self.actions[ind].unsqueeze(0))
-                old_action_log_probs_batch.append(
+                ind = perm[start_ind + offset]
+                states_mini_batch.append(self.states[ind].unsqueeze(0))
+                return_mini_batch.append(self.returns[ind].unsqueeze(0))
+                masks_mini_batch.append(self.masks[ind].unsqueeze(0))
+                actions_mini_batch.append(self.actions[ind].unsqueeze(0))
+                old_action_log_probs_mini_batch.append(
                     self.action_log_probs[ind].unsqueeze(0)
                 )
-                adv_targ.append(advantages[ind].unsqueeze(0))
+                adv_targ_mini_batch.append(self.gae[ind].unsqueeze(0))
 
             if done:
                 break
 
             # cat on firt dimension
-            states_batch = torch.cat(states_batch, dim=0)
-            actions_batch = torch.cat(actions_batch, dim=0)
-            return_batch = torch.cat(return_batch, dim=0)
-            masks_batch = torch.cat(masks_batch, dim=0)
-            old_action_log_probs_batch = torch.cat(old_action_log_probs_batch, dim=0)
-            adv_targ = torch.cat(adv_targ, dim=0)
+            states_mini_batch = torch.cat(states_mini_batch, dim=0)
+            actions_mini_batch = torch.cat(actions_mini_batch, dim=0)
+            return_mini_batch = torch.cat(return_mini_batch, dim=0)
+            masks_mini_batch = torch.cat(masks_mini_batch, dim=0)
+            old_action_log_probs_mini_batch = torch.cat(
+                old_action_log_probs_mini_batch, dim=0)
+            adv_targ_mini_batch = torch.cat(adv_targ_mini_batch, dim=0)
 
-            # split per num frame
-            # [batch * num_frames , *shape] ->[batch, num_frames , *shape]
-            #states_batch = states_batch.view(
-            #    -1, self.state_shape[0] * num_frames, *states_batch.shape[2:]
-            #)
-            #actions_batch = actions_batch.view(-1, num_frames, *actions_batch.shape[1:])
-            #return_batch = return_batch.view(-1, num_frames, *return_batch.shape[1:])
-            #masks_batch = masks_batch.view(-1, num_frames, *masks_batch.shape[1:])
-            #old_action_log_probs_batch = old_action_log_probs_batch.view(
-            #    -1, num_frames, *old_action_log_probs_batch.shape[1:]
-            #)
-            #adv_targ = adv_targ.view(-1, num_frames, *adv_targ.shape[1:])
-
-            yield states_batch, actions_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
-
-    def after_update(self):
-        self.states[0].copy_(self.states[-1])
-        self.masks[0].copy_(self.masks[-1])
+            yield states_mini_batch, actions_mini_batch, return_mini_batch,\
+                masks_mini_batch, old_action_log_probs_mini_batch,\
+                adv_targ_mini_batch

@@ -18,6 +18,7 @@ scikit-image==0.18.3
 dm-tree==0.1.6
 pandas==1.3.3
 opencv-python==4.5.4.58
+tqdm==4.62.3
 """
 
 

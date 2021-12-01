@@ -13,6 +13,7 @@ def mas_dict2tensor(agent_dict):
     tensor = [int(elem[1]) for elem in tensor]
     return torch.as_tensor(tensor)
 
+
 def get_env_configs(params: Params):
     env_config = dict(
         max_cycles=params.horizon,
@@ -34,6 +35,25 @@ def get_env_configs(params: Params):
     return env_config
 
 
+def order_state(state):
+    """order_state function.
+
+    Parameters
+    ----------
+    state : torch tensor
+        with dimension [width, height, channels]
+
+    Returns
+    -------
+    Torch tensor
+        with dimension [channels, width, height]
+
+    """
+    assert len(state.shape) == 3, "State should have 3 dimensions"
+    state = state.transpose((2, 0, 1))
+    return torch.FloatTensor(state.copy())
+
+
 def get_policy_configs(params: Params):
     env = get_env(params.configs["env_config"])
     # ModelCatalog.register_custom_model(params.model_name, NavModel)
@@ -49,9 +69,11 @@ def get_policy_configs(params: Params):
     elif params.obs_type == "states":
         obs_dim = env.observation_space
     else:
-        raise NotImplementedError(f"No observation space for name '{params.obs_type}'")
+        raise NotImplementedError(
+            f"No observation space for name '{params.obs_type}'")
 
-    policies = {agnt: (None, obs_dim, env.action_space, {}) for agnt in env.agents}
+    policies = {agnt: (None, obs_dim, env.action_space, {})
+                for agnt in env.agents}
     policy_configs = dict(
         policies=policies, policy_mapping_fn=lambda agent_id: agent_id
     )
