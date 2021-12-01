@@ -1,5 +1,5 @@
 import numpy as np
-from pettingzoo.mpe._mpe_utils.core import Agent, World
+from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 
 from .TimerLandmark import TimerLandmark
@@ -12,14 +12,45 @@ def is_collision(agent1, agent2):
     return True if dist < dist_min else False
 
 
+
+class Border(Entity):
+    start = []
+    end = []
+    attrs={}
+
+class BoundedWorld(World):
+
+    def __init__(self, max_size):
+        super(BoundedWorld, self).__init__()
+
+        self.max_size = max_size
+        max_size -= 0.2
+
+        self.borders = [Border() for _ in range(4)]
+
+        self.borders[0].start = [-max_size, -max_size]
+        self.borders[0].end=[max_size, -max_size]
+        self.borders[1].start = [-max_size, -max_size]
+        self.borders[1].end =  [-max_size, max_size]
+        self.borders[2].start = [max_size, -max_size]
+        self.borders[2].end = [max_size, max_size]
+        self.borders[3].start = [max_size, max_size]
+        self.borders[3].end = [-max_size, max_size]
+
+
+        for b in self.borders:
+            b.attrs['color'] = np.array([0, 0, 0])
+            b.attrs['linewidth'] = 2
+
+
 class Scenario(BaseScenario):
     def __init__(
-        self,
-        num_agents,
-        num_landmarks,
-        landmark_reward=1,
-        max_landmark_counter=4,
-        landmark_penalty=2,
+            self,
+            num_agents,
+            num_landmarks,
+            landmark_reward=1,
+            max_landmark_counter=4,
+            landmark_penalty=2,
     ):
         self.registered_collisions = {}
         self.landmarks = {}
@@ -32,16 +63,17 @@ class Scenario(BaseScenario):
     def get_reward_range(self):
 
         lower_bound = (
-            self.num_landmarks * self.landmark_penalty * self.max_landmark_counter
+                self.num_landmarks * self.landmark_penalty * self.max_landmark_counter
         )
         upper_bound = self.landmark_reward + 1
 
         return list(range(lower_bound, upper_bound))
 
     def make_world(
-        self,
+            self,
+            max_size,
     ):
-        world = World()
+        world = BoundedWorld(max_size)
         # set any world properties first
         world.dim_c = 2
         # add agents

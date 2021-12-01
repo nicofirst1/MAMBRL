@@ -14,7 +14,7 @@ Env main params
 import random
 import time
 
-from rich import print, print_json
+from rich import print
 
 from src.common import Params, get_env_configs
 from src.env import get_env
@@ -22,6 +22,7 @@ from src.env import get_env
 params = Params()
 # Get configs
 env_config = get_env_configs(params)
+env_config['mode'] = "human"
 env = get_env(env_config)
 obs = env.reset()
 count = 0
