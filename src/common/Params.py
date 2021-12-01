@@ -9,7 +9,8 @@ class Params:
     unique_id = str(uuid.uuid1())[:8]
 
     #### DIRECTORIES ####
-    WORKING_DIR = os.getcwd().split("src")[0]
+    WORKING_DIR = os.getcwd().split("MAMBRL")[0]
+    WORKING_DIR = os.path.join(WORKING_DIR,"MAMBRL")
     SRC_DIR = os.path.join(WORKING_DIR, "src")
     LOG_DIR = os.path.join(WORKING_DIR, "log_dir")
     RAY_DIR = os.path.join(LOG_DIR, "ray_results")
