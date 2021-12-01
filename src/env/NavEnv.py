@@ -21,7 +21,8 @@ class RawEnv(SimpleEnv):
         mode="human",
     ):
         scenario = Scenario(**scenario_kwargs)
-        world = scenario.make_world()
+        max_size=3
+        world = scenario.make_world(max_size)
         super().__init__(
             scenario,
             world,
@@ -35,7 +36,7 @@ class RawEnv(SimpleEnv):
 
         visible = True if mode == "human" else False
         self.viewer = rendering.Viewer(700, 700, visible=visible)
-        self.viewer.set_max_size(3)
+        self.viewer.set_max_size(max_size)
 
     def get_reward_range(self):
         return self.scenario.get_reward_range()
