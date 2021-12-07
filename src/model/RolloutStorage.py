@@ -79,12 +79,13 @@ class RolloutStorage(object):
         done = False
 
         for start_ind in range(0, total_samples, minibatch_frames):
-            states_mini_batch = []
+            next_states_mini_batch = []
             actions_mini_batch = []
             return_mini_batch = []
             masks_mini_batch = []
             old_action_log_probs_mini_batch = []
             adv_targ_mini_batch = []
+            states_mini_batch = []
 
             for offset in range(minibatch_frames):
                 if start_ind + minibatch_frames >= total_samples:
@@ -94,6 +95,7 @@ class RolloutStorage(object):
 
                 ind = perm[start_ind + offset]
                 states_mini_batch.append(self.states[ind].unsqueeze(0))
+                next_states_mini_batch.append(self.states[ind+1].unsqueeze(0))
                 return_mini_batch.append(self.returns[ind].unsqueeze(0))
                 masks_mini_batch.append(self.masks[ind].unsqueeze(0))
                 actions_mini_batch.append(self.actions[ind].unsqueeze(0))
@@ -107,6 +109,7 @@ class RolloutStorage(object):
 
             # cat on firt dimension
             states_mini_batch = torch.cat(states_mini_batch, dim=0)
+            next_states_mini_batch = torch.cat(next_states_mini_batch, dim=0)
             actions_mini_batch = torch.cat(actions_mini_batch, dim=0)
             return_mini_batch = torch.cat(return_mini_batch, dim=0)
             masks_mini_batch = torch.cat(masks_mini_batch, dim=0)
@@ -116,4 +119,4 @@ class RolloutStorage(object):
 
             yield states_mini_batch, actions_mini_batch, return_mini_batch,\
                 masks_mini_batch, old_action_log_probs_mini_batch,\
-                adv_targ_mini_batch
+                adv_targ_mini_batch, next_states_mini_batch
