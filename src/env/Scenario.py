@@ -1,5 +1,5 @@
 import numpy as np
-from pettingzoo.mpe._mpe_utils.core import Agent, World
+from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from src.env.TimerLandmark import TimerLandmark
 
@@ -9,6 +9,36 @@ def is_collision(agent1, agent2):
     dist = np.sqrt(np.sum(np.square(delta_pos)))
     dist_min = agent1.size + agent2.size
     return True if dist < dist_min else False
+
+
+class Border(Entity):
+    start = []
+    end = []
+    attrs = {}
+
+
+class BoundedWorld(World):
+
+    def __init__(self, max_size):
+        super(BoundedWorld, self).__init__()
+
+        self.max_size = max_size
+        max_size -= 0.2
+
+        self.borders = [Border() for _ in range(4)]
+
+        self.borders[0].start = [-max_size, -max_size]
+        self.borders[0].end = [max_size, -max_size]
+        self.borders[1].start = [-max_size, -max_size]
+        self.borders[1].end = [-max_size, max_size]
+        self.borders[2].start = [max_size, -max_size]
+        self.borders[2].end = [max_size, max_size]
+        self.borders[3].start = [max_size, max_size]
+        self.borders[3].end = [-max_size, max_size]
+
+        for b in self.borders:
+            b.attrs['color'] = np.array([0, 0, 0])
+            b.attrs['linewidth'] = 2
 
 
 class Scenario(BaseScenario):
@@ -39,8 +69,9 @@ class Scenario(BaseScenario):
 
     def make_world(
         self,
+        max_size
     ):
-        world = World()
+        world = BoundedWorld(max_size)
         # set any world properties first
         world.dim_c = 2
         # add agents
@@ -67,7 +98,8 @@ class Scenario(BaseScenario):
             landmark.size = 0.1
             landmark.boundary = False
 
-        self.landmarks = {landmark.name: landmark for landmark in world.landmarks}
+        self.landmarks = {
+            landmark.name: landmark for landmark in world.landmarks}
 
         return world
 
@@ -133,9 +165,9 @@ class Scenario(BaseScenario):
             other_agents_pos.append(other.state.p_pos - agent.state.p_pos)
             other_agents_vel.append(other.state.p_vel)
         return np.concatenate(
-            [agent.state.p_vel]
-            + [agent.state.p_pos]
-            + entity_pos
-            + other_agents_pos
-            + other_agents_vel
+            [agent.state.p_vel] +
+            [agent.state.p_pos] +
+            entity_pos +
+            other_agents_pos +
+            other_agents_vel
         )

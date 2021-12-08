@@ -26,7 +26,8 @@ class RawEnv(SimpleEnv):
             gray_scale=False,
     ):
         scenario = Scenario(**scenario_kwargs)
-        world = scenario.make_world()
+        max_size = 3
+        world = scenario.make_world(max_size)
         super().__init__(
             scenario,
             world,
