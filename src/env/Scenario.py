@@ -29,14 +29,13 @@ class BoundedWorld(World):
         self.borders = [Border() for _ in range(4)]
 
         self.borders[0].start = [-max_size, -max_size]
-        self.borders[0].end=[max_size, -max_size]
+        self.borders[0].end = [max_size, -max_size]
         self.borders[1].start = [-max_size, -max_size]
-        self.borders[1].end =  [-max_size, max_size]
+        self.borders[1].end = [-max_size, max_size]
         self.borders[2].start = [max_size, -max_size]
         self.borders[2].end = [max_size, max_size]
         self.borders[3].start = [max_size, max_size]
         self.borders[3].end = [-max_size, max_size]
-
 
         for b in self.borders:
             b.attrs['color'] = np.array([0, 0, 0])
@@ -70,8 +69,8 @@ class Scenario(BaseScenario):
         return list(range(lower_bound, upper_bound))
 
     def make_world(
-            self,
-            max_size,
+        self,
+        max_size
     ):
         world = BoundedWorld(max_size)
         # set any world properties first
@@ -100,7 +99,8 @@ class Scenario(BaseScenario):
             landmark.size = 0.1
             landmark.boundary = False
 
-        self.landmarks = {landmark.name: landmark for landmark in world.landmarks}
+        self.landmarks = {
+            landmark.name: landmark for landmark in world.landmarks}
 
         return world
 
@@ -166,9 +166,9 @@ class Scenario(BaseScenario):
             other_agents_pos.append(other.state.p_pos - agent.state.p_pos)
             other_agents_vel.append(other.state.p_vel)
         return np.concatenate(
-            [agent.state.p_vel]
-            + [agent.state.p_pos]
-            + entity_pos
-            + other_agents_pos
-            + other_agents_vel
+            [agent.state.p_vel] +
+            [agent.state.p_pos] +
+            entity_pos +
+            other_agents_pos +
+            other_agents_vel
         )

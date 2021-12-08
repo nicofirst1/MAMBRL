@@ -19,6 +19,7 @@ dm-tree==0.1.6
 pandas==1.3.3
 opencv-python==4.5.4.58
 torchvision==0.11.1
+tqdm==4.62.3
 """
 
 
