@@ -1,27 +1,29 @@
 import itertools
 from copy import copy
 
+import cv2
 import numpy as np
+import torch
 from ray.rllib.utils.images import rgb2gray
 
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
-
 from .Scenario import Scenario
 
 
 class RawEnv(SimpleEnv):
     def __init__(
-        self,
-        name,
-        scenario_kwargs,
-        max_cycles,
-        continuous_actions,
-        gray_scale=False,
-        mode="human",
+            self,
+            name,
+            scenario_kwargs,
+            max_cycles,
+            continuous_actions,
+            gray_scale=False,
+            obs_shape=None,
+            mode="human",
     ):
         scenario = Scenario(**scenario_kwargs)
-        max_size=3
+        max_size = 3
         world = scenario.make_world(max_size)
         super().__init__(
             scenario,
@@ -33,6 +35,7 @@ class RawEnv(SimpleEnv):
         self.metadata["name"] = name
         self.gray_scale = gray_scale
         self.agents_dict = {agent.name: agent for agent in world.agents}
+        self.obs_shape = obs_shape
 
         visible = True if mode == "human" else False
         self.viewer = rendering.Viewer(700, 700, visible=visible)
@@ -50,9 +53,27 @@ class RawEnv(SimpleEnv):
 
         observation = self.render(mode=mode)
 
-        if self.gray_scale and observation is not None:
-            observation = rgb2gray(observation)
-            observation = np.expand_dims(observation, axis=0)
+        if observation is not None:
+            if self.obs_shape is not None:
+                # PIL.Image.fromarray(state).show()
+
+                observation = cv2.resize(
+                    observation,
+                    dsize=(self.obs_shape[2], self.obs_shape[1]),
+                    interpolation=cv2.INTER_AREA,
+                )
+                # PIL.Image.fromarray(state).show()
+
+            observation = torch.LongTensor(observation)
+            # move channel on second dimension if present, else add 1
+            if len(observation.shape) == 3:
+                observation = observation.permute(2, 0, 1)
+            else:
+                observation = observation.unsqueeze(dim=0)
+
+            if self.gray_scale:
+                observation = rgb2gray(observation)
+                observation = np.expand_dims(observation, axis=0)
 
         return observation
 

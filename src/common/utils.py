@@ -1,4 +1,3 @@
-import cv2
 import gym
 import numpy as np
 import torch
@@ -13,6 +12,7 @@ def get_env_configs(params: Params):
         continuous_actions=False,
         name=params.env_name,
         gray_scale=params.gray_scale,
+        obs_shape=params.obs_shape if params.resize else None,
         scenario_kwargs=dict(
             landmark_reward=1,
             max_landmark_counter=4,

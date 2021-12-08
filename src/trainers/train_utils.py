@@ -83,8 +83,8 @@ def collect_trajectories(
         action_dict = {agent_id: False for agent_id in env.agents}
         values_dict = {agent_id: False for agent_id in env.agents}
 
-        state = env.reset(mode="rgb_array")
-        current_state = state_fn(state)
+        current_state = env.reset(mode="rgb_array")
+        #current_state = state_fn(state)
 
         # Insert first state
         rollout.states[episode * params.horizon] = current_state.unsqueeze(dim=0)
@@ -128,7 +128,7 @@ def collect_trajectories(
             values = mas_dict2tensor(values_dict)
             action_log_probs = torch.cat(action_log_probs_list, dim=-1)
 
-            current_state = state_fn(next_state)
+            current_state = next_state
             rollout.insert(
                 step=step + episode * params.horizon,
                 state=current_state,
