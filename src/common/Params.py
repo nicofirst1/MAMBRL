@@ -20,7 +20,7 @@ class Params:
     #### TRAINING ####
     debug = True
     device = torch.device("cuda")
-    resize = True
+    resize = False
     obs_shape = [3, 32, 32]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()

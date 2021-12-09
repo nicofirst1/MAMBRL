@@ -38,7 +38,7 @@ class RawEnv(SimpleEnv):
         self.obs_shape = obs_shape
 
         visible = True if mode == "human" else False
-        self.viewer = rendering.Viewer(700, 700, visible=visible)
+        self.viewer = rendering.Viewer(obs_shape, obs_shape, visible=visible)
         self.viewer.set_max_size(max_size)
 
     def get_reward_range(self):
@@ -54,17 +54,8 @@ class RawEnv(SimpleEnv):
         observation = self.render(mode=mode)
 
         if observation is not None:
-            if self.obs_shape is not None:
-                # PIL.Image.fromarray(state).show()
 
-                observation = cv2.resize(
-                    observation,
-                    dsize=(self.obs_shape[2], self.obs_shape[1]),
-                    interpolation=cv2.INTER_AREA,
-                )
-                # PIL.Image.fromarray(state).show()
-
-            observation = torch.LongTensor(observation)
+            observation = torch.from_numpy(observation.copy())
             # move channel on second dimension if present, else add 1
             if len(observation.shape) == 3:
                 observation = observation.permute(2, 0, 1)

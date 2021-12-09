@@ -46,7 +46,7 @@ while count <= 1000:
     obs, reward, done, info = env.step(action_dict)
 
     output = dict(
-        done=done, reward=reward, info={k: v.__dict__ for k, v in info.items()}
+        done=done, reward=reward, info={k: v.__dict__ for k, v in info.items()}, obs_dim=obs.shape,
     )
 
     print(f"step {count}:\n")
