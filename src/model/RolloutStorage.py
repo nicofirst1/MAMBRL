@@ -3,7 +3,7 @@ import torch
 
 class RolloutStorage(object):
     def __init__(
-        self, num_steps, state_shape, num_agents, gamma, size_mini_batch, num_actions
+        self, num_steps, state_shape, num_agents, gamma, size_minibatch, num_actions
     ):
         self.num_steps = num_steps
         self.num_channels = state_shape[0]
@@ -18,7 +18,7 @@ class RolloutStorage(object):
         self.gae = torch.zeros(num_steps+1, num_agents)
         self.action_log_probs = torch.zeros(num_steps, num_agents)
         self.gamma = gamma
-        self.size_mini_batch = size_mini_batch
+        self.size_minibatch = size_minibatch
 
     def to(self, device):
         self.states = self.states.to(device)
@@ -61,34 +61,52 @@ class RolloutStorage(object):
             # Q-value function (Advantage + Value)
             self.returns[step] = self.gae[step] + self.values[step]
 
-    def get_num_batches(self):
-        """get_num_batches method.
+    def get_num_minibatches(self):
+        """get_num_minibatches method.
 
         Returns the number of possible minibatches based on the number of
         samples and the size of one minibatch
         """
         total_samples = self.rewards.size(0) - 1
 
-        return total_samples // self.size_mini_batch
+        return total_samples // self.size_minibatch
 
     def recurrent_generator(self):
         """recurrent_generator method.
 
-        Generates minibatches of size self.size_mini_batch
+        Generates a set of permuted minibatches (use the get_num_minibatches
+        method to obtain the exact number) of size self.size_minibatch
+
+        Returns
+        -------
+        states_minibatch : torch.Tensor
+            [minibatch_size, channels, width, height]
+        actions_minibatch: torch.Tensor
+            [minibatch_size, num_agents]
+        return_minibatch: torch.Tensor
+            [minibatch_size, num_agents]
+        masks_minibatch: torch.Tensor
+            [minibatch_size, num_agents]
+        old_action_log_probs_minibatch: torch.Tensor
+            [minibatch_size, num_agents]
+        adv_targ_minibatch: torch.Tensor
+            [minibatch_size, num_agents]
+        next_states_minibatch: torch.Tensor
+            [minibatch_size, num_channels, width, height]
         """
         total_samples = self.rewards.size(0) - 1
         perm = torch.randperm(total_samples)
-        minibatch_frames = self.size_mini_batch
+        minibatch_frames = self.size_minibatch
         done = False
 
         for start_ind in range(0, total_samples, minibatch_frames):
-            next_states_mini_batch = []
-            actions_mini_batch = []
-            return_mini_batch = []
-            masks_mini_batch = []
-            old_action_log_probs_mini_batch = []
-            adv_targ_mini_batch = []
-            states_mini_batch = []
+            next_states_minibatch = []
+            actions_minibatch = []
+            return_minibatch = []
+            masks_minibatch = []
+            old_action_log_probs_minibatch = []
+            adv_targ_minibatch = []
+            states_minibatch = []
 
             for offset in range(minibatch_frames):
                 if start_ind + minibatch_frames >= total_samples:
@@ -97,29 +115,29 @@ class RolloutStorage(object):
                     continue
 
                 ind = perm[start_ind + offset]
-                states_mini_batch.append(self.states[ind].unsqueeze(0))
-                next_states_mini_batch.append(self.states[ind+1].unsqueeze(0))
-                return_mini_batch.append(self.returns[ind].unsqueeze(0))
-                masks_mini_batch.append(self.masks[ind].unsqueeze(0))
-                actions_mini_batch.append(self.actions[ind].unsqueeze(0))
-                old_action_log_probs_mini_batch.append(
+                states_minibatch.append(self.states[ind].unsqueeze(0))
+                next_states_minibatch.append(self.states[ind+1].unsqueeze(0))
+                return_minibatch.append(self.returns[ind].unsqueeze(0))
+                masks_minibatch.append(self.masks[ind].unsqueeze(0))
+                actions_minibatch.append(self.actions[ind].unsqueeze(0))
+                old_action_log_probs_minibatch.append(
                     self.action_log_probs[ind].unsqueeze(0)
                 )
-                adv_targ_mini_batch.append(self.gae[ind].unsqueeze(0))
+                adv_targ_minibatch.append(self.gae[ind].unsqueeze(0))
 
             if done:
                 break
 
             # cat on firt dimension
-            states_mini_batch = torch.cat(states_mini_batch, dim=0)
-            next_states_mini_batch = torch.cat(next_states_mini_batch, dim=0)
-            actions_mini_batch = torch.cat(actions_mini_batch, dim=0)
-            return_mini_batch = torch.cat(return_mini_batch, dim=0)
-            masks_mini_batch = torch.cat(masks_mini_batch, dim=0)
-            old_action_log_probs_mini_batch = torch.cat(
-                old_action_log_probs_mini_batch, dim=0)
-            adv_targ_mini_batch = torch.cat(adv_targ_mini_batch, dim=0)
+            states_minibatch = torch.cat(states_minibatch, dim=0)
+            next_states_minibatch = torch.cat(next_states_minibatch, dim=0)
+            actions_minibatch = torch.cat(actions_minibatch, dim=0)
+            return_minibatch = torch.cat(return_minibatch, dim=0)
+            masks_minibatch = torch.cat(masks_minibatch, dim=0)
+            old_action_log_probs_minibatch = torch.cat(
+                old_action_log_probs_minibatch, dim=0)
+            adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
 
-            yield states_mini_batch, actions_mini_batch, return_mini_batch,\
-                masks_mini_batch, old_action_log_probs_mini_batch,\
-                adv_targ_mini_batch, next_states_mini_batch
+            yield states_minibatch, actions_minibatch, return_minibatch,\
+                masks_minibatch, old_action_log_probs_minibatch,\
+                adv_targ_minibatch, next_states_minibatch

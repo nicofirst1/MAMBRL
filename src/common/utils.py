@@ -6,7 +6,6 @@ from src.common.Params import Params
 from src.env import get_env
 
 
-
 def get_env_configs(params: Params):
     env_config = dict(
         max_cycles=params.horizon,
@@ -14,6 +13,7 @@ def get_env_configs(params: Params):
         name=params.env_name,
         gray_scale=params.gray_scale,
         obs_shape=params.obs_shape[2],
+        mode="invisible",
         scenario_kwargs=dict(
             landmark_reward=1,
             max_landmark_counter=4,
@@ -32,14 +32,15 @@ def get_env_configs(params: Params):
 def order_state(state):
     """order_state function.
 
+    Switch the 3rd dimension of state as its 1st dimension
     Parameters
     ----------
-    state : torch tensor
+    state : Numpy.Array
         with dimension [width, height, channels]
 
     Returns
     -------
-    Torch tensor
+    Torch.Tensor
         with dimension [channels, width, height]
 
     """

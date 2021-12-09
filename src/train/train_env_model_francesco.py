@@ -1,57 +1,47 @@
-"""nn_test file.
+"""env_model_test file.
 
-train the model free network
+train the environment network
 """
 import os
 import sys
-import numpy as np
+import tqdm
 import torch
-import torch.optim as optim
 import torch.nn.functional as F
 
-from torch.utils.tensorboard import SummaryWriter
+from torch import optim, nn
 from torch.nn.utils import clip_grad_norm_
-from tqdm import tqdm
+from torch.autograd import Variable
 from src.env.NavEnv import get_env
-from src.train.train_utils import mas_dict2tensor
-from src.common.utils import get_env_configs, order_state
+from src.common.utils import get_env_configs, mas_dict2tensor, order_state
 from src.common.Params import Params
+from src.model.EnvModel import EnvModel
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
-
+from src.model.ImaginationCore import target_to_pix
 
 TENSORBOARD_DIR = os.path.join(os.path.abspath(os.pardir), os.pardir,
                                "tensorboard")
+
 params = Params()
-params_dict = dict(Params.__dict__)
+params.resize = False
 params.gray_scale = False
 device = params.device
+color_index = params.color_index
+num_colors = len(color_index)
 # =============================================================================
 # ENV
 # =============================================================================
 env_config = get_env_configs(params)
-env_config["scenario_kwargs"]["num_landmarks"] = 1
-# fix: env_config non tiene in considerazione la modalità del rendering,
-# aggiungere attributo
 env = get_env(env_config)
-
-num_rewards = len(env.get_reward_range())
-num_agents = env.num_agents
+num_rewards = len(env.par_env.get_reward_range())
+num_agents = params.agents
 if params.resize:
-    # fix: Nicolò quando il params.resize è True ritorna solo un intero (32),
-    # dovrebbe ritornare tutta la obs_shape (32, 32, 3) o (3, 32, 32)
-    obs_space = (3, env.obs_shape, env.obs_shape)
-
+    obs_space = params.obs_shape
 else:
-    # fix: Nicolò errore quando si fa il rendering:
-    # AttributeError: 'RawEnv' object has no attribute 'render_geoms'
     obs_space = env.render(mode="rgb_array").shape
     # channels are inverted
-    # obs_space = (obs_space[2], obs_space[0], obs_space[1])
-
-# fix: Nicolò num_actions ed altri attributi dovrebbero essere parametri
-# interni della classe non del file di configurazione (Params())
-num_actions = params.num_actions
+    obs_space = (obs_space[2], obs_space[0], obs_space[1])
+num_actions = env.action_space.n
 # =============================================================================
 # TRAINING PARAMS
 # =============================================================================
@@ -60,8 +50,8 @@ entropy_coef = 0.01
 value_loss_coef = 0.5
 max_grad_norm = 0.5
 size_minibatch = 4
-epochs = 1
-steps_per_episode = 21  # params.horizon
+epochs = 1  # 1
+steps_per_episode = 21
 number_of_episodes = 10  # int(10e5)
 
 # rmsprop hyperparams:
@@ -78,14 +68,21 @@ if not PARAM_SHARING:
         agent_id: ModelFree(obs_space, num_actions)
         for agent_id in env.agents
     }
+    model_dict = {
+        agent_id: EnvModel(obs_space,
+                           num_rewards,
+                           params.num_frames,
+                           num_actions,
+                           num_colors)
+        for agent_id in env.agents
+    }
     opt_dict = {
         agent_id: optim.RMSprop(
-            ac_dict[agent_id].parameters(), lr, eps=eps, alpha=alpha)
+            model_dict[agent_id].parameters(), lr, eps=eps, alpha=alpha)
         for agent_id in env.agents
     }
 else:
     raise NotImplementedError
-
 
 rollout = RolloutStorage(steps_per_episode,
                          obs_space,
@@ -94,7 +91,6 @@ rollout = RolloutStorage(steps_per_episode,
                          size_minibatch,
                          num_actions)
 rollout.to(device)
-
 # =============================================================================
 # TRAIN
 # =============================================================================
@@ -104,22 +100,18 @@ for epoch in tqdm(range(epochs)):
     # =============================================================================
     print(f"epoch {epoch}/{epochs}: collecting trajectories...")
     [model.eval() for model in ac_dict.values()]
-    # just consider 1 episode, since we need to fix the rollout function to
-    # accept more than one episode without overwriting
-    # init dicts and reset env
     dones = {agent_id: False for agent_id in env.agents}
     action_dict = {agent_id: False for agent_id in env.agents}
     values_dict = {agent_id: False for agent_id in env.agents}
     action_log_dict = {agent_id: False for agent_id in env.agents}
 
-    # fix: Nicolò env.reset() ritorna None
     current_state = env.reset()
-    current_state = torch.randint(0, 255, (3, 32, 32)).float()
-    # current_state = order_state(current_state)
+    current_state = order_state(current_state)
     rollout.states[0].copy_(current_state)
 
     for step in range(steps_per_episode):
         current_state = current_state.to(params.device).unsqueeze(dim=0)
+
         # let every agent act
         for agent_id in env.agents:
 
@@ -135,7 +127,7 @@ for epoch in tqdm(range(epochs)):
             action_probs = F.softmax(action_logit, dim=1)
             action = action_probs.multinomial(1).squeeze()
             action_dict[agent_id] = int(action)
-            values_dict[agent_id] = float(value_logit)
+            values_dict[agent_id] = int(value_logit)
             action_log_probs = torch.log(action_probs).squeeze(0)[int(action)]
             action_log_dict[agent_id] = sys.float_info.min \
                 if float(action_log_probs) == 0.0 else float(action_log_probs)
@@ -151,10 +143,8 @@ for epoch in tqdm(range(epochs)):
         values = mas_dict2tensor(values_dict)
         action_log_probs = mas_dict2tensor(action_log_dict)
 
-        # fix: Nicolò l'environment torna tensori uint8, la rete mi accetta
-        # solo i float, quindi va fatto il recast all'interno
-        current_state = next_state.float()
-        # current_state = order_state(current_state)
+        current_state = next_state
+        current_state = order_state(current_state)
 
         rollout.insert(
             step=step,
@@ -163,98 +153,103 @@ for epoch in tqdm(range(epochs)):
             values=values,
             reward=rewards,
             mask=masks,
-            action_log_probs=action_log_probs,
+            action_log_probs=action_log_probs.detach().squeeze(),
         )
         # if done for all agents
         if dones["__all__"]:
             break
-
-    current_state = current_state.to(params.device).unsqueeze(dim=0).float()
+    current_state = current_state.to(params.device).unsqueeze(dim=0)
     for agent_id in env.agents:
         _, next_value = ac_dict[agent_id](current_state)
-        values_dict[agent_id] = float(next_value)
+    values_dict[agent_id] = float(next_value)
     next_value = mas_dict2tensor(values_dict)
     # estimate advantages
     rollout.compute_returns(next_value)
     advantages = rollout.gae
     # normalize advantages
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
+
 # =============================================================================
 # TRAIN
 # =============================================================================
 
     # # get data generation that splits rollout in batches
     data_generator = rollout.recurrent_generator()
-    num_minibatches = rollout.get_num_minibatches()
+    num_mini_batches = rollout.get_num_batches()
 
-    # set model to train mode
-    [model.train() for model in ac_dict.values()]
-
-    print(f"epoch {epoch}/{epochs}: training the model_free...")
+    t2p = target_to_pix(params.color_index, gray_scale=params.gray_scale)
+    criterion = nn.MSELoss()
     # MINI BATCHES ARE NECESSARY FOR PPO (SINCE IT USES OLD AND NEW POLICIES)
+    print(f"epoch {epoch}/{epochs}: training the env_models...")
     for sample in data_generator:
         (
-            states_minibatch,
-            actions_minibatch,
-            return_minibatch,
-            masks_minibatch,
-            old_action_log_probs_minibatch,
-            adv_targ_minibatch,
-            _
+            states_mini_batch,
+            actions_mini_batch,
+            return_mini_batch,
+            _,
+            _,
+            _,
+            next_states_mini_batch
         ) = sample
-        # REMOVE
-        states_minibatch = states_minibatch.float()
+        # states_mini_batch = [mini_batch_len, num_channels, width, height]
+        # actions_mini_batch = [mini_batch_len, num_agents]
+        # return_mini_batch = [mini_batch_len, num_agents]
+        # next_states_mini_batch = [mini_batch_len, num_channels, width,
+        # height]
+        # minibatches should be divided by agent in order to train their
+        # personal model
+        one_hot_actions_mini_batch = {agent_id: [] for agent_id in env.agents}
+        for elem in range(len(states_mini_batch)):
+            for agent_id in env.agents:
+                one_hot_action = torch.zeros(1,
+                                             num_actions,
+                                             *obs_space[1:]
+                                             )
+                agent_index = env.agents.index(agent_id)
+                action_index = int(actions_mini_batch[elem, agent_index])
+                one_hot_action[0, action_index] = 1
+                one_hot_actions_mini_batch[agent_id].append(one_hot_action)
+
+        # concatenate input and one_hot_actions
         for agent_id in env.agents:
-            agent_index = env.agents.index(agent_id)
+            action_input = torch.cat(one_hot_actions_mini_batch[agent_id], 0)
+            inputs = torch.cat([
+                states_mini_batch,
+                action_input],
+                1)
+            inputs = inputs.to(params.device)
 
-            agent = ac_dict[agent_id]
-            _, action_log_prob, probs, value, entropy = \
-                agent.evaluate_actions(
-                    states_minibatch,
-                    actions_minibatch[
-                        :, agent_index].unsqueeze(-1)
-                )
+            # call forward method
+            imagined_state, reward = model_dict[agent_id](inputs)
 
-            value_loss = (return_minibatch[:, agent_index] -
-                          value).pow(2).mean()
+            # ========================================
+            # from imagined state to real
+            # ========================================
+            # imagined outputs to real one
+            imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
+            imagined_state = imagined_state.view(
+                size_minibatch,
+                *obs_space[1:])
+            imagined_state = t2p(imagined_state)
 
-            ratio = torch.exp(action_log_prob -
-                              old_action_log_probs_minibatch)
+            imagined_reward = F.softmax(reward, dim=1).max(dim=1)[1]
 
-            surr1 = ratio * adv_targ_minibatch
-            # fix: i parametri in params sono da aggiustare un po, ad esempip
-            # il ppo_clip_params è sia un attributo della classe ed è sia
-            # ripetuto in params.config
-            surr2 = (
-                torch.clamp(
-                    ratio,
-                    1.0 - params.ppo_clip_param,
-                    1.0 + params.ppo_clip_param,
-
-                ) *
-                adv_targ_minibatch
-            )
-
-            action_loss = -torch.min(surr1, surr2).mean()
+            reward_loss = (return_mini_batch[:, agent_index] -
+                           imagined_reward).pow(2).mean()
+            reward_loss = Variable(reward_loss, requires_grad=True)
+            image_loss = criterion(
+                imagined_state,
+                next_states_mini_batch)
 
             opt_dict[agent_id].zero_grad()
-            loss = (
-                value_loss * params.value_loss_coef +
-                action_loss -
-                entropy * params.entropy_coef
-            )
-            loss = loss.mean()
+            loss = reward_loss + image_loss
             loss.backward()
 
-            clip_grad_norm_(agent.parameters(),
-                            params.max_grad_norm)
+            clip_grad_norm_(model_dict[agent_id].parameters(),
+                            params.configs["max_grad_norm"])
             opt_dict[agent_id].step()
 
-writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "model_free_trained"))
 for agent_id in env.agents:
     agent_index = env.agents.index(agent_id)
-    agent = ac_dict[agent_id]
-    torch.save(agent.state_dict(), "ModelFree_agent_" + str(agent_index))
-
-    writer.add_graph(agent, states_minibatch[0].unsqueeze(dim=0))
-writer.close()
+    agent = model_dict[agent_id]
+    torch.save(agent.state_dict(), "EnvModel_agent_" + str(agent_index))
