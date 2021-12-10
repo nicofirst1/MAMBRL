@@ -171,15 +171,15 @@ def train_epoch_PPO(
         loss = loss.mean()
         loss.backward()
 
-        infos['value_loss'].append(value_loss)
-        infos['action_loss'].append(action_loss)
-        infos['entropys'].append(entropys)
-        infos['loss'].append(loss)
+        infos['value_loss'].append(float(value_loss))
+        infos['action_loss'].append(float(action_loss))
+        infos['entropys'].append(float(entropys))
+        infos['loss'].append(float(loss))
 
         clip_grad_norm_(optim_params, params.max_grad_norm)
         optimizer.step()
 
-    return infos, states_mini_batch[0]
+    return infos, states_mini_batch
 
 
 # todo: this can be done in parallel

@@ -1,6 +1,8 @@
 import os
 from typing import Any, Dict
 
+import numpy as np
+import torch
 import wandb
 
 from logging_callbacks.callbacks import WandbLogger
@@ -107,11 +109,15 @@ class PPOWandb(WandbLogger):
         self.epoch = 0
 
     def on_batch_end(
-            self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
+            self, logs: Dict[str, Any], states: torch.Tensor, batch_id: int, is_training: bool = True
     ):
         flag = "training" if is_training else "validation"
 
-        logs = {f"{flag}_{k}": v for k, v in logs.items()}
+        logs = {f"{flag}_{k}": sum(v) / len(v) for k, v in logs.items()}
+        states = states.cpu().numpy().astype(np.uint8)
+
+        if batch_id % 5 == 0:
+            logs['behaviour'] = wandb.Video(states, fps=4, format="gif")
 
         self.log_to_wandb(logs, commit=True)
 

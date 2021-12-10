@@ -102,7 +102,7 @@ if __name__ == "__main__":
             rollout, ac_dict, env, optimizer, optim_params, params
         )
 
-        wandb_callback.on_batch_end(infos, 0, epoch)
+        wandb_callback.on_batch_end(infos, states_mini_batch, epoch)
         rollout.after_update()
 
     writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "model_free_trained"))
@@ -111,5 +111,5 @@ if __name__ == "__main__":
         agent = ac_dict[agent_id]
         torch.save(agent.state_dict(), "ModelFree_agent_" + str(agent_index))
 
-        writer.add_graph(agent, states_mini_batch.unsqueeze(dim=0))
+        writer.add_graph(agent, states_mini_batch[0].unsqueeze(dim=0))
     writer.close()
