@@ -18,15 +18,15 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
 
     #### TRAINING ####
-    debug = True
+    debug = False
     device = torch.device("cuda")
     resize = True
     obs_shape = [3, 32, 32]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
-    minibatch = 8
-    epochs = 2
+    minibatch = 16
+    epochs = 500
 
     ### Optimizer
     lr = 3e-4
@@ -44,8 +44,8 @@ class Params:
 
     #### ENVIRONMENT ####
     agents = 1
-    landmarks = 2
-    horizon = 10
+    landmarks = 1
+    horizon = 30
     episodes = 3
     env_name = "collab_nav"
     model_name = f"{env_name}_model"

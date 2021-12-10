@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # channels are inverted
     num_actions = env.action_spaces["agent_0"].n
 
-    ac_dict = {agent_id: ModelFree(obs_shape, num_actions) for agent_id in env.agents}
+    ac_dict = {agent_id: ModelFree(obs_shape, num_actions).to(params.device) for agent_id in env.agents}
     optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
     optim_params = chain.from_iterable(optim_params)
     optim_params = list(optim_params)
@@ -83,7 +83,7 @@ if __name__ == "__main__":
         model_config=params.__dict__,
         out_dir=params.WANDB_DIR,
         opts={},
-        mode="disabled",  # if params.debug else "online",
+        mode="disabled" if params.debug else "online",
     )
 
     for epoch in track(range(params.epochs)):

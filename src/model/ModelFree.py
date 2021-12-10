@@ -104,6 +104,15 @@ class ModelFree(OnPolicy):
         self.critic = nn.Linear(256, 1)
         self.actor = nn.Linear(256, num_actions)
 
+
+    def to(self, device):
+        self.features = self.features.to(device)
+        self.fc = self.fc.to(device)
+        self.critic = self.critic.to(device)
+        self.actor = self.actor.to(device)
+
+        return self
+
     def forward(self, x):
         """forward method.
 

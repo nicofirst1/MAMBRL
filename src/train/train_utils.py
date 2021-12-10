@@ -93,6 +93,7 @@ def train_epoch_PPO(
     """
 
     rollout.compute_returns(rollout.values[-1])
+    rollout.to(params.device)
 
     # # get data generation that splits rollout in batches
     data_generator = rollout.recurrent_generator()
@@ -257,7 +258,7 @@ def collect_trajectories(
             values = mas_dict2tensor(values_dict)
             action_log_probs = mas_dict2tensor(action_log_dict)
 
-            current_state = next_state
+            current_state = next_state.to(params.device)
 
             rollout.insert(
                 step=step + episode * params.horizon,

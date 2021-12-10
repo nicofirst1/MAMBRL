@@ -28,6 +28,7 @@ class RolloutStorage(object):
         self.action_log_probs = self.action_log_probs.to(device)
         self.values = self.values.to(device)
         self.returns = self.returns.to(device)
+        self.gae = self.gae.to(device)
 
     def insert(self, step, state, action, values, reward, mask, action_log_probs):
         self.states[step + 1].copy_(state)
