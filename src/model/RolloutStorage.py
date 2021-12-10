@@ -3,7 +3,7 @@ import torch
 
 class RolloutStorage(object):
     def __init__(
-        self, num_steps, state_shape, num_agents, gamma, size_minibatch, num_actions
+        self, num_steps, state_shape, num_agents, gamma, size_minibatch
     ):
         self.num_steps = num_steps
         self.num_channels = state_shape[0]

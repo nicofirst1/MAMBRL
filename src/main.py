@@ -1,5 +1,5 @@
 from src.common import Params
-from src.trainers.train_full import train
+from src.train.train_full import train
 
 if __name__ == "__main__":
     params = Params()

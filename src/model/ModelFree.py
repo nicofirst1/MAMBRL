@@ -26,7 +26,7 @@ class OnPolicy(nn.Module):
 
         return action
 
-    def evaluate_actions(self, frames: torch.Tensor, action_indx: int):
+    def evaluate_actions(self, frames: torch.Tensor, action_indx: torch.Tensor):
         """evaluate_actions method.
 
         compute the actions logit, value and actions probability by passing
@@ -37,8 +37,8 @@ class OnPolicy(nn.Module):
         ----------
         frames : PyTorch Array
             a 4 dimensional tensor [batch_size, channels, width, height]
-        action_indx : int
-            index of the actions to use in order to compute the entropy
+        action_indx : torch.Tensor
+            Tensor [batch_size] index of the actions to use in order to compute the entropy
 
         Returns
         -------
@@ -55,17 +55,19 @@ class OnPolicy(nn.Module):
             value of the entropy given by the action with index equal to
             action_indx.
         """
-        print("wait")
         action_logit, value = self.forward(frames)
 
-        probs = F.softmax(action_logit, dim=1)
+        action_probs = F.softmax(action_logit, dim=1)
 
         log_probs = F.log_softmax(action_logit, dim=1)
 
-        action_log_prob = log_probs.gather(1, action_indx)
-        entropy = -(probs * log_probs).sum(1).mean()
+        if action_indx.ndim==1:
+            action_indx= action_indx.unsqueeze(1)
 
-        return action_logit, action_log_prob, probs, value, entropy
+        action_log_prob = log_probs.gather(1, action_indx )
+        entropy = -(action_probs * log_probs).sum(1).mean()
+
+        return action_logit, action_log_prob, action_probs, value, entropy
 
 
 class ModelFree(OnPolicy):
