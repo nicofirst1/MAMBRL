@@ -26,7 +26,7 @@ class Params:
     num_gpus = torch.cuda.device_count()
     framework = "torch"
     minibatch = 8
-    epochs = 500
+    epochs = 2
 
     ### Optimizer
     lr = 3e-4

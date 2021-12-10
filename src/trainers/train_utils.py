@@ -1,3 +1,4 @@
+import sys
 from random import randint
 from typing import Tuple
 
@@ -6,6 +7,8 @@ import torch
 from rich.progress import track
 
 from src.common import Params
+from src.env.NavEnv import RawEnv
+from src.model import RolloutStorage
 
 
 def mas_dict2tensor(agent_dict):
@@ -49,42 +52,41 @@ def parametrize_state(params):
 
 
 def random_action(
-    agent_id: str, observation: torch.Tensor
+        agent_id: str, observation: torch.Tensor
 ) -> Tuple[int, int, torch.Tensor]:
     params = Params()
 
     action = randint(0, params.num_actions - 1)
     value = 0
-    action_log_probs = torch.zeros((1, params.num_actions))
-    action_log_probs = action_log_probs.to(params.device)
+    action_log = torch.ones((1, params.num_actions))
+    action_log = action_log.to(params.device)
 
-    return action, value, action_log_probs
+    return action, value, action_log
 
 
 # todo: this can be done in parallel
 def collect_trajectories(
-    params,
-    env,
-    rollout,
-    obs_shape,
-    policy_fn=random_action,
+        params: Params,
+        env: RawEnv,
+        rollout: RolloutStorage,
+        obs_shape,
+        policy_fn=random_action,
 ):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
     policy_fn: should be a function that gets an agent_id and an observation and returns
     action : int, value: int , action_log_probs : torch.Tensor
     """
-    state_fn = parametrize_state(params)
-    state_channel = int(params.obs_shape[0])
+    state_channel = int(obs_shape[0])
 
     for episode in range(params.episodes):
         # init dicts and reset env
         dones = {agent_id: False for agent_id in env.agents}
         action_dict = {agent_id: False for agent_id in env.agents}
         values_dict = {agent_id: False for agent_id in env.agents}
+        action_log_dict = {agent_id: False for agent_id in env.agents}
 
-        current_state = env.reset(mode="rgb_array")
-        #current_state = state_fn(state)
+        current_state = env.reset()
 
         # Insert first state
         rollout.states[episode * params.horizon] = current_state.unsqueeze(dim=0)
@@ -93,7 +95,6 @@ def collect_trajectories(
         observation = torch.zeros(obs_shape)
         observation[-state_channel:, :, :] = current_state
         for step in range(params.horizon):
-            action_log_probs_list = []
             observation = observation.to(params.device).unsqueeze(dim=0)
 
             # let every agent act
@@ -111,11 +112,12 @@ def collect_trajectories(
 
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
-                action_log_probs = action_probs.unsqueeze(dim=-1)
-                action_log_probs_list.append(action_log_probs)
+                action_log_probs = torch.log(action_probs).squeeze(0)[int(action)]
+                action_log_dict[agent_id] = 0e-10 \
+                    if float(action_log_probs) == 0.0 else float(action_log_probs)
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
-            next_state, rewards, dones, _ = env.step(action_dict)
+            next_state, rewards, dones, infos = env.step(action_dict)
 
             # if done for all agents end episode
             if dones.pop("__all__"):
@@ -126,9 +128,10 @@ def collect_trajectories(
             rewards = mas_dict2tensor(rewards)
             actions = mas_dict2tensor(action_dict)
             values = mas_dict2tensor(values_dict)
-            action_log_probs = torch.cat(action_log_probs_list, dim=-1)
+            action_log_probs = mas_dict2tensor(action_log_dict)
 
             current_state = next_state
+
             rollout.insert(
                 step=step + episode * params.horizon,
                 state=current_state,

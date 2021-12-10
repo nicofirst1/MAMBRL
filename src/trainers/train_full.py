@@ -71,14 +71,12 @@ def train(params: Params):
     configs["mode"] = "rgb_array"
     env = get_env(configs)
 
-    if params.resize:
-        obs_space = params.obs_shape
-    else:
-        obs_space = env.render(mode="rgb_array").shape
+
+    obs_shape = env.reset().shape
 
     reward_range = env.get_reward_range()
     ac_dict = {
-        agent_id: get_actor_critic(obs_space, params, reward_range)
+        agent_id: get_actor_critic(obs_shape, params, reward_range)
         for agent_id in env.agents
     }
 
@@ -91,7 +89,7 @@ def train(params: Params):
 
     rollout = RolloutStorage(
         params.horizon * params.episodes,
-        obs_space,
+        obs_shape,
         num_agents=params.agents,
         gamma=params.gamma,
         size_mini_batch=params.minibatch,
@@ -101,11 +99,7 @@ def train(params: Params):
 
     policy_fn = traj_collection_policy(ac_dict)
 
-    obs_shape = (
-        params.obs_shape[0] * params.num_frames,
-        params.obs_shape[1],
-        params.obs_shape[2],
-    )
+
     for ep in track(range(params.epochs), description=f"Epochs"):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, rollout, obs_shape, policy_fn=policy_fn)
@@ -120,14 +114,13 @@ def traj_collection_policy(ac_dict):
         agent_id: str, observation: torch.Tensor
     ) -> Tuple[int, int, torch.Tensor]:
         action_logit, value_logit = ac_dict[agent_id](observation)
-        action_log_probs = F.log_softmax(action_logit, dim=1)
         action_probs = F.softmax(action_logit, dim=1)
         action = action_probs.multinomial(1).squeeze()
 
         value = int(value_logit)
         action = int(action)
 
-        return action, value, action_log_probs
+        return action, value, action_probs
 
     return inner
 
@@ -137,13 +130,10 @@ def train_epoch(rollouts, ac_dict, env, params, optimizer, optim_params, obs_sha
 
     # estimate advantages
     rollouts.compute_returns(rollouts.values[-1])
-    advantages = rollouts.returns - rollouts.values
     # normalize advantages
-    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
     # get data generation that splits rollout in batches
-    data_generator = rollouts.recurrent_generator(advantages, params.num_frames)
-    num_batches = rollouts.get_num_batches(params.num_frames)
+    data_generator = rollouts.recurrent_generator()
 
     # set model to train mode
     [model.train() for model in ac_dict.values()]
