@@ -8,23 +8,24 @@ from itertools import chain
 from typing import Tuple
 
 import torch
-import torch.optim as optim
 import torch.nn.functional as F
+import torch.optim as optim
 from rich.progress import track
-
-from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils import clip_grad_norm_
-from src.env.NavEnv import get_env
-from src.common.utils import get_env_configs, order_state
+from torch.utils.tensorboard import SummaryWriter
+
 from src.common.Params import Params
+from src.common.utils import get_env_configs, order_state
+from src.env.NavEnv import get_env
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
-from src.train.train_utils import mas_dict2tensor, collect_trajectories, train_epoch_PPO
+from src.train.train_utils import (collect_trajectories, mas_dict2tensor,
+                                   train_epoch_PPO)
 
 
 def traj_collection_policy(ac_dict):
     def inner(
-            agent_id: str, observation: torch.Tensor
+        agent_id: str, observation: torch.Tensor
     ) -> Tuple[int, int, torch.Tensor]:
         action_logit, value_logit = ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
@@ -38,10 +39,9 @@ def traj_collection_policy(ac_dict):
     return inner
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
-    TENSORBOARD_DIR = os.path.join(os.path.abspath(os.pardir), os.pardir,
-                                   "tensorboard")
+    TENSORBOARD_DIR = os.path.join(os.path.abspath(os.pardir), os.pardir, "tensorboard")
     params = Params()
     device = params.device
     # =============================================================================
@@ -53,7 +53,7 @@ if __name__ == '__main__':
     num_agents = params.agents
     obs_shape = env.reset().shape
     # channels are inverted
-    num_actions = env.action_spaces['agent_0'].n
+    num_actions = env.action_spaces["agent_0"].n
     # =============================================================================
     # TRAINING PARAMS
     # =============================================================================
@@ -65,8 +65,7 @@ if __name__ == '__main__':
     # Init a2c and rmsprop
     if not PARAM_SHARING:
         ac_dict = {
-            agent_id: ModelFree(obs_shape, num_actions)
-            for agent_id in env.agents
+            agent_id: ModelFree(obs_shape, num_actions) for agent_id in env.agents
         }
         optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
         optim_params = chain.from_iterable(optim_params)
@@ -77,12 +76,13 @@ if __name__ == '__main__':
     else:
         raise NotImplementedError
 
-    rollout = RolloutStorage(params.horizon * params.episodes,
-
-                             obs_shape,
-                             num_agents=num_agents,
-                             gamma=params.gamma,
-                             size_minibatch=params.minibatch)
+    rollout = RolloutStorage(
+        params.horizon * params.episodes,
+        obs_shape,
+        num_agents=num_agents,
+        gamma=params.gamma,
+        size_minibatch=params.minibatch,
+    )
     rollout.to(device)
 
     for epoch in track(range(params.epochs)):
@@ -97,7 +97,9 @@ if __name__ == '__main__':
         # set model to train mode
         [model.train() for model in ac_dict.values()]
 
-        states_mini_batch = train_epoch_PPO(rollout, ac_dict, env, optimizer, optim_params, params)
+        states_mini_batch = train_epoch_PPO(
+            rollout, ac_dict, env, optimizer, optim_params, params
+        )
         rollout.after_update()
 
     writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "model_free_trained"))

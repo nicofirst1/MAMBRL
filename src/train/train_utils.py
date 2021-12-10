@@ -1,6 +1,6 @@
 import sys
 from random import randint
-from typing import Tuple, Dict, List
+from typing import Dict, List, Tuple
 
 import cv2
 import torch
@@ -54,7 +54,7 @@ def parametrize_state(params):
 
 
 def random_action(
-        agent_id: str, observation: torch.Tensor
+    agent_id: str, observation: torch.Tensor
 ) -> Tuple[int, int, torch.Tensor]:
     params = Params()
 
@@ -66,8 +66,14 @@ def random_action(
     return action, value, action_log
 
 
-def train_epoch_PPO(rollout: RolloutStorage, ac_dict: Dict[str, nn.Module], env: RawEnv,
-                    optimizer: torch.optim.Optimizer, optim_params: List, params: Params):
+def train_epoch_PPO(
+    rollout: RolloutStorage,
+    ac_dict: Dict[str, nn.Module],
+    env: RawEnv,
+    optimizer: torch.optim.Optimizer,
+    optim_params: List,
+    params: Params,
+):
     """
     Performs a PPO update on a full rollout storage (aka one epoch).
     The update also estimate the loss and does the backpropagation
@@ -113,7 +119,7 @@ def train_epoch_PPO(rollout: RolloutStorage, ac_dict: Dict[str, nn.Module], env:
             masks_mini_batch,
             old_action_log_probs_mini_batch,
             adv_targ_mini_batch,
-            _
+            _,
         ) = sample
 
         # states_mini_batch = [mini_batch_len, num_channels, width, height]
@@ -132,10 +138,9 @@ def train_epoch_PPO(rollout: RolloutStorage, ac_dict: Dict[str, nn.Module], env:
             agent_action = actions_mini_batch[:, agent_index]
 
             agent = ac_dict[agent_id]
-            _, action_log_prob, action_prob, value, entropy = \
-                agent.evaluate_actions(
-                    states_mini_batch, agent_action
-                )
+            _, action_log_prob, action_prob, value, entropy = agent.evaluate_actions(
+                states_mini_batch, agent_action
+            )
             action_probs.append(action_prob.unsqueeze(dim=-1))
             action_log_probs.append(action_log_prob.unsqueeze(dim=-1))
             values.append(value.unsqueeze(dim=-1))
@@ -148,33 +153,30 @@ def train_epoch_PPO(rollout: RolloutStorage, ac_dict: Dict[str, nn.Module], env:
 
         value_loss = (return_mini_batch - values).pow(2).mean()
 
-        ratio = torch.exp(action_log_probs -
-                          old_action_log_probs_mini_batch)
+        ratio = torch.exp(action_log_probs - old_action_log_probs_mini_batch)
 
         surr1 = ratio * adv_targ_mini_batch
         surr2 = (
-                torch.clamp(
-                    ratio,
-                    1.0 - params.ppo_clip_param,
-                    1.0 + params.ppo_clip_param,
-
-                ) *
-                adv_targ_mini_batch
+            torch.clamp(
+                ratio,
+                1.0 - params.ppo_clip_param,
+                1.0 + params.ppo_clip_param,
+            )
+            * adv_targ_mini_batch
         )
 
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-                value_loss * params.value_loss_coef +
-                action_loss -
-                entropys * params.entropy_coef
+            value_loss * params.value_loss_coef
+            + action_loss
+            - entropys * params.entropy_coef
         )
         loss = loss.mean()
         loss.backward()
 
-        clip_grad_norm_(optim_params,
-                        params.max_grad_norm)
+        clip_grad_norm_(optim_params, params.max_grad_norm)
         optimizer.step()
 
     return states_mini_batch[0]
@@ -182,11 +184,11 @@ def train_epoch_PPO(rollout: RolloutStorage, ac_dict: Dict[str, nn.Module], env:
 
 # todo: this can be done in parallel
 def collect_trajectories(
-        params: Params,
-        env: RawEnv,
-        rollout: RolloutStorage,
-        obs_shape,
-        policy_fn=random_action,
+    params: Params,
+    env: RawEnv,
+    rollout: RolloutStorage,
+    obs_shape,
+    policy_fn=random_action,
 ):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
@@ -229,8 +231,9 @@ def collect_trajectories(
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
                 action_log_probs = torch.log(action_probs).squeeze(0)[int(action)]
-                action_log_dict[agent_id] = 0e-10 \
-                    if float(action_log_probs) == 0.0 else float(action_log_probs)
+                action_log_dict[agent_id] = (
+                    0e-10 if float(action_log_probs) == 0.0 else float(action_log_probs)
+                )
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, infos = env.step(action_dict)

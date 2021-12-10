@@ -4,23 +4,23 @@ train the environment network
 """
 import os
 import sys
-import tqdm
+
 import torch
 import torch.nn.functional as F
-
-from torch import optim, nn
-from torch.nn.utils import clip_grad_norm_
+import tqdm
+from torch import nn, optim
 from torch.autograd import Variable
-from src.env.NavEnv import get_env
-from src.common.utils import get_env_configs, mas_dict2tensor, order_state
+from torch.nn.utils import clip_grad_norm_
+
 from src.common.Params import Params
+from src.common.utils import get_env_configs, mas_dict2tensor, order_state
+from src.env.NavEnv import get_env
 from src.model.EnvModel import EnvModel
+from src.model.ImaginationCore import target_to_pix
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
-from src.model.ImaginationCore import target_to_pix
 
-TENSORBOARD_DIR = os.path.join(os.path.abspath(os.pardir), os.pardir,
-                               "tensorboard")
+TENSORBOARD_DIR = os.path.join(os.path.abspath(os.pardir), os.pardir, "tensorboard")
 
 params = Params()
 params.resize = False
@@ -64,32 +64,25 @@ alpha = 0.99
 PARAM_SHARING = False
 # Init a2c and rmsprop
 if not PARAM_SHARING:
-    ac_dict = {
-        agent_id: ModelFree(obs_space, num_actions)
-        for agent_id in env.agents
-    }
+    ac_dict = {agent_id: ModelFree(obs_space, num_actions) for agent_id in env.agents}
     model_dict = {
-        agent_id: EnvModel(obs_space,
-                           num_rewards,
-                           params.num_frames,
-                           num_actions,
-                           num_colors)
+        agent_id: EnvModel(
+            obs_space, num_rewards, params.num_frames, num_actions, num_colors
+        )
         for agent_id in env.agents
     }
     opt_dict = {
         agent_id: optim.RMSprop(
-            model_dict[agent_id].parameters(), lr, eps=eps, alpha=alpha)
+            model_dict[agent_id].parameters(), lr, eps=eps, alpha=alpha
+        )
         for agent_id in env.agents
     }
 else:
     raise NotImplementedError
 
-rollout = RolloutStorage(steps_per_episode,
-                         obs_space,
-                         num_agents,
-                         gamma,
-                         size_minibatch,
-                         num_actions)
+rollout = RolloutStorage(
+    steps_per_episode, obs_space, num_agents, gamma, size_minibatch, num_actions
+)
 rollout.to(device)
 # =============================================================================
 # TRAIN
@@ -129,13 +122,19 @@ for epoch in tqdm(range(epochs)):
             action_dict[agent_id] = int(action)
             values_dict[agent_id] = int(value_logit)
             action_log_probs = torch.log(action_probs).squeeze(0)[int(action)]
-            action_log_dict[agent_id] = sys.float_info.min \
-                if float(action_log_probs) == 0.0 else float(action_log_probs)
+            action_log_dict[agent_id] = (
+                sys.float_info.min
+                if float(action_log_probs) == 0.0
+                else float(action_log_probs)
+            )
 
         # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
         next_state, rewards, dones, _ = env.step(action_dict)
-        masks = {agent_done: dones[agent_done]
-                 for agent_done in dones if agent_done != '__all__'}
+        masks = {
+            agent_done: dones[agent_done]
+            for agent_done in dones
+            if agent_done != "__all__"
+        }
         # sort in agent orders and convert to list of int for tensor
         masks = 1 - mas_dict2tensor(masks)
         rewards = mas_dict2tensor(rewards)
@@ -169,9 +168,9 @@ for epoch in tqdm(range(epochs)):
     # normalize advantages
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
-# =============================================================================
-# TRAIN
-# =============================================================================
+    # =============================================================================
+    # TRAIN
+    # =============================================================================
 
     # # get data generation that splits rollout in batches
     data_generator = rollout.recurrent_generator()
@@ -189,7 +188,7 @@ for epoch in tqdm(range(epochs)):
             _,
             _,
             _,
-            next_states_mini_batch
+            next_states_mini_batch,
         ) = sample
         # states_mini_batch = [mini_batch_len, num_channels, width, height]
         # actions_mini_batch = [mini_batch_len, num_agents]
@@ -201,10 +200,7 @@ for epoch in tqdm(range(epochs)):
         one_hot_actions_mini_batch = {agent_id: [] for agent_id in env.agents}
         for elem in range(len(states_mini_batch)):
             for agent_id in env.agents:
-                one_hot_action = torch.zeros(1,
-                                             num_actions,
-                                             *obs_space[1:]
-                                             )
+                one_hot_action = torch.zeros(1, num_actions, *obs_space[1:])
                 agent_index = env.agents.index(agent_id)
                 action_index = int(actions_mini_batch[elem, agent_index])
                 one_hot_action[0, action_index] = 1
@@ -213,10 +209,7 @@ for epoch in tqdm(range(epochs)):
         # concatenate input and one_hot_actions
         for agent_id in env.agents:
             action_input = torch.cat(one_hot_actions_mini_batch[agent_id], 0)
-            inputs = torch.cat([
-                states_mini_batch,
-                action_input],
-                1)
+            inputs = torch.cat([states_mini_batch, action_input], 1)
             inputs = inputs.to(params.device)
 
             # call forward method
@@ -227,26 +220,24 @@ for epoch in tqdm(range(epochs)):
             # ========================================
             # imagined outputs to real one
             imagined_state = F.softmax(imagined_state, dim=1).max(dim=1)[1]
-            imagined_state = imagined_state.view(
-                size_minibatch,
-                *obs_space[1:])
+            imagined_state = imagined_state.view(size_minibatch, *obs_space[1:])
             imagined_state = t2p(imagined_state)
 
             imagined_reward = F.softmax(reward, dim=1).max(dim=1)[1]
 
-            reward_loss = (return_mini_batch[:, agent_index] -
-                           imagined_reward).pow(2).mean()
+            reward_loss = (
+                (return_mini_batch[:, agent_index] - imagined_reward).pow(2).mean()
+            )
             reward_loss = Variable(reward_loss, requires_grad=True)
-            image_loss = criterion(
-                imagined_state,
-                next_states_mini_batch)
+            image_loss = criterion(imagined_state, next_states_mini_batch)
 
             opt_dict[agent_id].zero_grad()
             loss = reward_loss + image_loss
             loss.backward()
 
-            clip_grad_norm_(model_dict[agent_id].parameters(),
-                            params.configs["max_grad_norm"])
+            clip_grad_norm_(
+                model_dict[agent_id].parameters(), params.configs["max_grad_norm"]
+            )
             opt_dict[agent_id].step()
 
 for agent_id in env.agents:

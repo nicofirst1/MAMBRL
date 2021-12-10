@@ -71,7 +71,6 @@ def train(params: Params):
     configs["mode"] = "rgb_array"
     env = get_env(configs)
 
-
     obs_shape = env.reset().shape
 
     reward_range = env.get_reward_range()
@@ -98,7 +97,6 @@ def train(params: Params):
 
     policy_fn = traj_collection_policy(ac_dict)
 
-
     for ep in track(range(params.epochs), description=f"Epochs"):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, rollout, obs_shape, policy_fn=policy_fn)
@@ -108,7 +106,6 @@ def train(params: Params):
 
 
 def traj_collection_policy(ac_dict):
-
     def inner(
         agent_id: str, observation: torch.Tensor
     ) -> Tuple[int, int, torch.Tensor]:
