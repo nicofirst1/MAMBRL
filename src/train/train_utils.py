@@ -13,49 +13,34 @@ from src.env.NavEnv import RawEnv
 from src.model import RolloutStorage
 
 
-def mas_dict2tensor(agent_dict):
-    # sort in agent orders and convert to list of int for tensor
+def mas_dict2tensor(agent_dict) -> torch.Tensor:
+    """
+    sort agent dict and convert to list of int of tensor
+
+    Args:
+        agent_dict:
+
+    Returns:
+
+    """
 
     tensor = sorted(agent_dict.items())
     tensor = [int(elem[1]) for elem in tensor]
     return torch.as_tensor(tensor)
 
 
-def parametrize_state(params):
-    """
-    Function used to resize image coming from env
-    """
-
-    def inner(state):
-
-        if params.resize:
-            state = state.squeeze()
-            # PIL.Image.fromarray(state).show()
-
-            state = cv2.resize(
-                state,
-                dsize=(params.obs_shape[2], params.obs_shape[1]),
-                interpolation=cv2.INTER_AREA,
-            )
-            # PIL.Image.fromarray(state).show()
-
-        # fixme: why are we not using long instead of floats?
-        state = torch.LongTensor(state)
-        # move channel on second dimension if present, else add 1
-        if len(state.shape) == 3:
-            state = state.permute(2, 0, 1)
-        else:
-            state = state.unsqueeze(dim=0)
-
-        state = state.to(params.device)
-        return state
-
-    return inner
-
-
 def random_action(
-    agent_id: str, observation: torch.Tensor
+        agent_id: str, observation: torch.Tensor
 ) -> Tuple[int, int, torch.Tensor]:
+    """
+    Returns a random action for the trajectory collection
+    Args:
+        agent_id:
+        observation:
+
+    Returns:
+
+    """
     params = Params()
 
     action = randint(0, params.num_actions - 1)
@@ -67,12 +52,12 @@ def random_action(
 
 
 def train_epoch_PPO(
-    rollout: RolloutStorage,
-    ac_dict: Dict[str, nn.Module],
-    env: RawEnv,
-    optimizer: torch.optim.Optimizer,
-    optim_params: List,
-    params: Params,
+        rollout: RolloutStorage,
+        ac_dict: Dict[str, nn.Module],
+        env: RawEnv,
+        optimizer: torch.optim.Optimizer,
+        optim_params: List[torch.nn.Parameter],
+        params: Params,
 ):
     """
     Performs a PPO update on a full rollout storage (aka one epoch).
@@ -82,7 +67,7 @@ def train_epoch_PPO(
         ac_dict: Dictionary of agents, represented as modules
         env:
         optimizer: The optimizer
-        optim_params: A list of agent.parameters()
+        optim_params: A list of agent.parameters() chained together
         params:
 
     Returns:
@@ -157,21 +142,21 @@ def train_epoch_PPO(
 
         surr1 = ratio * adv_targ_mini_batch
         surr2 = (
-            torch.clamp(
-                ratio,
-                1.0 - params.ppo_clip_param,
-                1.0 + params.ppo_clip_param,
-            )
-            * adv_targ_mini_batch
+                torch.clamp(
+                    ratio,
+                    1.0 - params.ppo_clip_param,
+                    1.0 + params.ppo_clip_param,
+                )
+                * adv_targ_mini_batch
         )
 
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-            value_loss * params.value_loss_coef
-            + action_loss
-            - entropys * params.entropy_coef
+                value_loss * params.value_loss_coef
+                + action_loss
+                - entropys * params.entropy_coef
         )
         loss = loss.mean()
         loss.backward()
@@ -184,16 +169,25 @@ def train_epoch_PPO(
 
 # todo: this can be done in parallel
 def collect_trajectories(
-    params: Params,
-    env: RawEnv,
-    rollout: RolloutStorage,
-    obs_shape,
-    policy_fn=random_action,
+        params: Params,
+        env: RawEnv,
+        rollout: RolloutStorage,
+        obs_shape,
+        policy_fn=random_action,
 ):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
-    policy_fn: should be a function that gets an agent_id and an observation and returns
-    action : int, value: int , action_log_probs : torch.Tensor
+
+    Args:
+        params:
+        env:
+        rollout:
+        obs_shape:
+        policy_fn: should be a function that gets an agent_id and an observation and returns
+                    action : int, value: int , action_log_probs : torch.Tensor
+
+    Returns:
+
     """
     state_channel = int(obs_shape[0])
 

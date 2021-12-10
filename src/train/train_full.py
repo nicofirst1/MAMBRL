@@ -80,7 +80,7 @@ def train(params: Params):
     }
 
     optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
-    optim_params = chain.from_iterable(optim_params)
+    optim_params = list(chain.from_iterable(optim_params))
 
     optimizer = optim.RMSprop(
         optim_params, params.lr, eps=params.eps, alpha=params.alpha
