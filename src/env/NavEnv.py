@@ -38,24 +38,26 @@ class RawEnv(SimpleEnv):
         self.obs_shape = obs_shape
 
         visible = True if mode == "human" else False
+        self.mode=mode
         self.viewer = rendering.Viewer(obs_shape, obs_shape, visible=visible)
         self.viewer.set_max_size(max_size)
 
     def get_reward_range(self):
         return self.scenario.get_reward_range()
 
-    def reset(self, mode="human"):
+    def reset(self):
         super(RawEnv, self).reset()
 
-        return self.observe(mode=mode)
+        return self.observe()
 
-    def observe(self, mode):
+    def observe(self):
 
-        observation = self.render(mode=mode)
+        observation = self.render(mode=self.mode)
 
         if observation is not None:
 
             observation = torch.from_numpy(observation.copy())
+            observation= observation.float()
             # move channel on second dimension if present, else add 1
             if len(observation.shape) == 3:
                 observation = observation.permute(2, 0, 1)
@@ -85,7 +87,7 @@ class RawEnv(SimpleEnv):
         for lndmrk_id in not_visited:
             self.scenario.landmarks[lndmrk_id].step()
 
-        observation = self.observe(mode="rgb_array")
+        observation = self.observe()
         # copy done so __all__ is not appended
         dones = copy(self.dones)
         dones["__all__"] = all(dones.values())

@@ -9,7 +9,7 @@ class RolloutStorage(object):
         self.num_channels = state_shape[0]
         self.num_agents = num_agents
 
-        self.states = torch.zeros(num_steps + 1, *state_shape).long()
+        self.states = torch.zeros(num_steps + 1, *state_shape)
         self.rewards = torch.zeros(num_steps, num_agents).long()
         self.masks = torch.ones(num_steps + 1, num_agents).long()
         self.actions = torch.zeros(num_steps, num_agents).long()

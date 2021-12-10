@@ -14,6 +14,7 @@ def get_env_configs(params: Params):
         name=params.env_name,
         gray_scale=params.gray_scale,
         obs_shape=params.obs_shape[2],
+        mode="rgb_array",
         scenario_kwargs=dict(
             landmark_reward=1,
             max_landmark_counter=4,

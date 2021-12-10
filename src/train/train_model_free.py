@@ -7,16 +7,16 @@ import sys
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
+from rich.progress import track
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils import clip_grad_norm_
-from tqdm import tqdm
 from src.env.NavEnv import get_env
-from src.common.utils import get_env_configs, mas_dict2tensor, order_state
+from src.common.utils import get_env_configs, order_state
 from src.common.Params import Params
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
-
+from src.trainers.train_utils import mas_dict2tensor
 
 TENSORBOARD_DIR = os.path.join(os.path.abspath(os.pardir), os.pardir,
                                "tensorboard")
@@ -29,16 +29,11 @@ device = params.device
 # =============================================================================
 env_config = get_env_configs(params)
 env = get_env(env_config)
-num_rewards = len(env.par_env.get_reward_range())
+num_rewards = len(env.get_reward_range())
 num_agents = params.agents
-if params.resize:
-    obs_space = params.obs_shape
-
-else:
-    obs_space = env.render(mode="rgb_array").shape
-    # channels are inverted
-    obs_space = (obs_space[2], obs_space[0], obs_space[1])
-num_actions = env.action_space.n
+obs_space = env.reset().shape
+# channels are inverted
+num_actions = env.action_spaces['agent_0'].n
 # =============================================================================
 # TRAINING PARAMS
 # =============================================================================
@@ -85,7 +80,7 @@ rollout.to(device)
 # =============================================================================
 # TRAIN
 # =============================================================================
-for epoch in tqdm(range(epochs)):
+for epoch in track(range(epochs)):
     # =============================================================================
     # COLLECT TRAJECTORIES
     # =============================================================================
@@ -100,7 +95,6 @@ for epoch in tqdm(range(epochs)):
     action_log_dict = {agent_id: False for agent_id in env.agents}
 
     current_state = env.reset()
-    current_state = order_state(current_state)
     rollout.states[0].copy_(current_state)
 
     for step in range(steps_per_episode):
@@ -137,7 +131,6 @@ for epoch in tqdm(range(epochs)):
         action_log_probs = mas_dict2tensor(action_log_dict)
 
         current_state = next_state
-        current_state = order_state(current_state)
 
         rollout.insert(
             step=step,
@@ -215,8 +208,8 @@ for epoch in tqdm(range(epochs)):
             surr2 = (
                 torch.clamp(
                     ratio,
-                    1.0 - params.configs["ppo_clip_param"],
-                    1.0 + params.configs["ppo_clip_param"],
+                    1.0 - params.ppo_clip_param,
+                    1.0 + params.ppo_clip_param,
 
                 ) *
                 adv_targ_mini_batch
@@ -226,15 +219,15 @@ for epoch in tqdm(range(epochs)):
 
             opt_dict[agent_id].zero_grad()
             loss = (
-                value_loss * params.configs["value_loss_coef"] +
+                value_loss * params.value_loss_coef +
                 action_loss -
-                entropy * params.configs["entropy_coef"]
+                entropy * params.entropy_coef
             )
             loss = loss.mean()
             loss.backward()
 
             clip_grad_norm_(agent.parameters(),
-                            params.configs["max_grad_norm"])
+                            params.max_grad_norm)
             opt_dict[agent_id].step()
 
 writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "model_free_trained"))
