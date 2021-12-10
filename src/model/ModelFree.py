@@ -26,26 +26,46 @@ class OnPolicy(nn.Module):
 
         return action
 
-    # fix: check if it works
-    def evaluate_actions(self, frames, action):
+    def evaluate_actions(self, frames: torch.Tensor, action_indx: int):
         """evaluate_actions method.
 
-        compute the actions logit, value and actions probability based on the
-        the actual state and then compute the entropy with respect to the 
-        action that we passed as a parameter. 
+        compute the actions logit, value and actions probability by passing
+        the actual states (frames) to the ModelFree network. Then it computes
+        the entropy of the action corresponding to the index action_indx
+
         Parameters
-        ---------
+        ----------
+        frames : PyTorch Array
+            a 4 dimensional tensor [batch_size, channels, width, height]
+        action_indx : int
+            index of the actions to use in order to compute the entropy
+
+        Returns
+        -------
+        action_logit : Torch.Tensor [batch_size, num_actions]
+            output of the ModelFree network before passing it to the softmax
+        action_log_prob : Torch.Tensor [batch_size,1]
+            scalar value, action log of the action corresponding to the
+            action_indx
+        probs : Torch.Tensor [batch_size, num_actions]
+            probability of actions given by the ModelFree network
+        value : Torch.Tensor [batch_size,1]
+            value of the state given by the ModelFree network
+        entropy : Torch.Tensor [batch_size,1]
+            value of the entropy given by the action with index equal to
+            action_indx.
         """
+        print("wait")
         action_logit, value = self.forward(frames)
 
         probs = F.softmax(action_logit, dim=1)
 
         log_probs = F.log_softmax(action_logit, dim=1)
 
-        action_log_probs = log_probs.gather(1, action)
+        action_log_prob = log_probs.gather(1, action_indx)
         entropy = -(probs * log_probs).sum(1).mean()
 
-        return action_logit, action_log_probs, probs, value, entropy
+        return action_logit, action_log_prob, probs, value, entropy
 
 
 class ModelFree(OnPolicy):
@@ -83,6 +103,22 @@ class ModelFree(OnPolicy):
         self.actor = nn.Linear(256, num_actions)
 
     def forward(self, x):
+        """forward method.
+
+        Return the logit and the values of the ModelFree
+        Parameters
+        ----------
+        x : torch.Tensor
+            [batch_size, num_channels, width, height]
+
+        Returns
+        -------
+        logit : torch.Tensor
+            [batch_size, num_actions]
+        value : torch.Tensor
+            [batch_size, value]
+
+        """
         x = self.features(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)

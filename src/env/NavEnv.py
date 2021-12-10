@@ -99,6 +99,6 @@ class RawEnv(SimpleEnv):
 
 
 def get_env(kwargs) -> RawEnv:
-    """Initialize rawEnv and wrap it in parallel petting zoo"""
+    """Initialize rawEnv and wrap it in parallel petting zoo."""
     env = RawEnv(**kwargs)
     return env
