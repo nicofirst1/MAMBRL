@@ -8,13 +8,22 @@ from logging_callbacks.callbacks import WandbLogger
 
 class EnvModelWandb(WandbLogger):
     def __init__(
-        self,
-        train_log_step,
-        val_log_step,
-        out_dir,
-        model_config,
-        **kwargs,
+            self,
+            train_log_step: int,
+            val_log_step: int,
+            out_dir: str,
+            model_config,
+            **kwargs,
     ):
+        """
+        Logs env model training onto wandb
+        Args:
+            train_log_step:
+            val_log_step:
+            out_dir:
+            model_config:
+            **kwargs:
+        """
 
         # create wandb dir if not existing
         if not os.path.isdir(out_dir):
@@ -30,7 +39,7 @@ class EnvModelWandb(WandbLogger):
         self.epoch = 0
 
     def on_batch_end(
-        self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
+            self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
     ):
 
         flag = "training" if is_training else "validation"
@@ -64,9 +73,47 @@ class EnvModelWandb(WandbLogger):
 
         self.epoch += 1
 
-        model_artifact = wandb.Artifact(
-            "env_model", type="model", metadata=dict(self.model_config)
-        )
 
-        model_artifact.add_file(model_path)
-        wandb.log_artifact(model_artifact)
+class PPOWandb(WandbLogger):
+    def __init__(
+            self,
+            train_log_step: int,
+            val_log_step: int,
+            out_dir: str,
+            model_config,
+            **kwargs,
+    ):
+        """
+        Logs env model training onto wandb
+        Args:
+            train_log_step:
+            val_log_step:
+            out_dir:
+            model_config:
+            **kwargs:
+        """
+
+        # create wandb dir if not existing
+        if not os.path.isdir(out_dir):
+            os.mkdir(out_dir)
+
+        super(PPOWandb, self).__init__(dir=out_dir, config=model_config, **kwargs)
+
+        self.train_log_step = train_log_step if train_log_step > 0 else 2
+        self.val_log_step = val_log_step if val_log_step > 0 else 2
+        self.model_config = model_config
+        self.out_dir = out_dir
+
+        self.epoch = 0
+
+    def on_batch_end(
+            self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
+    ):
+        flag = "training" if is_training else "validation"
+
+        logs = {f"{flag}_{k}": v for k, v in logs.items()}
+
+        self.log_to_wandb(logs, commit=True)
+
+    def on_epoch_end(self, loss: float, logs: Dict[str, Any], model_path: str):
+        self.epoch += 1

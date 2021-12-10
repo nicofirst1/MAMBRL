@@ -101,13 +101,13 @@ def train(params: Params):
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, rollout, obs_shape, policy_fn=policy_fn)
         # train for all the trajectories collected so far
-        train_epoch_PPO(rollout, ac_dict, env, optimizer, optim_params, params)
+        infos, _ = train_epoch_PPO(rollout, ac_dict, env, optimizer, optim_params, params)
         rollout.after_update()
 
 
 def traj_collection_policy(ac_dict):
     def inner(
-        agent_id: str, observation: torch.Tensor
+            agent_id: str, observation: torch.Tensor
     ) -> Tuple[int, int, torch.Tensor]:
         action_logit, value_logit = ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)

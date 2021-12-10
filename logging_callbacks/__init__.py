@@ -1,9 +1,8 @@
-from .callbacks import Callback, CheckpointSaver, ConsoleLogger
-from .wandbLogger import EnvModelWandb
+from .callbacks import Callback
+from .wandbLogger import EnvModelWandb, PPOWandb
 
 __all__ = [
     "Callback",
-    "ConsoleLogger",
-    "CheckpointSaver",
+    "PPOWandb",
     "EnvModelWandb",
 ]

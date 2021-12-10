@@ -14,6 +14,7 @@ from rich.progress import track
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.tensorboard import SummaryWriter
 
+from logging_callbacks import PPOWandb
 from src.common.Params import Params
 from src.common.utils import get_env_configs, order_state
 from src.env.NavEnv import get_env
@@ -25,7 +26,7 @@ from src.train.train_utils import (collect_trajectories, mas_dict2tensor,
 
 def traj_collection_policy(ac_dict):
     def inner(
-        agent_id: str, observation: torch.Tensor
+            agent_id: str, observation: torch.Tensor
     ) -> Tuple[int, int, torch.Tensor]:
         action_logit, value_logit = ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
@@ -71,6 +72,20 @@ if __name__ == "__main__":
     )
     rollout.to(device)
 
+    # get logging step based on num of batches
+    num_batches = rollout.get_num_minibatches()
+    num_batches = int(num_batches * 0.01) + 1
+
+    wandb_callback = PPOWandb(
+        train_log_step=num_batches,
+        val_log_step=num_batches,
+        project="model_free",
+        model_config=params.__dict__,
+        out_dir=params.WANDB_DIR,
+        opts={},
+        mode="disabled",  # if params.debug else "online",
+    )
+
     for epoch in track(range(params.epochs)):
         [model.eval() for model in ac_dict.values()]
 
@@ -83,9 +98,11 @@ if __name__ == "__main__":
         # set model to train mode
         [model.train() for model in ac_dict.values()]
 
-        states_mini_batch = train_epoch_PPO(
+        infos, states_mini_batch = train_epoch_PPO(
             rollout, ac_dict, env, optimizer, optim_params, params
         )
+
+        wandb_callback.on_batch_end(infos, 0, epoch)
         rollout.after_update()
 
     writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "model_free_trained"))

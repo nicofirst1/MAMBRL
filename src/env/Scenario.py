@@ -172,3 +172,27 @@ class Scenario(BaseScenario):
             )
 
         return rew
+
+    @staticmethod
+    def observation(agent, world):
+        # get positions of all entities in this agent's reference frame
+        entity_pos = []
+        for entity in world.landmarks:
+            if not entity.boundary:
+                entity_pos.append(entity.state.p_pos - agent.state.p_pos)
+
+        # communication of all other agents
+        comm = []
+        other_agents_pos = []
+        other_agents_vel = []
+        for other in world.agents:
+            comm.append(other.state.c)
+            other_agents_pos.append(other.state.p_pos - agent.state.p_pos)
+            other_agents_vel.append(other.state.p_vel)
+        return np.concatenate(
+            [agent.state.p_vel] +
+            [agent.state.p_pos] +
+            entity_pos +
+            other_agents_pos +
+            other_agents_vel
+        )

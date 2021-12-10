@@ -58,7 +58,7 @@ def train_epoch_PPO(
     optimizer: torch.optim.Optimizer,
     optim_params: List[torch.nn.Parameter],
     params: Params,
-):
+) -> Tuple[Dict[str, List[int]], torch.Tensor]:
     """
     Performs a PPO update on a full rollout storage (aka one epoch).
     The update also estimate the loss and does the backpropagation
@@ -71,6 +71,8 @@ def train_epoch_PPO(
         params:
 
     Returns:
+        infos: dict of loss values for logging
+        states_mini_batch: i dunno why this is here
 
     """
 
@@ -94,6 +96,13 @@ def train_epoch_PPO(
 
     # # get data generation that splits rollout in batches
     data_generator = rollout.recurrent_generator()
+    infos=dict(
+        value_loss=[],
+        action_loss=[],
+        entropys =[],
+        loss=[]
+    )
+
 
     # MINI BATCHES ARE NECESSARY FOR PPO (SINCE IT USES OLD AND NEW POLICIES)
     for sample in data_generator:
@@ -161,10 +170,15 @@ def train_epoch_PPO(
         loss = loss.mean()
         loss.backward()
 
+        infos['value_loss'].append(value_loss)
+        infos['action_loss'].append(action_loss)
+        infos['entropys'].append(entropys)
+        infos['loss'].append(loss)
+
         clip_grad_norm_(optim_params, params.max_grad_norm)
         optimizer.step()
 
-    return states_mini_batch[0]
+    return infos, states_mini_batch[0]
 
 
 # todo: this can be done in parallel
