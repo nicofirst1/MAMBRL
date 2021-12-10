@@ -55,6 +55,7 @@ class OnPolicy(nn.Module):
             value of the entropy given by the action with index equal to
             action_indx.
         """
+        print("wait")
         action_logit, value = self.forward(frames)
 
         action_probs = F.softmax(action_logit, dim=1)
