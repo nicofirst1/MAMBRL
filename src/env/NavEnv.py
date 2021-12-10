@@ -1,5 +1,6 @@
 import itertools
 from copy import copy
+from typing import Dict, List, Tuple
 
 import cv2
 import numpy as np
@@ -14,22 +15,35 @@ from .Scenario import Scenario
 class RawEnv(SimpleEnv):
     def __init__(
             self,
-            name,
-            scenario_kwargs,
-            max_cycles,
-            continuous_actions,
+            name: str,
+            scenario_kwargs: Dict,
+            horizon,
+            continuous_actions: bool,
             gray_scale=False,
             obs_shape=None,
             mode="human",
     ):
+        """
+        This class has to manage the interaction between the agents in an environment.
+        The env is made of N agents and M landmarks.
+        The goal of the agents is to get to as many landmarks as possible in the shortest time
+        Args:
+            name: name of the env
+            scenario_kwargs: dict of keyward for scenario initialization
+            horizon: max steps before __all_done__=true
+            continuous_actions: if to use continous or discrete actions
+            gray_scale: if to convert obs to gray scale
+            obs_shape: shape of observation space, used for rescaling
+            mode: rendering mode, either human or rgb_array
+        """
         scenario = Scenario(**scenario_kwargs)
-        max_size = 3
-        world = scenario.make_world(max_size)
+
+        world = scenario.make_world()
         super().__init__(
             scenario,
             world,
-            max_cycles,
-            continuous_actions,
+            max_cycles=horizon,
+            continuous_actions=continuous_actions,
             # color_entities=TimerLandmark,
         )
         self.metadata["name"] = name
@@ -38,11 +52,11 @@ class RawEnv(SimpleEnv):
         self.obs_shape = obs_shape
 
         visible = True if mode == "human" else False
-        self.mode=mode
+        self.mode = mode
         self.viewer = rendering.Viewer(obs_shape, obs_shape, visible=visible)
-        self.viewer.set_max_size(max_size)
+        self.viewer.set_max_size(scenario_kwargs['max_size'])
 
-    def get_reward_range(self):
+    def get_reward_range(self) -> List[int]:
         return self.scenario.get_reward_range()
 
     def reset(self):
@@ -50,14 +64,22 @@ class RawEnv(SimpleEnv):
 
         return self.observe()
 
-    def observe(self):
+    def observe(self, agent="") -> torch.Tensor:
+        """
+        Get an image of the game
+        Args:
+            agent: All observation are the same here
+
+        Returns: returns an image as a torch tensor of size [channels, width, height]
+
+        """
 
         observation = self.render(mode=self.mode)
 
         if observation is not None:
 
             observation = torch.from_numpy(observation.copy())
-            observation= observation.float()
+            observation = observation.float()
             # move channel on second dimension if present, else add 1
             if len(observation.shape) == 3:
                 observation = observation.permute(2, 0, 1)
@@ -70,7 +92,21 @@ class RawEnv(SimpleEnv):
 
         return observation
 
-    def step(self, actions):
+    def step(self, actions: Dict[str, int]) -> Tuple[Dict[str, torch.Tensor], Dict[str, int], Dict[str, bool], Dict[
+        str, Dict]]:
+        """
+        Takes a step in the environment.
+        All the agents act simultaneously and the the observation are collected
+        Args:
+            actions: dictionary mapping angent name to an action
+
+        Returns: all returns are dict mapping agent string to a value
+            observation : the observed window as a torch.Tensor
+            rewards: a reward as an int
+            dones: if the agent is done or not
+            infos: additional infos on the agent, such as its position
+
+        """
 
         for agent_id, action in actions.items():
             self.agent_selection = agent_id
@@ -98,7 +134,8 @@ class RawEnv(SimpleEnv):
         return observation, self.rewards, dones, self.infos
 
 
-def get_env(kwargs) -> RawEnv:
+def get_env(kwargs:Dict
+            ) -> RawEnv:
     """Initialize rawEnv and wrap it in parallel petting zoo."""
     env = RawEnv(**kwargs)
     return env

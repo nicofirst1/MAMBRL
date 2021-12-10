@@ -8,7 +8,7 @@ from src.env import get_env
 
 def get_env_configs(params: Params):
     env_config = dict(
-        max_cycles=params.horizon,
+        horizon=params.horizon,
         continuous_actions=False,
         name=params.env_name,
         gray_scale=params.gray_scale,
@@ -20,6 +20,7 @@ def get_env_configs(params: Params):
             landmark_penalty=-2,
             num_agents=params.agents,
             num_landmarks=params.landmarks,
+            max_size=3,
         ),
     )
 

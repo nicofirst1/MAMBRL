@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
@@ -12,15 +14,18 @@ def is_collision(agent1, agent2):
     return True if dist < dist_min else False
 
 
-
 class Border(Entity):
     start = []
     end = []
-    attrs={}
+    attrs = {}
+
 
 class BoundedWorld(World):
+    """
+    A bounded word for the env. Uses unmovable landmarks on the border of the image in order to bound the agents
+    """
 
-    def __init__(self, max_size):
+    def __init__(self, max_size: int):
         super(BoundedWorld, self).__init__()
 
         self.max_size = max_size
@@ -38,19 +43,31 @@ class BoundedWorld(World):
         self.borders[3].end = [-max_size, max_size]
 
         for b in self.borders:
-            b.attrs['color'] = np.array([0, 0, 0])
-            b.attrs['linewidth'] = 2
+            b.attrs["color"] = np.array([0, 0, 0])
+            b.attrs["linewidth"] = 2
 
 
 class Scenario(BaseScenario):
     def __init__(
             self,
-            num_agents,
-            num_landmarks,
-            landmark_reward=1,
-            max_landmark_counter=4,
-            landmark_penalty=2,
+            num_agents: int,
+            num_landmarks: int,
+            max_size: int,
+            landmark_reward: int = 1,
+            max_landmark_counter: int = 4,
+            landmark_penalty: int = 2,
     ):
+        """
+
+        Args:
+            num_agents: the number of agents in the system
+            num_landmarks: the number of landmarks
+            max_size: maximum size of the word, used in word initialization
+            landmark_reward: the reward value (positive) for visiting a landmark
+            max_landmark_counter: At each timestep a landmarks increases its penalty until step>=max_landmark_counter,
+                    then it stays the same until visited
+            landmark_penalty: the penalty value (negative) for not visited landmarks
+        """
         self.registered_collisions = {}
         self.landmarks = {}
         self.max_landmark_counter = max_landmark_counter
@@ -58,8 +75,12 @@ class Scenario(BaseScenario):
         self.landmark_penalty = landmark_penalty
         self.num_agents = num_agents
         self.num_landmarks = num_landmarks
+        self.max_size = max_size
 
-    def get_reward_range(self):
+    def get_reward_range(self) -> List[int]:
+        """
+        Return the possible values of the reward
+        """
 
         lower_bound = (
                 self.num_landmarks * self.landmark_penalty * self.max_landmark_counter
@@ -69,10 +90,14 @@ class Scenario(BaseScenario):
         return list(range(lower_bound, upper_bound))
 
     def make_world(
-        self,
-        max_size
-    ):
-        world = BoundedWorld(max_size)
+            self,
+    ) -> World:
+        """
+        Init world and populate it with agents and landmarks
+        Returns:
+
+        """
+        world = BoundedWorld(self.max_size)
         # set any world properties first
         world.dim_c = 2
         # add agents
@@ -99,8 +124,7 @@ class Scenario(BaseScenario):
             landmark.size = 0.1
             landmark.boundary = False
 
-        self.landmarks = {
-            landmark.name: landmark for landmark in world.landmarks}
+        self.landmarks = {landmark.name: landmark for landmark in world.landmarks}
 
         return world
 
@@ -148,27 +172,3 @@ class Scenario(BaseScenario):
             )
 
         return rew
-
-    @staticmethod
-    def observation(agent, world):
-        # get positions of all entities in this agent's reference frame
-        entity_pos = []
-        for entity in world.landmarks:
-            if not entity.boundary:
-                entity_pos.append(entity.state.p_pos - agent.state.p_pos)
-
-        # communication of all other agents
-        comm = []
-        other_agents_pos = []
-        other_agents_vel = []
-        for other in world.agents:
-            comm.append(other.state.c)
-            other_agents_pos.append(other.state.p_pos - agent.state.p_pos)
-            other_agents_vel.append(other.state.p_vel)
-        return np.concatenate(
-            [agent.state.p_vel] +
-            [agent.state.p_pos] +
-            entity_pos +
-            other_agents_pos +
-            other_agents_vel
-        )
