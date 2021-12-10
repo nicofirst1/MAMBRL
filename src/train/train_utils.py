@@ -30,7 +30,7 @@ def mas_dict2tensor(agent_dict) -> torch.Tensor:
 
 
 def random_action(
-        agent_id: str, observation: torch.Tensor
+    agent_id: str, observation: torch.Tensor
 ) -> Tuple[int, int, torch.Tensor]:
     """
     Returns a random action for the trajectory collection
@@ -52,12 +52,12 @@ def random_action(
 
 
 def train_epoch_PPO(
-        rollout: RolloutStorage,
-        ac_dict: Dict[str, nn.Module],
-        env: RawEnv,
-        optimizer: torch.optim.Optimizer,
-        optim_params: List[torch.nn.Parameter],
-        params: Params,
+    rollout: RolloutStorage,
+    ac_dict: Dict[str, nn.Module],
+    env: RawEnv,
+    optimizer: torch.optim.Optimizer,
+    optim_params: List[torch.nn.Parameter],
+    params: Params,
 ):
     """
     Performs a PPO update on a full rollout storage (aka one epoch).
@@ -142,21 +142,21 @@ def train_epoch_PPO(
 
         surr1 = ratio * adv_targ_mini_batch
         surr2 = (
-                torch.clamp(
-                    ratio,
-                    1.0 - params.ppo_clip_param,
-                    1.0 + params.ppo_clip_param,
-                )
-                * adv_targ_mini_batch
+            torch.clamp(
+                ratio,
+                1.0 - params.ppo_clip_param,
+                1.0 + params.ppo_clip_param,
+            )
+            * adv_targ_mini_batch
         )
 
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-                value_loss * params.value_loss_coef
-                + action_loss
-                - entropys * params.entropy_coef
+            value_loss * params.value_loss_coef
+            + action_loss
+            - entropys * params.entropy_coef
         )
         loss = loss.mean()
         loss.backward()
@@ -169,11 +169,11 @@ def train_epoch_PPO(
 
 # todo: this can be done in parallel
 def collect_trajectories(
-        params: Params,
-        env: RawEnv,
-        rollout: RolloutStorage,
-        obs_shape,
-        policy_fn=random_action,
+    params: Params,
+    env: RawEnv,
+    rollout: RolloutStorage,
+    obs_shape,
+    policy_fn=random_action,
 ):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
