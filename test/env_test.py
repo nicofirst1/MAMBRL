@@ -22,7 +22,8 @@ from src.env import get_env
 params = Params()
 # Get configs
 env_config = get_env_configs(params)
-env_config['mode'] = "human"
+env_config['visible'] = True
+env_config['obs_shape'] = 320
 env = get_env(env_config)
 obs = env.reset()
 count = 0
@@ -42,11 +43,13 @@ while count <= 1000:
 
         else:
             action_dict[agent] = random.randint(0, 4)
+            action_dict[agent] = 4
 
     obs, reward, done, info = env.step(action_dict)
 
     output = dict(
         done=done, reward=reward, info={k: v.__dict__ for k, v in info.items()}, obs_dim=obs.shape,
+        actions=action_dict,
     )
 
     print(f"step {count}:\n")
@@ -54,7 +57,7 @@ while count <= 1000:
 
     env.render()
 
-    time.sleep(0.4)
+    time.sleep(0.1)
 
     count += 1
 
