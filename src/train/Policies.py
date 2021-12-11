@@ -48,24 +48,38 @@ class ExplorationMAS(TrajCollectionPolicy):
         self.epsilon = 1
         self.decrease = 5e-5
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, float, torch.Tensor]:
+        """act method.
+
+        implementation of the epsilon greedy exploration function
+        Returns
+        -------
+        action: int
+            index of the action chosen
+        value: float
+            value of the state
+        log_action_prob: torch.Tensor
+            [1] log prob of the selected action
+        """
+        # action_logit [1, num_action] value_logit [1,1]
         action_logit, value_logit = self.ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
 
         if uniform(0, 1) < self.epsilon:
             action = randint(0, self.num_actions - 1)  # Explore action space
         else:
-            action = action_probs.multinomial(1).squeeze()
+            action = action_probs.max(1)[1]
 
-        value = int(value_logit)
+        value = float(value_logit)
         action = int(action)
 
-        log_action_prob = torch.log(action_probs).mean()
+        # log_action_prob = torch.log(action_probs).mean()
+        log_action_prob = torch.log(action_probs).squeeze()
 
         if self.epsilon > 0:
             self.epsilon -= self.decrease
 
-        return action, value, log_action_prob
+        return action, value, log_action_prob[action]
 
     def increase_temp(self, actions: torch.Tensor):
         var = actions.float().var()

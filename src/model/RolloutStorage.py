@@ -8,12 +8,13 @@ class RolloutStorage(object):
         self.num_steps = num_steps
         self.num_channels = state_shape[0]
         self.num_agents = num_agents
+        self.counter = 0
 
         self.states = torch.zeros(num_steps + 1, *state_shape)
         self.rewards = torch.zeros(num_steps, num_agents).long()
         self.masks = torch.ones(num_steps + 1, num_agents).long()
         self.actions = torch.zeros(num_steps, num_agents).long()
-        self.values = torch.zeros(num_steps + 1, num_agents).long()
+        self.values = torch.zeros(num_steps + 1, num_agents)
         self.returns = torch.zeros(num_steps, num_agents)
         self.gae = torch.zeros(num_steps+1, num_agents)
         self.action_log_probs = torch.zeros(num_steps, num_agents)
@@ -38,6 +39,18 @@ class RolloutStorage(object):
         self.masks[step].copy_(mask)
         self.action_log_probs[step].copy_(action_log_probs)
 
+    def update_counter(self, counter):
+        """update_counter method.
+
+        updates the counter indicating the index of the last element in the
+        rollout (this is useful in case the episodes end before the
+        params.horizon value)
+        Params
+        ------
+        counter: int
+        """
+        self.counter = counter
+
     def after_update(self):
         self.states[0].copy_(self.states[-1])
         self.masks[0].copy_(self.masks[-1])
@@ -59,6 +72,9 @@ class RolloutStorage(object):
             )
             self.gae[step] = delta + self.gamma * \
                 tau * self.masks[step] * self.gae[step+1]
+
+            # fix: advantage normalization, not sure if we should use it or not
+            # self.gae = (self.gae - self.gae.mean()) / (self.gae.std() + 1e-5)
             # Q-value function (Advantage + Value)
             self.returns[step] = self.gae[step] + self.values[step]
 

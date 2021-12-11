@@ -49,26 +49,6 @@ def train_epoch_PPO(
         infos: dict of loss values for logging
 
     """
-
-    # fixme: non ho capito questo cosa faccia
-    """
-        current_state = current_state.to(params.device).unsqueeze(dim=0)
-        for agent_id in env.agents:
-            _, next_value = ac_dict[agent_id](current_state)
-            values_dict[agent_id] = float(next_value)
-        next_value = mas_dict2tensor(values_dict)
-        # estimate advantages
-        rollout.compute_returns(next_value)
-        advantages = rollout.gae
-        # normalize advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
-
-   
-    """
-
-    rollout.compute_returns(rollout.values[-1])
-    rollout.to(params.device)
-
     # # get data generation that splits rollout in batches
     data_generator = rollout.recurrent_generator()
     infos = dict(
@@ -125,21 +105,21 @@ def train_epoch_PPO(
 
         surr1 = ratio * adv_targ_mini_batch
         surr2 = (
-                torch.clamp(
-                    ratio,
-                    1.0 - params.ppo_clip_param,
-                    1.0 + params.ppo_clip_param,
-                )
-                * adv_targ_mini_batch
+            torch.clamp(
+                ratio,
+                1.0 - params.ppo_clip_param,
+                1.0 + params.ppo_clip_param,
+            )
+            * adv_targ_mini_batch
         )
 
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-                value_loss * params.value_loss_coef
-                + action_loss
-                - entropys * params.entropy_coef
+            value_loss * params.value_loss_coef
+            + action_loss
+            - entropys * params.entropy_coef
         )
         loss = loss.mean()
         loss.backward()
@@ -163,21 +143,26 @@ def collect_trajectories(
         obs_shape,
         policy: Optional[TrajCollectionPolicy] = None,
 ):
-    """
-    Collect a number of samples from the environment based on the current model (in eval mode)
+    """collect_trajectories function.
 
+    Collect a number of samples from the environment based on the current model
+    (in eval mode)
     Args:
         params:
         env:
         rollout:
         obs_shape:
-        policy: Subclass of TrajCollectionPolicy, define how the action should be computed
+        policy: Subclass of TrajCollectionPolicy, define how the action should
+        be computed
 
     Returns:
 
     """
-    state_channel = int(obs_shape[0])
-
+    # Please Note: everything work until params.horizon is equal to the episode
+    # lenght (i.e. done is true only after params.horizon steps).
+    # otherwise we should use a list instead of a tensor with predefined
+    # dimension
+    counter = 0
     if policy is None:
         policy = RandomAction(params.num_actions, params.device)
 
@@ -191,13 +176,10 @@ def collect_trajectories(
         current_state = env.reset()
 
         # Insert first state
-        rollout.states[episode * params.horizon] = current_state.unsqueeze(dim=0)
+        rollout.states[counter].copy_(current_state)
 
-        ## Initialize Observation
-        observation = torch.zeros(obs_shape)
-        observation[-state_channel:, :, :] = current_state
         for step in range(params.horizon):
-            observation = observation.to(params.device).unsqueeze(dim=0)
+            current_state = current_state.unsqueeze(dim=0)
 
             # let every agent act
             for agent_id in env.agents:
@@ -208,25 +190,31 @@ def collect_trajectories(
                     continue
 
                 # call forward method
-                action, value, action_log_probs = policy.act(agent_id, observation)
+                action, value, action_log_probs = policy.act(
+                    agent_id, current_state)
 
                 # get action with softmax and multimodal (stochastic)
 
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
-                #fixme: why is action_log_probs treated as a scalar and not a tensor?
-                action_log_dict[agent_id] = (
-                    0e-10 if action_log_probs.isinf() else float(action_log_probs)
-                )
+                # fixme: why is action_log_probs treated as a scalar and not
+                # a tensor?
+                # because we only need one action_log_prob for the ppo (the
+                # one corresponding to the chosen action)
+                # this is also explained in the comments of the post:
+                # https://towardsdatascience.com/proximal-policy-optimization-tutorial-part-2-2-gae-and-ppo-loss-fe1b3c5549e8
+                # considering only the selected action_log_prob is equivalent
+                # to multiply with the vector y_true of the the true actions
+                # and then making the average
+                action_log_dict[agent_id] = 0e-10 if action_log_probs.isinf()\
+                    else float(action_log_probs)
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, infos = env.step(action_dict)
 
-            # if done for all agents end episode
-            if dones.pop("__all__"):
-                break
-
             # sort in agent orders and convert to list of int for tensor
+            masks = {agent_done: dones[agent_done]
+                     for agent_done in dones if agent_done != '__all__'}
             masks = 1 - mas_dict2tensor(dones)
             rewards = mas_dict2tensor(rewards)
             actions = mas_dict2tensor(action_dict)
@@ -236,17 +224,25 @@ def collect_trajectories(
             current_state = next_state.to(params.device)
 
             rollout.insert(
-                step=step + episode * params.horizon,
+                step=counter,
                 state=current_state,
                 action=actions,
                 values=values,
                 reward=rewards,
                 mask=masks,
-                action_log_probs=action_log_probs.detach().squeeze(dim=0),
+                action_log_probs=action_log_probs,
             )
+            counter += 1
+            # if done for all agents end episode
+            if dones.pop("__all__"):
+                break
 
-            # Update observation
-            observation = observation.squeeze(dim=0)
-            observation = torch.cat(
-                [observation[state_channel:, :, :], current_state], dim=0
-            )
+    current_state = current_state.to(
+        params.device).unsqueeze(dim=0)
+    for agent_id in env.agents:
+        _, next_value, _ = policy.act(
+            agent_id, current_state)
+        values_dict[agent_id] = float(next_value)
+    next_value = mas_dict2tensor(values_dict)
+    # estimate advantages
+    rollout.compute_returns(next_value)
