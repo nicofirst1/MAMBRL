@@ -21,7 +21,7 @@ class RawEnv(SimpleEnv):
             continuous_actions: bool,
             gray_scale=False,
             obs_shape=None,
-            mode="human",
+            visible=False,
     ):
         """
         This class has to manage the interaction between the agents in an environment.
@@ -52,8 +52,6 @@ class RawEnv(SimpleEnv):
         self.obs_shape = obs_shape
 
 
-        visible = True if mode == "human" else False
-        self.mode = mode
         self.viewer = rendering.Viewer(obs_shape, obs_shape, visible=visible)
         self.viewer.set_max_size(scenario_kwargs['max_size'])
 
