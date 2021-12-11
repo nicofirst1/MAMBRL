@@ -1,4 +1,4 @@
-from random import randint
+from random import randint, uniform
 from typing import Tuple
 
 import torch
