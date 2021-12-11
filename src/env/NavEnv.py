@@ -51,6 +51,7 @@ class RawEnv(SimpleEnv):
         self.agents_dict = {agent.name: agent for agent in world.agents}
         self.obs_shape = obs_shape
 
+
         visible = True if mode == "human" else False
         self.mode = mode
         self.viewer = rendering.Viewer(obs_shape, obs_shape, visible=visible)
@@ -74,7 +75,7 @@ class RawEnv(SimpleEnv):
 
         """
 
-        observation = self.render(mode=self.mode)
+        observation = self.render()
 
         if observation is not None:
 

@@ -1,9 +1,9 @@
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
-from pettingzoo.mpe._mpe_utils.core import Agent, World, Entity
-from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 
+from PettingZoo.pettingzoo.mpe._mpe_utils.core import Entity, World, Agent
+from PettingZoo.pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from .TimerLandmark import TimerLandmark
 
 
@@ -15,10 +15,20 @@ def is_collision(agent1, agent2):
 
 
 class Border(Entity):
-    start = []
-    end = []
-    color = []
-    linewidth = []
+
+    def __init__(self, start: Tuple[int, int], end: Tuple[int, int], color=(0, 1, 0), linewidth=2):
+        super(Border, self).__init__()
+        self.start = np.array(start)
+        self.end = np.array(end)
+        self.color = np.array(color)
+        self.linewidth = linewidth
+
+        p_pos = (
+            (start[0] + end[0]) / 2,
+            (start[1] + end[1]) / 2,
+        )
+
+        self.state.p_pos = np.array(p_pos)
 
 
 class BoundedWorld(World):
@@ -32,20 +42,31 @@ class BoundedWorld(World):
         self.max_size = max_size
         max_size -= 0.2
 
-        self.borders = [Border() for _ in range(4)]
+        b1 = Border((-max_size, -max_size), (max_size, -max_size))
+        b2 = Border((-max_size, -max_size), (-max_size, max_size))
+        b3 = Border((max_size, -max_size), (max_size, max_size))
+        b4 = Border((max_size, max_size), (-max_size, max_size))
 
-        self.borders[0].start = [-max_size, -max_size]
-        self.borders[0].end = [max_size, -max_size]
-        self.borders[1].start = [-max_size, -max_size]
-        self.borders[1].end = [-max_size, max_size]
-        self.borders[2].start = [max_size, -max_size]
-        self.borders[2].end = [max_size, max_size]
-        self.borders[3].start = [max_size, max_size]
-        self.borders[3].end = [-max_size, max_size]
+        self.borders = [b1, b2, b3, b4]
+        self._contact_margin = 0.1
 
-        for b in self.borders:
-            b.color = np.array([0, 1, 0])
-            b.linewidth = 2
+    @property
+    def entities(self):
+        return self.agents + self.landmarks + self.borders
+
+    @property
+    def contact_margin(self):
+        if len(self.entities) == 0:
+            return self._contact_margin
+        else:
+            min_size = [ent.size for ent in self.entities]
+            min_size = min(min_size)
+            return min_size*150
+
+    @contact_margin.setter
+    def contact_margin(self, value):
+
+        self._contact_margin = value
 
 
 class Scenario(BaseScenario):

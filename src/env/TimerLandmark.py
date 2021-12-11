@@ -1,6 +1,7 @@
 import matplotlib as mpl
 import numpy as np
-from pettingzoo.mpe._mpe_utils.core import Entity
+
+from PettingZoo.pettingzoo.mpe._mpe_utils.core import Entity
 
 
 def colorFader(

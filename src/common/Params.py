@@ -25,8 +25,8 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
-    minibatch = 16
-    epochs = 5000
+    minibatch = 128
+    epochs = 1000
 
     ### Optimizer
     lr = 3e-4
@@ -44,8 +44,8 @@ class Params:
 
     #### ENVIRONMENT ####
     agents = 1
-    landmarks = 1
-    horizon = 30
+    landmarks = 2
+    horizon = 64
     episodes = 3
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
