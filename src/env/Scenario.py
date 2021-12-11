@@ -52,7 +52,7 @@ class BoundedWorld(World):
 
     @property
     def entities(self):
-        return self.agents + self.landmarks + self.borders
+        return  self.landmarks + self.borders + self.agents
 
     @property
     def contact_margin(self):
