@@ -60,7 +60,7 @@ class WandbLogger(Callback):
         # what type of data are to be logged.
         self.opts = opts
 
-        wandb.init(project=project, id=run_id, **kwargs)
+        wandb.init(project=project, id=run_id, entity="mambrl", **kwargs)
         wandb.config.update(opts)
 
     @staticmethod
