@@ -96,7 +96,7 @@ class RolloutStorage(object):
             [minibatch_size, num_channels, width, height]
         """
         total_samples = self.rewards.size(0) - 1
-        #perm = torch.randperm(total_samples)
+        perm = torch.randperm(total_samples)
         minibatch_frames = self.size_minibatch
         done = False
 
@@ -115,8 +115,7 @@ class RolloutStorage(object):
                     done = True
                     continue
 
-               # ind = perm[start_ind + offset]
-                ind = start_ind + offset
+                ind = perm[start_ind + offset]
                 states_minibatch.append(self.states[ind].unsqueeze(0))
                 next_states_minibatch.append(self.states[ind+1].unsqueeze(0))
                 return_minibatch.append(self.returns[ind].unsqueeze(0))
