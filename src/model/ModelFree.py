@@ -149,6 +149,7 @@ class ModelFreeResnet(ModelFree):
         ])
 
         model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+        model = model.eval()
         model = torch.nn.Sequential(*(list(model.children())[:-1]))
         self.features = model
 

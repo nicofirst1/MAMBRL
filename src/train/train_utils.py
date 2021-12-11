@@ -153,7 +153,7 @@ def train_epoch_PPO(
         clip_grad_norm_(optim_params, params.max_grad_norm)
         optimizer.step()
 
-    return infos, states_mini_batch
+    return infos
 
 
 # todo: this can be done in parallel

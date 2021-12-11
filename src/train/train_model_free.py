@@ -79,7 +79,7 @@ if __name__ == "__main__":
             rollout, ac_dict, env, optimizer, optim_params, params
         )
 
-        infos['exploration_eps'] = [policy.epsilon]
+        infos['exploration_temp'] = [policy.epsilon]
 
         wandb_callback.on_batch_end(infos,  epoch, rollout)
         policy.evaluate_action(rollout.actions)
@@ -92,5 +92,5 @@ if __name__ == "__main__":
         agent = ac_dict[agent_id]
         torch.save(agent.state_dict(), f"ModelFree_agent_{agent_index}.pt")
 
-        writer.add_graph(agent, states_mini_batch[0].unsqueeze(dim=0))
+        #writer.add_graph(agent, states_mini_batch[0].unsqueeze(dim=0))
     writer.close()
