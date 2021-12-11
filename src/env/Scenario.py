@@ -143,7 +143,7 @@ class Scenario(BaseScenario):
             landmark.name = f"landmark_{i}"
             landmark.collide = False
             landmark.movable = False
-            landmark.size = 0.01
+            landmark.size = 1
             landmark.boundary = False
 
         self.landmarks = {landmark.name: landmark for landmark in world.landmarks}

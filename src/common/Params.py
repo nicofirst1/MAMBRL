@@ -44,7 +44,7 @@ class Params:
 
     #### ENVIRONMENT ####
     agents = 1
-    landmarks = 2
+    landmarks = 1
     horizon = 64
     episodes = 3
     env_name = "collab_nav"

@@ -53,8 +53,7 @@ class I2A(OnPolicy):
                 nn.ReLU(),
             )
 
-        self.critic = nn.Linear(256, 1)
-        self.actor = nn.Linear(256, num_actions)
+
 
     def forward(self, input):
         batch_size = input.size(0)

@@ -8,7 +8,7 @@ class OnPolicy(nn.Module):
     def __init__(self, num_actions, features_out=256):
         super(OnPolicy, self).__init__()
 
-
+        self._features_out=features_out
         self.critic = nn.Linear(features_out, 1)
         self.actor = nn.Linear(features_out, num_actions)
 

@@ -75,7 +75,7 @@ if __name__ == "__main__":
         # set model to train mode
         [model.train() for model in ac_dict.values()]
 
-        infos, states_mini_batch = train_epoch_PPO(
+        infos = train_epoch_PPO(
             rollout, ac_dict, env, optimizer, optim_params, params
         )
 

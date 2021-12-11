@@ -60,10 +60,12 @@ class ExplorationMAS(TrajCollectionPolicy):
         value = int(value_logit)
         action = int(action)
 
+        log_action_prob = torch.log(action_probs).mean()
+
         if self.epsilon > 0:
             self.epsilon -= self.decrease
 
-        return action, value, action_probs
+        return action, value, log_action_prob
 
     def increase_temp(self, actions: torch.Tensor):
         var = actions.float().var()
@@ -83,8 +85,9 @@ class MultimodalMAS(TrajCollectionPolicy):
         action_logit, value_logit = self.ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
         action = action_probs.multinomial(1).squeeze()
+        log_action_prob = torch.log(action_probs)
 
         value = int(value_logit)
         action = int(action)
 
-        return action, value, action_probs
+        return action, value, log_action_prob

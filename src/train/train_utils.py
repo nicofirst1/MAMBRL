@@ -33,7 +33,7 @@ def train_epoch_PPO(
         optimizer: torch.optim.Optimizer,
         optim_params: List[torch.nn.Parameter],
         params: Params,
-) -> Tuple[Dict[str, List[int]], torch.Tensor]:
+) -> Dict[str, List[int]]:
     """
     Performs a PPO update on a full rollout storage (aka one epoch).
     The update also estimate the loss and does the backpropagation
@@ -47,7 +47,6 @@ def train_epoch_PPO(
 
     Returns:
         infos: dict of loss values for logging
-        states_mini_batch: i dunno why this is here
 
     """
 
@@ -215,6 +214,7 @@ def collect_trajectories(
 
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
+                #fixme: why is action_log_probs treated as a scalar and not a tensor?
                 action_log_dict[agent_id] = (
                     0e-10 if action_log_probs.isinf() else float(action_log_probs)
                 )
