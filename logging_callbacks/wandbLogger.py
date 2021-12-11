@@ -4,8 +4,10 @@ from typing import Any, Dict
 import numpy as np
 import torch
 import wandb
+from torch import nn
 
 from logging_callbacks.callbacks import WandbLogger
+from src.model import RolloutStorage
 
 
 class EnvModelWandb(WandbLogger):
@@ -81,8 +83,8 @@ class PPOWandb(WandbLogger):
             self,
             train_log_step: int,
             val_log_step: int,
-            out_dir: str,
-            model_config,
+            models: Dict[str, nn.Module],
+            horizon: int,
             **kwargs,
     ):
         """
@@ -95,31 +97,32 @@ class PPOWandb(WandbLogger):
             **kwargs:
         """
 
-        # create wandb dir if not existing
-        if not os.path.isdir(out_dir):
-            os.mkdir(out_dir)
+        super(PPOWandb, self).__init__(**kwargs)
 
-        super(PPOWandb, self).__init__(dir=out_dir, config=model_config, **kwargs)
+        for v in models.values():
+            wandb.watch(v)
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
-        self.model_config = model_config
-        self.out_dir = out_dir
+        self.horizon=horizon
 
         self.epoch = 0
 
     def on_batch_end(
-            self, logs: Dict[str, Any], states: torch.Tensor, batch_id: int, is_training: bool = True
+            self, logs: Dict[str, Any],  batch_id: int, rollout:RolloutStorage,
     ):
-        flag = "training" if is_training else "validation"
 
-        logs = {f"{flag}_{k}": sum(v) / len(v) for k, v in logs.items()}
-        states = states.cpu().numpy().astype(np.uint8)
+        logs = {k: sum(v) / len(v) for k, v in logs.items()}
 
-        logs['epoch']=batch_id
+        logs['epoch'] = batch_id
 
         if batch_id % 5 == 0:
+            states = rollout.states[:self.horizon].cpu().numpy().astype(np.uint8)
+            actions = rollout.actions[:self.horizon].squeeze().cpu().numpy()
+            rewards = rollout.rewards[:self.horizon].squeeze().cpu().numpy()
             logs['behaviour'] = wandb.Video(states, fps=16, format="gif")
+            logs['actions'] = actions
+            logs['rewards'] = rewards
 
         self.log_to_wandb(logs, commit=True)
 

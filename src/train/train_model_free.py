@@ -59,10 +59,10 @@ if __name__ == "__main__":
         train_log_step=num_batches,
         val_log_step=num_batches,
         project="model_free",
-        model_config=params.__dict__,
-        out_dir=params.WANDB_DIR,
         opts={},
-        mode="disabled"   if params.debug else "online",
+        models=ac_dict,
+        horizon=params.horizon,
+        mode="disabled"  if params.debug else "online",
     )
 
     # init policy
@@ -81,7 +81,7 @@ if __name__ == "__main__":
 
         infos['exploration_eps'] = [policy_fn.epsilon]
 
-        wandb_callback.on_batch_end(infos, states_mini_batch, epoch)
+        wandb_callback.on_batch_end(infos,  epoch, rollout)
         rollout.after_update()
 
     writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "model_free_trained"))

@@ -16,7 +16,7 @@ def is_collision(agent1, agent2):
 
 class Border(Entity):
 
-    def __init__(self, start: Tuple[int, int], end: Tuple[int, int], color=(0, 1, 0), linewidth=2):
+    def __init__(self, start: Tuple[int, int], end: Tuple[int, int], color=(1, 0, 0), linewidth=2):
         super(Border, self).__init__()
         self.start = np.array(start)
         self.end = np.array(end)

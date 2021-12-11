@@ -1,57 +1,20 @@
 import argparse
-import json
 import os
-import pathlib
-import re
-import sys
-from typing import Any, Dict, NamedTuple, Optional, Union
+from typing import Any, Dict, Optional, Union
 
-import torch
 import wandb
 
-
-class Callback:
-    def on_train_begin(self):  # noqa: F821
-        pass
-
-    def on_train_end(self):
-        pass
-
-    def on_early_stopping(
-        self,
-        train_loss: float,
-        train_logs: Dict[str, Any],
-        epoch: int,
-        test_loss: float = None,
-        test_logs: Dict[str, Any] = None,
-    ):
-        pass
-
-    def on_validation_begin(self, epoch: int):
-        pass
-
-    def on_validation_end(self, loss: float, logs: Dict[str, Any], epoch: int):
-        pass
-
-    def on_epoch_begin(self, epoch: int):
-        pass
-
-    def on_epoch_end(self, loss: float, logs: Dict[str, Any], epoch: int):
-        pass
-
-    def on_batch_end(
-        self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
-    ):
-        pass
+from src.common import Params
 
 
-class WandbLogger(Callback):
+
+class WandbLogger():
     def __init__(
-        self,
-        opts: Union[argparse.ArgumentParser, Dict, str, None] = None,
-        project: Optional[str] = None,
-        run_id: Optional[str] = None,
-        **kwargs,
+            self,
+            opts: Union[argparse.ArgumentParser, Dict, str, None] = None,
+            project: Optional[str] = None,
+            run_id: Optional[str] = None,
+            **kwargs,
     ):
         # This callback logs to wandb the interaction as they are stored in the leader process.
         # When interactions are not aggregated in a multigpu run, each process will store
@@ -60,10 +23,15 @@ class WandbLogger(Callback):
         # what type of data are to be logged.
         self.opts = opts
 
-        wandb.init(project=project, id=run_id, entity="mambrl", **kwargs)
+        params = Params()
+        out_dir = params.WANDB_DIR
+        # create wandb dir if not existing
+        if not os.path.isdir(out_dir):
+            os.mkdir(out_dir)
+
+        wandb.init(project=project, id=run_id, dir=out_dir, entity="mambrl", config=params.__dict__, **kwargs)
         wandb.config.update(opts)
 
     @staticmethod
     def log_to_wandb(metrics: Dict[str, Any], commit: bool = False, **kwargs):
         wandb.log(metrics, commit=commit, **kwargs)
-
