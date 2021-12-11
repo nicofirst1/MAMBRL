@@ -1,16 +1,13 @@
-import sys
-from random import randint
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
-import cv2
 import torch
-from rich.progress import track
 from torch import nn
 from torch.nn.utils import clip_grad_norm_
 
 from src.common import Params
 from src.env.NavEnv import RawEnv
 from src.model import RolloutStorage
+from src.train.Policies import TrajCollectionPolicy, RandomAction
 
 
 def mas_dict2tensor(agent_dict) -> torch.Tensor:
@@ -29,35 +26,13 @@ def mas_dict2tensor(agent_dict) -> torch.Tensor:
     return torch.as_tensor(tensor)
 
 
-def random_action(
-    agent_id: str, observation: torch.Tensor
-) -> Tuple[int, int, torch.Tensor]:
-    """
-    Returns a random action for the trajectory collection
-    Args:
-        agent_id:
-        observation:
-
-    Returns:
-
-    """
-    params = Params()
-
-    action = randint(0, params.num_actions - 1)
-    value = 0
-    action_log = torch.ones((1, params.num_actions))
-    action_log = action_log.to(params.device)
-
-    return action, value, action_log
-
-
 def train_epoch_PPO(
-    rollout: RolloutStorage,
-    ac_dict: Dict[str, nn.Module],
-    env: RawEnv,
-    optimizer: torch.optim.Optimizer,
-    optim_params: List[torch.nn.Parameter],
-    params: Params,
+        rollout: RolloutStorage,
+        ac_dict: Dict[str, nn.Module],
+        env: RawEnv,
+        optimizer: torch.optim.Optimizer,
+        optim_params: List[torch.nn.Parameter],
+        params: Params,
 ) -> Tuple[Dict[str, List[int]], torch.Tensor]:
     """
     Performs a PPO update on a full rollout storage (aka one epoch).
@@ -97,13 +72,12 @@ def train_epoch_PPO(
 
     # # get data generation that splits rollout in batches
     data_generator = rollout.recurrent_generator()
-    infos=dict(
+    infos = dict(
         value_loss=[],
         action_loss=[],
-        entropys =[],
+        entropys=[],
         loss=[]
     )
-
 
     # MINI BATCHES ARE NECESSARY FOR PPO (SINCE IT USES OLD AND NEW POLICIES)
     for sample in data_generator:
@@ -152,21 +126,21 @@ def train_epoch_PPO(
 
         surr1 = ratio * adv_targ_mini_batch
         surr2 = (
-            torch.clamp(
-                ratio,
-                1.0 - params.ppo_clip_param,
-                1.0 + params.ppo_clip_param,
-            )
-            * adv_targ_mini_batch
+                torch.clamp(
+                    ratio,
+                    1.0 - params.ppo_clip_param,
+                    1.0 + params.ppo_clip_param,
+                )
+                * adv_targ_mini_batch
         )
 
         action_loss = -torch.min(surr1, surr2).mean()
 
         optimizer.zero_grad()
         loss = (
-            value_loss * params.value_loss_coef
-            + action_loss
-            - entropys * params.entropy_coef
+                value_loss * params.value_loss_coef
+                + action_loss
+                - entropys * params.entropy_coef
         )
         loss = loss.mean()
         loss.backward()
@@ -184,11 +158,11 @@ def train_epoch_PPO(
 
 # todo: this can be done in parallel
 def collect_trajectories(
-    params: Params,
-    env: RawEnv,
-    rollout: RolloutStorage,
-    obs_shape,
-    policy_fn=random_action,
+        params: Params,
+        env: RawEnv,
+        rollout: RolloutStorage,
+        obs_shape,
+        policy_fn: Optional[TrajCollectionPolicy] = None,
 ):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
@@ -198,13 +172,15 @@ def collect_trajectories(
         env:
         rollout:
         obs_shape:
-        policy_fn: should be a function that gets an agent_id and an observation and returns
-                    action : int, value: int , action_log_probs : torch.Tensor
+        policy_fn: Subclass of TrajCollectionPolicy, define how the action should be computed
 
     Returns:
 
     """
     state_channel = int(obs_shape[0])
+
+    if policy_fn is None:
+        policy_fn = RandomAction(params.num_actions, params.device)
 
     for episode in range(params.episodes):
         # init dicts and reset env
@@ -233,7 +209,7 @@ def collect_trajectories(
                     continue
 
                 # call forward method
-                action, value, action_probs = policy_fn(agent_id, observation)
+                action, value, action_probs = policy_fn.act(agent_id, observation)
 
                 # get action with softmax and multimodal (stochastic)
 
@@ -241,7 +217,7 @@ def collect_trajectories(
                 values_dict[agent_id] = value
                 action_log_probs = torch.log(action_probs).squeeze(0)[int(action)]
                 action_log_dict[agent_id] = (
-                    0e-10 if float(action_log_probs) == 0.0 else float(action_log_probs)
+                    0e-10 if action_log_probs.isinf() else float(action_log_probs)
                 )
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}

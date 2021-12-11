@@ -12,7 +12,6 @@ from src.train.train_utils import collect_trajectories
 
 
 def train_env_model(rollouts, env_model, params, optimizer, callback_fn):
-
     # get data generation that splits rollout in batches
     data_generator = rollouts.recurrent_generator()
 

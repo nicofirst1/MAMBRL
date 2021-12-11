@@ -3,42 +3,21 @@
 train the model free network
 """
 import os
-import sys
 from itertools import chain
-from typing import Tuple
 
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
 from rich.progress import track
-from torch.nn.utils import clip_grad_norm_
 from torch.utils.tensorboard import SummaryWriter
 
 from logging_callbacks import PPOWandb
 from src.common.Params import Params
-from src.common.utils import get_env_configs, order_state
+from src.common.utils import get_env_configs
 from src.env.NavEnv import get_env
 from src.model.ModelFree import ModelFree
 from src.model.RolloutStorage import RolloutStorage
-from src.train.train_utils import (collect_trajectories, mas_dict2tensor,
-                                   train_epoch_PPO)
-
-
-def traj_collection_policy(ac_dict):
-    def inner(
-            agent_id: str, observation: torch.Tensor
-    ) -> Tuple[int, int, torch.Tensor]:
-        action_logit, value_logit = ac_dict[agent_id](observation)
-        action_probs = F.softmax(action_logit, dim=1)
-        action = action_probs.multinomial(1).squeeze()
-
-        value = int(value_logit)
-        action = int(action)
-
-        return action, value, action_probs
-
-    return inner
-
+from src.train.Policies import ExplorationMAS
+from src.train.train_utils import (collect_trajectories, train_epoch_PPO)
 
 if __name__ == "__main__":
 
@@ -83,24 +62,24 @@ if __name__ == "__main__":
         model_config=params.__dict__,
         out_dir=params.WANDB_DIR,
         opts={},
-        mode="disabled" if params.debug else "online",
+        mode="disabled"   if params.debug else "online",
     )
+
+    # init policy
+    policy_fn = ExplorationMAS(ac_dict, params.num_actions)
 
     for epoch in track(range(params.epochs)):
         [model.eval() for model in ac_dict.values()]
 
-        collect_trajectories(
-            params,
-            env,
-            rollout,
-            obs_shape,
-        )
+        collect_trajectories(params, env, rollout, obs_shape, policy_fn=policy_fn)
         # set model to train mode
         [model.train() for model in ac_dict.values()]
 
         infos, states_mini_batch = train_epoch_PPO(
             rollout, ac_dict, env, optimizer, optim_params, params
         )
+
+        infos['exploration_eps'] = [policy_fn.epsilon]
 
         wandb_callback.on_batch_end(infos, states_mini_batch, epoch)
         rollout.after_update()
@@ -109,7 +88,7 @@ if __name__ == "__main__":
     for agent_id in env.agents:
         agent_index = env.agents.index(agent_id)
         agent = ac_dict[agent_id]
-        torch.save(agent.state_dict(), "ModelFree_agent_" + str(agent_index))
+        torch.save(agent.state_dict(), f"ModelFree_agent_{agent_index}.pt")
 
         writer.add_graph(agent, states_mini_batch[0].unsqueeze(dim=0))
     writer.close()

@@ -1,16 +1,13 @@
 from itertools import chain
-from typing import Tuple
 
-import torch
-import torch.nn.functional as F
 from rich.progress import track
 from torch import optim
-from torch.nn.utils import clip_grad_norm_
 
 from src.common import Params, get_env_configs
 from src.env import get_env
 from src.model import (I2A, EnvModel, ImaginationCore, ModelFree,
                        RolloutStorage, target_to_pix)
+from src.train.Policies import MultimodalMAS
 from src.train.train_utils import collect_trajectories, train_epoch_PPO
 
 
@@ -95,7 +92,7 @@ def train(params: Params):
     )
     rollout.to(params.device)
 
-    policy_fn = traj_collection_policy(ac_dict)
+    policy_fn = MultimodalMAS(ac_dict)
 
     for ep in track(range(params.epochs), description=f"Epochs"):
         # fill rollout storage with trajcetories
@@ -103,22 +100,6 @@ def train(params: Params):
         # train for all the trajectories collected so far
         infos, _ = train_epoch_PPO(rollout, ac_dict, env, optimizer, optim_params, params)
         rollout.after_update()
-
-
-def traj_collection_policy(ac_dict):
-    def inner(
-            agent_id: str, observation: torch.Tensor
-    ) -> Tuple[int, int, torch.Tensor]:
-        action_logit, value_logit = ac_dict[agent_id](observation)
-        action_probs = F.softmax(action_logit, dim=1)
-        action = action_probs.multinomial(1).squeeze()
-
-        value = int(value_logit)
-        action = int(action)
-
-        return action, value, action_probs
-
-    return inner
 
 
 if __name__ == "__main__":

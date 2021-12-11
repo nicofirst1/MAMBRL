@@ -116,8 +116,10 @@ class PPOWandb(WandbLogger):
         logs = {f"{flag}_{k}": sum(v) / len(v) for k, v in logs.items()}
         states = states.cpu().numpy().astype(np.uint8)
 
+        logs['epoch']=batch_id
+
         if batch_id % 5 == 0:
-            logs['behaviour'] = wandb.Video(states, fps=4, format="gif")
+            logs['behaviour'] = wandb.Video(states, fps=16, format="gif")
 
         self.log_to_wandb(logs, commit=True)
 
