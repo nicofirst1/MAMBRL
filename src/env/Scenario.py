@@ -17,7 +17,8 @@ def is_collision(agent1, agent2):
 class Border(Entity):
     start = []
     end = []
-    attrs = {}
+    color = []
+    linewidth = []
 
 
 class BoundedWorld(World):
@@ -43,8 +44,8 @@ class BoundedWorld(World):
         self.borders[3].end = [-max_size, max_size]
 
         for b in self.borders:
-            b.attrs["color"] = np.array([0, 0, 0])
-            b.attrs["linewidth"] = 2
+            b.color = np.array([0, 1, 0])
+            b.linewidth = 2
 
 
 class Scenario(BaseScenario):
@@ -107,7 +108,7 @@ class Scenario(BaseScenario):
             agent.name = f"agent_{i}"
             agent.collide = True
             agent.silent = True
-            agent.size = 0.05
+            agent.size = 0.001
             agent.accel = 4.0
             agent.max_speed = 1.3
             agent.color = np.array([0, 0, 1])
@@ -121,7 +122,7 @@ class Scenario(BaseScenario):
             landmark.name = f"landmark_{i}"
             landmark.collide = False
             landmark.movable = False
-            landmark.size = 0.1
+            landmark.size = 0.01
             landmark.boundary = False
 
         self.landmarks = {landmark.name: landmark for landmark in world.landmarks}
