@@ -162,7 +162,7 @@ def collect_trajectories(
         env: RawEnv,
         rollout: RolloutStorage,
         obs_shape,
-        policy_fn: Optional[TrajCollectionPolicy] = None,
+        policy: Optional[TrajCollectionPolicy] = None,
 ):
     """
     Collect a number of samples from the environment based on the current model (in eval mode)
@@ -172,15 +172,15 @@ def collect_trajectories(
         env:
         rollout:
         obs_shape:
-        policy_fn: Subclass of TrajCollectionPolicy, define how the action should be computed
+        policy: Subclass of TrajCollectionPolicy, define how the action should be computed
 
     Returns:
 
     """
     state_channel = int(obs_shape[0])
 
-    if policy_fn is None:
-        policy_fn = RandomAction(params.num_actions, params.device)
+    if policy is None:
+        policy = RandomAction(params.num_actions, params.device)
 
     for episode in range(params.episodes):
         # init dicts and reset env
@@ -209,7 +209,7 @@ def collect_trajectories(
                     continue
 
                 # call forward method
-                action, value, action_probs = policy_fn.act(agent_id, observation)
+                action, value, action_probs = policy.act(agent_id, observation)
 
                 # get action with softmax and multimodal (stochastic)
 

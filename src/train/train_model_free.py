@@ -14,7 +14,7 @@ from logging_callbacks import PPOWandb
 from src.common.Params import Params
 from src.common.utils import get_env_configs
 from src.env.NavEnv import get_env
-from src.model.ModelFree import ModelFree
+from src.model.ModelFree import ModelFree, ModelFreeResnet
 from src.model.RolloutStorage import RolloutStorage
 from src.train.Policies import ExplorationMAS
 from src.train.train_utils import (collect_trajectories, train_epoch_PPO)
@@ -33,7 +33,7 @@ if __name__ == "__main__":
     # channels are inverted
     num_actions = env.action_spaces["agent_0"].n
 
-    ac_dict = {agent_id: ModelFree(obs_shape, num_actions).to(params.device) for agent_id in env.agents}
+    ac_dict = {agent_id: ModelFreeResnet(in_shape=obs_shape, num_actions=num_actions).to(params.device) for agent_id in env.agents}
     optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
     optim_params = chain.from_iterable(optim_params)
     optim_params = list(optim_params)
@@ -62,16 +62,16 @@ if __name__ == "__main__":
         opts={},
         models=ac_dict,
         horizon=params.horizon,
-        mode="disabled"  if params.debug else "online",
+        mode="disabled" if params.debug else "online",
     )
 
     # init policy
-    policy_fn = ExplorationMAS(ac_dict, params.num_actions)
+    policy = ExplorationMAS(ac_dict, params.num_actions)
 
     for epoch in track(range(params.epochs)):
         [model.eval() for model in ac_dict.values()]
 
-        collect_trajectories(params, env, rollout, obs_shape, policy_fn=policy_fn)
+        collect_trajectories(params, env, rollout, obs_shape, policy=policy)
         # set model to train mode
         [model.train() for model in ac_dict.values()]
 
@@ -79,10 +79,12 @@ if __name__ == "__main__":
             rollout, ac_dict, env, optimizer, optim_params, params
         )
 
-        infos['exploration_eps'] = [policy_fn.epsilon]
+        infos['exploration_eps'] = [policy.epsilon]
 
         wandb_callback.on_batch_end(infos,  epoch, rollout)
+        policy.evaluate_action(rollout.actions)
         rollout.after_update()
+
 
     writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "model_free_trained"))
     for agent_id in env.agents:

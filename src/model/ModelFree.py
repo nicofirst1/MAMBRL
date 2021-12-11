@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.transforms import transforms
 
 
 class OnPolicy(nn.Module):
@@ -61,10 +62,10 @@ class OnPolicy(nn.Module):
 
         log_probs = F.log_softmax(action_logit, dim=1)
 
-        if action_indx.ndim==1:
-            action_indx= action_indx.unsqueeze(1)
+        if action_indx.ndim == 1:
+            action_indx = action_indx.unsqueeze(1)
 
-        action_log_prob = log_probs.gather(1, action_indx )
+        action_log_prob = log_probs.gather(1, action_indx)
         entropy = -(action_probs * log_probs).sum(1).mean()
 
         return action_logit, action_log_prob, action_probs, value, entropy
@@ -92,8 +93,8 @@ class ModelFree(OnPolicy):
 
         features_out = (
             self.features(torch.zeros(1, num_channels, *self.in_shape[1:]))
-            .view(1, -1)
-            .size(1)
+                .view(1, -1)
+                .size(1)
         )
 
         self.fc = nn.Sequential(
@@ -103,7 +104,6 @@ class ModelFree(OnPolicy):
 
         self.critic = nn.Linear(256, 1)
         self.actor = nn.Linear(256, num_actions)
-
 
     def to(self, device):
         self.features = self.features.to(device)
@@ -136,3 +136,27 @@ class ModelFree(OnPolicy):
         logit = self.actor(x)
         value = self.critic(x)
         return logit, value
+
+
+class ModelFreeResnet(ModelFree):
+    def __init__(self, **kwargs):
+        super(ModelFreeResnet, self).__init__(**kwargs)
+
+        self.preprocess = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+        model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+        model = torch.nn.Sequential(*(list(model.children())[:-1]))
+        self.features = model
+
+        self.fc = nn.Sequential(
+            nn.Linear(512, 256),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        x = self.preprocess(x)
+        return super(ModelFreeResnet, self).forward(x)

@@ -46,7 +46,7 @@ class ExplorationMAS(TrajCollectionPolicy):
         self.num_actions = num_actions
 
         self.epsilon = 1
-        self.decrease = 1e-5
+        self.decrease = 5e-5
 
     def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
         action_logit, value_logit = self.ac_dict[agent_id](observation)
@@ -60,10 +60,18 @@ class ExplorationMAS(TrajCollectionPolicy):
         value = int(value_logit)
         action = int(action)
 
-        if self.epsilon>0:
+        if self.epsilon > 0:
             self.epsilon -= self.decrease
 
         return action, value, action_probs
+
+    def evaluate_action(self, actions: torch.Tensor):
+        var = actions.float().var()
+        mean = actions.float().mean()
+
+        if not mean - var < self.num_actions / 2 < mean + var:
+            if self.epsilon < 1:
+                self.epsilon += 0.2
 
 
 class MultimodalMAS(TrajCollectionPolicy):

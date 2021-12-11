@@ -96,7 +96,7 @@ def train(params: Params):
 
     for ep in track(range(params.epochs), description=f"Epochs"):
         # fill rollout storage with trajcetories
-        collect_trajectories(params, env, rollout, obs_shape, policy_fn=policy_fn)
+        collect_trajectories(params, env, rollout, obs_shape, policy=policy_fn)
         # train for all the trajectories collected so far
         infos, _ = train_epoch_PPO(rollout, ac_dict, env, optimizer, optim_params, params)
         rollout.after_update()
