@@ -209,13 +209,12 @@ def collect_trajectories(
                     continue
 
                 # call forward method
-                action, value, action_probs = policy.act(agent_id, observation)
+                action, value, action_log_probs = policy.act(agent_id, observation)
 
                 # get action with softmax and multimodal (stochastic)
 
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
-                action_log_probs = torch.log(action_probs).squeeze(0)[int(action)]
                 action_log_dict[agent_id] = (
                     0e-10 if action_log_probs.isinf() else float(action_log_probs)
                 )

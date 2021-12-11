@@ -5,10 +5,22 @@ from torchvision.transforms import transforms
 
 
 class OnPolicy(nn.Module):
-    def __init__(self):
+    def __init__(self, num_actions, features_out=256):
         super(OnPolicy, self).__init__()
 
-    def forward(self, x):
+
+        self.critic = nn.Linear(features_out, 1)
+        self.actor = nn.Linear(features_out, num_actions)
+
+    def forward(self, input) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Perform a forward pass extracting the actor features and returning the values
+        :param input:
+        :return:
+            action_logits: a torch tensor of size [batch_size, num_actions]
+            values: the value from the value layer
+
+        """
         raise NotImplementedError
 
     def act(self, x, deterministic=True):
@@ -79,7 +91,7 @@ class ModelFree(OnPolicy):
     """
 
     def __init__(self, in_shape, num_actions):
-        super(ModelFree, self).__init__()
+        super(ModelFree, self).__init__(num_actions)
 
         self.in_shape = in_shape
         num_channels = in_shape[0]
@@ -91,14 +103,14 @@ class ModelFree(OnPolicy):
             nn.ReLU(),
         )
 
-        features_out = (
+        fc_in = (
             self.features(torch.zeros(1, num_channels, *self.in_shape[1:]))
                 .view(1, -1)
                 .size(1)
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(features_out, 256),
+            nn.Linear(fc_in, self._features_out),
             nn.ReLU(),
         )
 
@@ -113,13 +125,13 @@ class ModelFree(OnPolicy):
 
         return self
 
-    def forward(self, x):
+    def forward(self, input):
         """forward method.
 
         Return the logit and the values of the ModelFree
         Parameters
         ----------
-        x : torch.Tensor
+        input : torch.Tensor
             [batch_size, num_channels, width, height]
 
         Returns
@@ -130,12 +142,12 @@ class ModelFree(OnPolicy):
             [batch_size, value]
 
         """
-        x = self.features(x)
+        x = self.features(input)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-        logit = self.actor(x)
+        action_logits = self.actor(x)
         value = self.critic(x)
-        return logit, value
+        return action_logits, value
 
 
 class ModelFreeResnet(ModelFree):

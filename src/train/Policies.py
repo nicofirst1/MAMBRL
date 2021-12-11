@@ -1,4 +1,4 @@
-from random import randint, uniform
+from random import randint
 from typing import Tuple
 
 import torch
@@ -18,7 +18,7 @@ class TrajCollectionPolicy:
         :return:
             action : an integer representing a discrete action
             value : the value associated with the action
-            action_probs : a tensor of dim [batch size, action dim] having the softmax of the action logits
+            action_log_probs : a tensor of dim [batch size, action dim] having the log_softmax of the action logits
 
         """
         raise NotImplementedError
@@ -65,7 +65,7 @@ class ExplorationMAS(TrajCollectionPolicy):
 
         return action, value, action_probs
 
-    def evaluate_action(self, actions: torch.Tensor):
+    def increase_temp(self, actions: torch.Tensor):
         var = actions.float().var()
         mean = actions.float().mean()
 

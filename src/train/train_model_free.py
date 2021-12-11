@@ -82,7 +82,7 @@ if __name__ == "__main__":
         infos['exploration_temp'] = [policy.epsilon]
 
         wandb_callback.on_batch_end(infos,  epoch, rollout)
-        policy.evaluate_action(rollout.actions)
+        policy.increase_temp(rollout.actions)
         rollout.after_update()
 
 
