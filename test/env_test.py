@@ -23,38 +23,46 @@ params = Params()
 # Get configs
 env_config = get_env_configs(params)
 env = get_env(env_config)
-obs = env.reset()
-count = 0
+
+horizon=10
+episodes=3
 action_dict = {}
 done = {}
-done = {_: False for _ in env.agents}
-done["__all__"] = False
 
-while count <= 1000:
-    if done["__all__"]:
-        print("GAME OVER!")
-        break
 
-    for agent in env.agents:
-        if done[agent]:
-            action_dict[agent] = None
+for ep in range(episodes):
+    obs = env.reset()
+    done = {_: False for _ in env.agents}
+    done["__all__"] = False
 
-        else:
-            action_dict[agent] = random.randint(0, 4)
+    for step in range(horizon):
 
-    obs, reward, done, info = env.step(action_dict)
+        if done["__all__"]:
+            print("GAME OVER!")
+            break
 
-    output = dict(
-        done=done, reward=reward, info={k: v.__dict__ for k, v in info.items()}, obs_dim=obs.shape,
-    )
+        for agent in env.agents:
+            if done[agent]:
+                action_dict[agent] = None
 
-    print(f"step {count}:\n")
-    print(output)
+            else:
+                action_dict[agent] = random.randint(0, 4)
+                action_dict[agent] = 4
 
-    env.render()
+        obs, reward, done, info = env.step(action_dict)
 
-    time.sleep(0.4)
+        output = dict(
+            done=done, reward=reward, info={k: v.__dict__ for k, v in info.items()}, obs_dim=obs.shape,
+            actions=action_dict,
+        )
 
-    count += 1
+        print(f"step {step}:\n")
+        print(output)
+
+        env.render()
+
+        time.sleep(0.1)
+
+    print(f"End of episode {ep}\n\n\n")
 
 env.close()

@@ -6,6 +6,11 @@
 - make one PPO function []
 
 
+#### Nico
+- agent on top of landmark [X]
+- agent moves in the same directions [X]
+- positive reward []
+
 
 ## TABLE
 

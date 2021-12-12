@@ -16,12 +16,13 @@ def is_collision(agent1, agent2):
 
 class Border(Entity):
 
-    def __init__(self, start: Tuple[int, int], end: Tuple[int, int], color=(1, 0, 0), linewidth=2):
+    def __init__(self, start: Tuple[int, int], end: Tuple[int, int], color=(1, 0, 0), linewidth=1):
         super(Border, self).__init__()
         self.start = np.array(start)
         self.end = np.array(end)
         self.color = np.array(color)
         self.linewidth = linewidth
+
 
         p_pos = (
             (start[0] + end[0]) / 2,
@@ -48,25 +49,25 @@ class BoundedWorld(World):
         b4 = Border((max_size, max_size), (-max_size, max_size))
 
         self.borders = [b1, b2, b3, b4]
-        self._contact_margin = 0.1
+        self.contact_margin = 0.1
 
     @property
     def entities(self):
-        return self.agents + self.landmarks + self.borders
+        return self.landmarks + self.borders+ self.agents
 
-    @property
-    def contact_margin(self):
-        if len(self.entities) == 0:
-            return self._contact_margin
-        else:
-            min_size = [ent.size for ent in self.entities]
-            min_size = min(min_size)
-            return min_size*150
-
-    @contact_margin.setter
-    def contact_margin(self, value):
-
-        self._contact_margin = value
+    # @property
+    # def contact_margin(self):
+    #     if len(self.entities) == 0:
+    #         return self._contact_margin
+    #     else:
+    #         min_size = [ent.size for ent in self.entities]
+    #         min_size = min(min_size)
+    #         return min_size*100
+    #
+    # @contact_margin.setter
+    # def contact_margin(self, value):
+    #
+    #     self._contact_margin = value
 
 
 class Scenario(BaseScenario):
@@ -129,7 +130,7 @@ class Scenario(BaseScenario):
             agent.name = f"agent_{i}"
             agent.collide = True
             agent.silent = True
-            agent.size = 0.001
+            agent.size = 0.1
             agent.accel = 4.0
             agent.max_speed = 1.3
             agent.color = np.array([0, 0, 1])
@@ -151,6 +152,9 @@ class Scenario(BaseScenario):
         return world
 
     def reset_world(self, world, np_random):
+
+        self.registered_collisions = {agent.name: [] for agent in world.agents}
+
         # set random initial states
         for agent in world.agents:
             agent.color = np.array([0, 0, 1])

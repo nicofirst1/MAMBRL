@@ -61,6 +61,11 @@ class RawEnv(SimpleEnv):
     def reset(self):
         super(RawEnv, self).reset()
 
+        self.scenario.reset_world(self.world, self.np_random)
+
+        for lndmrk_id in self.scenario.landmarks.values():
+            lndmrk_id.reset_counter()
+
         return self.observe()
 
     def observe(self, agent="") -> torch.Tensor:
