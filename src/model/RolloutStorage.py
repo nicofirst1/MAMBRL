@@ -8,7 +8,8 @@ class RolloutStorage(object):
         self.num_steps = num_steps
         self.num_channels = state_shape[0]
         self.num_agents = num_agents
-        self.counter = 0
+        self.gamma = gamma
+        self.size_minibatch = size_minibatch
 
         self.states = torch.zeros(num_steps + 1, *state_shape)
         self.rewards = torch.zeros(num_steps, num_agents).long()
@@ -18,8 +19,6 @@ class RolloutStorage(object):
         self.returns = torch.zeros(num_steps, num_agents)
         self.gae = torch.zeros(num_steps+1, num_agents)
         self.action_log_probs = torch.zeros(num_steps, num_agents)
-        self.gamma = gamma
-        self.size_minibatch = size_minibatch
 
     def to(self, device):
         self.states = self.states.to(device)
@@ -38,18 +37,6 @@ class RolloutStorage(object):
         self.rewards[step].copy_(reward)
         self.masks[step].copy_(mask)
         self.action_log_probs[step].copy_(action_log_probs)
-
-    def update_counter(self, counter):
-        """update_counter method.
-
-        updates the counter indicating the index of the last element in the
-        rollout (this is useful in case the episodes end before the
-        params.horizon value)
-        Params
-        ------
-        counter: int
-        """
-        self.counter = counter
 
     def after_update(self):
         self.states[0].copy_(self.states[-1])

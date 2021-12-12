@@ -22,7 +22,6 @@ from src.env import get_env
 params = Params()
 # Get configs
 env_config = get_env_configs(params)
-env_config['mode'] = "human"
 env = get_env(env_config)
 obs = env.reset()
 count = 0

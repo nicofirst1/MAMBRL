@@ -12,7 +12,7 @@ from src.train.Policies import TrajCollectionPolicy, RandomAction
 
 def mas_dict2tensor(agent_dict) -> torch.Tensor:
     """
-    sort agent dict and convert to list of int of tensor
+    sort agent dict and convert to tensor of int
 
     Args:
         agent_dict:
@@ -57,6 +57,9 @@ def train_epoch_PPO(
         entropys=[],
         loss=[]
     )
+    num_minibatches = rollout.get_num_minibatches()
+    assert num_minibatches > 0, "Assertion Error: params.horizon*params.episodes " + \
+        "should be greater than params.minibatches"
 
     # MINI BATCHES ARE NECESSARY FOR PPO (SINCE IT USES OLD AND NEW POLICIES)
     for sample in data_generator:
@@ -174,9 +177,11 @@ def collect_trajectories(
         action_log_dict = {agent_id: False for agent_id in env.agents}
 
         current_state = env.reset()
-
+        masks = 1 - mas_dict2tensor(dones)
         # Insert first state
+        # here counter overwrite last state and mask of the last episode
         rollout.states[counter].copy_(current_state)
+        rollout.masks[counter].copy_(masks)
 
         for step in range(params.horizon):
             current_state = current_state.unsqueeze(dim=0)
@@ -215,7 +220,8 @@ def collect_trajectories(
             # sort in agent orders and convert to list of int for tensor
             masks = {agent_done: dones[agent_done]
                      for agent_done in dones if agent_done != '__all__'}
-            masks = 1 - mas_dict2tensor(dones)
+            # mask is 1 if the agent can act, 0 otherwise
+            masks = 1 - mas_dict2tensor(masks)
             rewards = mas_dict2tensor(rewards)
             actions = mas_dict2tensor(action_dict)
             values = mas_dict2tensor(values_dict)
@@ -237,12 +243,17 @@ def collect_trajectories(
             if dones.pop("__all__"):
                 break
 
-    current_state = current_state.to(
-        params.device).unsqueeze(dim=0)
-    for agent_id in env.agents:
-        _, next_value, _ = policy.act(
-            agent_id, current_state)
-        values_dict[agent_id] = float(next_value)
-    next_value = mas_dict2tensor(values_dict)
+        # Please Note: next step is needed to associate a value to the ending
+        # state to compute the GAE (when the trajectory is < len_episode)
+        # at the moment we don't need it since one trajectory is exactly
+        # one episode
+        # current_state = current_state.to(
+        #     params.device).unsqueeze(dim=0)
+        # for agent_id in env.agents:
+        #     _, next_value, _ = policy.act(
+        #         agent_id, current_state)
+        #     values_dict[agent_id] = float(next_value)
+        # next_value = mas_dict2tensor(values_dict)
+
     # estimate advantages
-    rollout.compute_returns(next_value)
+    rollout.compute_returns(0.0)

@@ -33,10 +33,10 @@ class RandomAction(TrajCollectionPolicy):
     def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
         action = randint(0, self.num_actions - 1)
         value = 0
-        action_probs = torch.ones((1, self.num_actions))
+        action_probs = torch.ones(self.num_actions)
         action_probs = action_probs.to(self.device)
 
-        return action, value, action_probs
+        return action, value, action_probs[action]
 
 
 class ExplorationMAS(TrajCollectionPolicy):

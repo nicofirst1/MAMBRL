@@ -30,7 +30,7 @@ if __name__ == "__main__":
     # =============================================================================
     env_config = get_env_configs(params)
     env = get_env(env_config)
-    obs_shape = env.reset().shape
+    obs_shape = params.obs_shape
     # channels are inverted
     num_actions = env.action_spaces["agent_0"].n
 
@@ -54,8 +54,8 @@ if __name__ == "__main__":
     rollout.to(params.device)
 
     # get logging step based on num of batches
-    num_batches = rollout.get_num_minibatches()
-    num_batches = int(num_batches * 0.01) + 1
+    num_minibatches = rollout.get_num_minibatches()
+    num_minibatches = int(num_minibatches * 0.01) + 1
 
     # wandb_callback = PPOWandb(
     #     train_log_step=num_batches,
@@ -85,6 +85,7 @@ if __name__ == "__main__":
 
        # wandb_callback.on_batch_end(infos,  epoch, rollout)
         policy.increase_temp(rollout.actions)
+        # reset the rollout by overwriting it (saves memory)
         rollout.after_update()
 
     writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "model_free_trained"))
