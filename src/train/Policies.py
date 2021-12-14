@@ -45,7 +45,7 @@ class ExplorationMAS(TrajCollectionPolicy):
         self.ac_dict = ac_dict
         self.num_actions = num_actions
 
-        self.epsilon = 1
+        self.epsilon = 0.9
         self.decrease = 5e-5
 
     def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, float, torch.Tensor]:
@@ -58,8 +58,8 @@ class ExplorationMAS(TrajCollectionPolicy):
             index of the action chosen
         value: float
             value of the state
-        log_action_prob: torch.Tensor
-            [1] log prob of the selected action
+        log_actions_prob: torch.Tensor
+            [self.num_actions] log actions prob
         """
         # action_logit [1, num_action] value_logit [1,1]
         action_logit, value_logit = self.ac_dict[agent_id](observation)
@@ -73,13 +73,13 @@ class ExplorationMAS(TrajCollectionPolicy):
         value = float(value_logit)
         action = int(action)
 
-        # log_action_prob = torch.log(action_probs).mean()
-        log_action_prob = torch.log(action_probs).squeeze()
+        # log_actions_prob = torch.log(action_probs).mean()
+        log_actions_prob = F.log_softmax(action_logit, dim=1).squeeze()
 
         if self.epsilon > 0:
             self.epsilon -= self.decrease
 
-        return action, value, log_action_prob[action]
+        return action, value, log_actions_prob
 
     def increase_temp(self, actions: torch.Tensor):
         var = actions.float().var()

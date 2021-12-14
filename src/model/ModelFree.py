@@ -10,7 +10,7 @@ class OnPolicy(nn.Module):
     def __init__(self, num_actions, features_out=256):
         super(OnPolicy, self).__init__()
 
-        self._features_out=features_out
+        self._features_out = features_out
         self.critic = nn.Linear(features_out, 1)
         self.actor = nn.Linear(features_out, num_actions)
 
@@ -41,27 +41,23 @@ class OnPolicy(nn.Module):
 
         return action
 
-    def evaluate_actions(self, frames: torch.Tensor, action_indx: torch.Tensor):
+    def compute_action_entropy(self, frames: torch.Tensor):
         """evaluate_actions method.
 
         compute the actions logit, value and actions probability by passing
-        the actual states (frames) to the ModelFree network. Then it computes
-        the entropy of the action corresponding to the index action_indx
-
+        the actual states (frames) to the ModelFree network. Then computes
+        the entropy of the actions
         Parameters
         ----------
         frames : PyTorch Array
             a 4 dimensional tensor [batch_size, channels, width, height]
-        action_indx : torch.Tensor
-            Tensor [batch_size] index of the actions to use in order to compute the entropy
 
         Returns
         -------
         action_logit : Torch.Tensor [batch_size, num_actions]
             output of the ModelFree network before passing it to the softmax
-        action_log_prob : Torch.Tensor [batch_size,1]
-            scalar value, action log of the action corresponding to the
-            action_indx
+        action_log_probs : torch.Tensor [batch_size, num_actions]
+            log_probs of all the actions
         probs : Torch.Tensor [batch_size, num_actions]
             probability of actions given by the ModelFree network
         value : Torch.Tensor [batch_size,1]
@@ -74,15 +70,11 @@ class OnPolicy(nn.Module):
 
         action_probs = F.softmax(action_logit, dim=1)
 
-        log_probs = F.log_softmax(action_logit, dim=1)
+        action_log_probs = F.log_softmax(action_logit, dim=1)
 
-        if action_indx.ndim == 1:
-            action_indx = action_indx.unsqueeze(1)
+        entropy = -(action_probs * action_log_probs).sum(1).mean()
 
-        action_log_prob = log_probs.gather(1, action_indx)
-        entropy = -(action_probs * log_probs).sum(1).mean()
-
-        return action_logit, action_log_prob, action_probs, value, entropy
+        return action_logit, action_log_probs, action_probs, value, entropy
 
 
 class ModelFree(OnPolicy):
@@ -107,8 +99,8 @@ class ModelFree(OnPolicy):
 
         fc_in = (
             self.features(torch.zeros(1, num_channels, *self.in_shape[1:]))
-                .view(1, -1)
-                .size(1)
+            .view(1, -1)
+            .size(1)
         )
 
         self.fc = nn.Sequential(
@@ -159,10 +151,12 @@ class ModelFreeResnet(ModelFree):
         self.preprocess = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
+                                 0.229, 0.224, 0.225]),
         ])
 
-        model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+        model = torch.hub.load('pytorch/vision:v0.10.0',
+                               'resnet18', pretrained=True)
         model = model.eval()
         model = torch.nn.Sequential(*(list(model.children())[:-1]))
         self.features = model

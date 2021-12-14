@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple, Optional
 import torch
 from torch import nn
 from torch.nn.utils import clip_grad_norm_
+import torch.nn.functional as F
 
 from src.common import Params
 from src.env.NavEnv import RawEnv
@@ -11,16 +12,14 @@ from src.train.Policies import TrajCollectionPolicy, RandomAction
 
 
 def mas_dict2tensor(agent_dict) -> torch.Tensor:
-    """
+    """mas_dict2tensor function.
+
     sort agent dict and convert to tensor of int
 
-    Args:
+    Params
+    ------
         agent_dict:
-
-    Returns:
-
     """
-
     tensor = sorted(agent_dict.items())
     tensor = [int(elem[1]) for elem in tensor]
     return torch.as_tensor(tensor)
@@ -30,22 +29,23 @@ def train_epoch_PPO(
         rollout: RolloutStorage,
         ac_dict: Dict[str, nn.Module],
         env: RawEnv,
-        optimizer: torch.optim.Optimizer,
-        optim_params: List[torch.nn.Parameter],
+        optimizers: Dict[str, torch.optim.Optimizer],
         params: Params,
 ) -> Dict[str, List[int]]:
-    """
+    """train_epoch_PPO method.
+
     Performs a PPO update on a full rollout storage (aka one epoch).
     The update also estimate the loss and does the backpropagation
-    Args:
+    Parameters
+    ----------
         rollout:
         ac_dict: Dictionary of agents, represented as modules
         env:
-        optimizer: The optimizer
-        optim_params: A list of agent.parameters() chained together
+        optimizer: the optimizers
         params:
 
-    Returns:
+    Returns
+    -------
         infos: dict of loss values for logging
 
     """
@@ -53,7 +53,7 @@ def train_epoch_PPO(
     data_generator = rollout.recurrent_generator()
     infos = dict(
         value_loss=[],
-        action_loss=[],
+        surrogate_loss=[],
         entropys=[],
         loss=[]
     )
@@ -77,63 +77,72 @@ def train_epoch_PPO(
         # actions_mini_batch = [mini_batch_len, num_agents]
         # return_mini_batch = [mini_batch_len, num_agents]
         # masks_mini_batch = [mini_batch_len, num_agents]
-        # old_action_log_probs_mini_batch = [mini_batch_len, num_agents]
+        # old_action_log_probs_mini_batch = [mini_batch_len, num_agents,
+        # num_actions]
         # adv_targ_mini_batch = [mini_batch_len, num_agents]
         # next_states_mini_batch = [mini_batch_len, num_channels, width,
         # height]
 
-        action_probs, action_log_probs, values, entropys = [], [], [], []
-
         for agent_id in env.agents:
             agent_index = env.agents.index(agent_id)
-            agent_action = actions_mini_batch[:, agent_index]
-
             agent = ac_dict[agent_id]
-            _, action_log_prob, action_prob, value, entropy = agent.evaluate_actions(
-                states_mini_batch, agent_action
+            agent_actions = actions_mini_batch[:,
+                                               agent_index].unsqueeze(dim=-1)
+
+            _, action_log_probs, action_prob, values, entropys = \
+                agent.compute_action_entropy(
+                    states_mini_batch
+                )
+
+            # we set the model in training mode after taking the action_probs
+            # othewise it modifies them
+            agent.train()
+            single_action_log_prob = action_log_probs.gather(-1, agent_actions)
+            single_action_old_log_prob = \
+                old_action_log_probs_mini_batch[:, agent_index].gather(
+                    -1, agent_actions)
+
+            value_loss = (
+                return_mini_batch[:, agent_index] - values.squeeze(-1)).pow(2)
+
+            value_loss_mean = value_loss.mean()
+            ratio = torch.exp(single_action_log_prob -
+                              single_action_old_log_prob)
+
+            ratio = ratio.squeeze()
+            ratio = ratio.nan_to_num(
+                posinf=params.abs_max_loss, neginf=-params.abs_max_loss)
+            # fix: this gives a lot of problem since ratio goes to -inf
+            # and in the surrogate loss it's taken as min
+            surr1 = ratio * adv_targ_mini_batch[:, agent_index]
+            surr2 = (
+                torch.clamp(
+                    ratio,
+                    1.0 - params.ppo_clip_param,
+                    1.0 + params.ppo_clip_param,
+                )
+                * adv_targ_mini_batch[:, agent_index]
             )
-            action_probs.append(action_prob.unsqueeze(dim=-1))
-            action_log_probs.append(action_log_prob.unsqueeze(dim=-1))
-            values.append(value.unsqueeze(dim=-1))
-            entropys.append(entropy.unsqueeze(dim=-1))
 
-        action_probs = torch.cat(action_probs, dim=-1)
-        action_log_probs = torch.cat(action_log_probs, dim=-1)
-        values = torch.cat(values, dim=-1)
-        entropys = torch.cat(entropys, dim=-1)
+            surrogate_loss = -torch.min(surr1, surr2)
+            surrogate_loss_mean = surrogate_loss.mean()
 
-        value_loss = (return_mini_batch - values).pow(2).mean()
-
-        ratio = torch.exp(action_log_probs - old_action_log_probs_mini_batch)
-
-        surr1 = ratio * adv_targ_mini_batch
-        surr2 = (
-            torch.clamp(
-                ratio,
-                1.0 - params.ppo_clip_param,
-                1.0 + params.ppo_clip_param,
+            optimizers[agent_id].zero_grad()
+            loss = (
+                value_loss * params.value_loss_coef
+                + surrogate_loss
+                - entropys * params.entropy_coef
             )
-            * adv_targ_mini_batch
-        )
+            loss = loss.mean()
+            loss.backward()
 
-        action_loss = -torch.min(surr1, surr2).mean()
+            infos['value_loss'].append(float(value_loss_mean))
+            infos['surrogate_loss'].append(float(surrogate_loss_mean))
+            infos['entropys'].append(float(entropys))
+            infos['loss'].append(float(loss))
 
-        optimizer.zero_grad()
-        loss = (
-            value_loss * params.value_loss_coef
-            + action_loss
-            - entropys * params.entropy_coef
-        )
-        loss = loss.mean()
-        loss.backward()
-
-        infos['value_loss'].append(float(value_loss))
-        infos['action_loss'].append(float(action_loss))
-        infos['entropys'].append(float(entropys))
-        infos['loss'].append(float(loss))
-
-        clip_grad_norm_(optim_params, params.max_grad_norm)
-        optimizer.step()
+            clip_grad_norm_(agent.parameters(), params.max_grad_norm)
+            optimizers[agent_id].step()
 
     return infos
 
@@ -150,7 +159,9 @@ def collect_trajectories(
 
     Collect a number of samples from the environment based on the current model
     (in eval mode)
-    Args:
+
+    Parameters
+    ----------
         params:
         env:
         rollout:
@@ -158,13 +169,11 @@ def collect_trajectories(
         policy: Subclass of TrajCollectionPolicy, define how the action should
         be computed
 
-    Returns:
-
     """
     # Please Note: everything work until params.horizon is equal to the episode
     # lenght (i.e. done is true only after params.horizon steps).
     # otherwise we should use a list instead of a tensor with predefined
-    # dimension
+    # dimension or a counter
     counter = 0
     if policy is None:
         policy = RandomAction(params.num_actions, params.device)
@@ -177,11 +186,6 @@ def collect_trajectories(
         action_log_dict = {agent_id: False for agent_id in env.agents}
 
         current_state = env.reset()
-        masks = 1 - mas_dict2tensor(dones)
-        # Insert first state
-        # here counter overwrite last state and mask of the last episode
-        rollout.states[counter].copy_(current_state)
-        rollout.masks[counter].copy_(masks)
 
         for step in range(params.horizon):
             current_state = current_state.unsqueeze(dim=0)
@@ -202,17 +206,8 @@ def collect_trajectories(
 
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
-                # fixme: why is action_log_probs treated as a scalar and not
-                # a tensor?
-                # because we only need one action_log_prob for the ppo (the
-                # one corresponding to the chosen action)
-                # this is also explained in the comments of the post:
-                # https://towardsdatascience.com/proximal-policy-optimization-tutorial-part-2-2-gae-and-ppo-loss-fe1b3c5549e8
-                # considering only the selected action_log_prob is equivalent
-                # to multiply with the vector y_true of the the true actions
-                # and then making the average
-                action_log_dict[agent_id] = 0e-10 if action_log_probs.isinf()\
-                    else float(action_log_probs)
+
+                action_log_dict[agent_id] = action_log_probs
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, infos = env.step(action_dict)
@@ -225,22 +220,26 @@ def collect_trajectories(
             rewards = mas_dict2tensor(rewards)
             actions = mas_dict2tensor(action_dict)
             values = mas_dict2tensor(values_dict)
-            action_log_probs = mas_dict2tensor(action_log_dict)
+            action_log_probs_list = [elem.unsqueeze(dim=0)
+                                     for _, elem in action_log_dict.items()]
+            action_log_probs = torch.cat(action_log_probs_list, 0)
 
-            current_state = next_state.to(params.device)
-
+            current_state = current_state.squeeze(0)
             rollout.insert(
                 step=counter,
                 state=current_state,
+                next_state=next_state,
                 action=actions,
                 values=values,
                 reward=rewards,
                 mask=masks,
                 action_log_probs=action_log_probs,
             )
+
+            current_state = next_state.to(params.device)
             counter += 1
             # if done for all agents end episode
-            if dones.pop("__all__"):
+            if dones["__all__"]:
                 break
 
         # Please Note: next step is needed to associate a value to the ending
@@ -256,4 +255,4 @@ def collect_trajectories(
         # next_value = mas_dict2tensor(values_dict)
 
     # estimate advantages
-    rollout.compute_returns(0.0)
+    rollout.compute_returns()

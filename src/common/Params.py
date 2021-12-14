@@ -21,11 +21,12 @@ class Params:
     debug = False
     device = torch.device("cuda")
     resize = True
+    param_sharing = False
     obs_shape = [3, 32, 32]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
-    minibatch = 8
+    minibatch = 2  # 64
     epochs = 1000
 
     # Optimizer
@@ -37,15 +38,18 @@ class Params:
     # Algo parameters
     gamma = 0.998
     ppo_clip_param = 0.1
+    # due to log all losses goes to -inf and +inf pretty fast, to limit this
+    # we use an upper and a lower bound
+    abs_max_loss = 10e10
 
     # Loss
-    value_loss_coef = 0.8
+    value_loss_coef = 0.5
     entropy_coef = 0.01
 
     #### ENVIRONMENT ####
     agents = 1
     landmarks = 1
-    horizon = 10
+    horizon = 5  # 64
     episodes = 3
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
