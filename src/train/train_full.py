@@ -65,7 +65,7 @@ def get_actor_critic(obs_space, params, reward_range):
 
 def train(params: Params):
     configs = get_env_configs(params)
-    configs["mode"] = "rgb_array"
+    #configs["mode"] = "rgb_array"
     env = get_env(configs)
 
     obs_shape = env.reset().shape

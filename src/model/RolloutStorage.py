@@ -121,9 +121,7 @@ class RolloutStorage(object):
                 return_minibatch.append(self.returns[ind].unsqueeze(0))
                 masks_minibatch.append(self.masks[ind].unsqueeze(0))
                 actions_minibatch.append(self.actions[ind].unsqueeze(0))
-                old_action_log_probs_minibatch.append(
-                    self.action_log_probs[ind].unsqueeze(0)
-                )
+                old_action_log_probs_minibatch.append(self.action_log_probs[ind].unsqueeze(0))
                 adv_targ_minibatch.append(self.gae[ind].unsqueeze(0))
 
             if done:

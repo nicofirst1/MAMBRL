@@ -25,7 +25,7 @@ class OnPolicy(nn.Module):
         """
         raise NotImplementedError
 
-    def act(self, x, deterministic=True):
+    def act(self, x, deterministic=False):
         """
         Use the current forward method to extract action based logits
         Then return an action in a deterministic or stochastic way
@@ -145,7 +145,7 @@ class ModelFree(OnPolicy):
 
         """
         x = self.features(input)
-        x = x.view(x.size(0), -1)
+        x = x.contiguous().view(x.size(0), -1)
         x = self.fc(x)
         action_logits = self.actor(x)
         value = self.critic(x)

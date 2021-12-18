@@ -109,9 +109,9 @@ def train_epoch_PPO(
             _, action_log_prob, action_prob, value, entropy = agent.evaluate_actions(
                 states_mini_batch, agent_action
             )
-            action_probs.append(action_prob.unsqueeze(dim=-1))
-            action_log_probs.append(action_log_prob.unsqueeze(dim=-1))
-            values.append(value.unsqueeze(dim=-1))
+            action_probs.append(action_prob)
+            action_log_probs.append(action_log_prob)
+            values.append(value)
             entropys.append(entropy.unsqueeze(dim=-1))
 
         action_probs = torch.cat(action_probs, dim=-1)
@@ -119,30 +119,8 @@ def train_epoch_PPO(
         values = torch.cat(values, dim=-1)
         entropys = torch.cat(entropys, dim=-1)
 
-        value_loss = (return_mini_batch - values).pow(2).mean()
-
-        ratio = torch.exp(action_log_probs - old_action_log_probs_mini_batch)
-
-        surr1 = ratio * adv_targ_mini_batch
-        surr2 = (
-                torch.clamp(
-                    ratio,
-                    1.0 - params.ppo_clip_param,
-                    1.0 + params.ppo_clip_param,
-                )
-                * adv_targ_mini_batch
-        )
-
-        action_loss = -torch.min(surr1, surr2).mean()
-
-        optimizer.zero_grad()
-        loss = (
-                value_loss * params.value_loss_coef
-                + action_loss
-                - entropys * params.entropy_coef
-        )
-        loss = loss.mean()
-        loss.backward()
+        loss, value_loss, action_loss = compute_PPO_update(optimizer, return_mini_batch, values, action_log_probs,
+            old_action_log_probs_mini_batch, adv_targ_mini_batch, entropys, params)
 
         infos['value_loss'].append(float(value_loss))
         infos['action_loss'].append(float(action_loss))
@@ -208,7 +186,7 @@ def collect_trajectories(
                     continue
 
                 # call forward method
-                action, value, action_log_probs = policy.act(agent_id, observation)
+                action, value, action_log_prob = policy.act(agent_id, observation)
 
                 # get action with softmax and multimodal (stochastic)
 
@@ -216,7 +194,7 @@ def collect_trajectories(
                 values_dict[agent_id] = value
                 #fixme: why is action_log_probs treated as a scalar and not a tensor?
                 action_log_dict[agent_id] = (
-                    0e-10 if action_log_probs.isinf() else float(action_log_probs)
+                    0e-10 if action_log_prob.isinf() else float(action_log_prob)
                 )
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
@@ -250,3 +228,58 @@ def collect_trajectories(
             observation = torch.cat(
                 [observation[state_channel:, :, :], current_state], dim=0
             )
+
+def compute_PPO_update(
+        optimizer: torch.optim.Optimizer,
+        return_mini_batch,
+        values,
+        action_log_probs,
+        old_action_log_probs_mini_batch,
+        adv_targ_mini_batch,
+        entropys,
+        params: Params
+):
+    """
+    Compute a PPO update through backpropagation
+    Args:
+        optimizer:
+        return_mini_batch:
+        values:
+        action_log_probs:
+        old_action_log_probs_mini_batch:
+        adv_targ_mini_batch:
+        entropys:
+        params
+
+    Return:
+        loss:
+        value_loss:
+        action_loss:
+    """
+
+    value_loss = (return_mini_batch - values).pow(2).mean()
+
+    ratio = torch.exp(action_log_probs - old_action_log_probs_mini_batch)
+
+    surr1 = ratio * adv_targ_mini_batch
+    surr2 = (
+            torch.clamp(
+                ratio,
+                1.0 - params.ppo_clip_param,
+                1.0 + params.ppo_clip_param,
+            )
+            * adv_targ_mini_batch
+    )
+
+    action_loss = -torch.min(surr1, surr2).mean()
+
+    optimizer.zero_grad()
+    loss = (
+            value_loss * params.value_loss_coef
+            + action_loss
+            - entropys * params.entropy_coef
+    )
+    loss = loss.mean()
+    loss.backward()
+
+    return loss, value_loss, action_loss

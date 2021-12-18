@@ -90,4 +90,4 @@ class MultimodalMAS(TrajCollectionPolicy):
         value = int(value_logit)
         action = int(action)
 
-        return action, value, log_action_prob
+        return action, value, log_action_prob[0][action]
