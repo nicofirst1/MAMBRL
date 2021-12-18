@@ -10,7 +10,7 @@ from src.model import RolloutStorage
 from src.train.Policies import TrajCollectionPolicy, RandomAction
 
 
-def mas_dict2tensor(agent_dict) -> torch.Tensor:
+def mas_dict2IntTensor(agent_dict) -> torch.Tensor:
     """
     sort agent dict and convert to list of int of tensor
 
@@ -23,6 +23,21 @@ def mas_dict2tensor(agent_dict) -> torch.Tensor:
 
     tensor = sorted(agent_dict.items())
     tensor = [int(elem[1]) for elem in tensor]
+    return torch.as_tensor(tensor)
+
+def mas_dict2FloatTensor(agent_dict) -> torch.Tensor:
+    """
+    sort agent dict and convert to list of float of tensor
+
+    Args:
+        agent_dict:
+
+    Returns:
+
+    """
+
+    tensor = sorted(agent_dict.items())
+    tensor = [float(elem[1]) for elem in tensor]
     return torch.as_tensor(tensor)
 
 
@@ -201,15 +216,15 @@ def collect_trajectories(
             next_state, rewards, dones, infos = env.step(action_dict)
 
             # if done for all agents end episode
-            if dones.pop("__all__"):
-                break
+            #if dones.pop("__all__"):
+            #    break
 
             # sort in agent orders and convert to list of int for tensor
-            masks = 1 - mas_dict2tensor(dones)
-            rewards = mas_dict2tensor(rewards)
-            actions = mas_dict2tensor(action_dict)
-            values = mas_dict2tensor(values_dict)
-            action_log_probs = mas_dict2tensor(action_log_dict)
+            masks = 1 - mas_dict2IntTensor(dones)
+            rewards = mas_dict2IntTensor(rewards)
+            actions = mas_dict2IntTensor(action_dict)
+            values = mas_dict2FloatTensor(values_dict)
+            action_log_probs = mas_dict2FloatTensor(action_log_dict)
 
             current_state = next_state.to(params.device)
 
@@ -219,7 +234,7 @@ def collect_trajectories(
                 action=actions,
                 values=values,
                 reward=rewards,
-                mask=masks,
+                mask=masks[:-1],
                 action_log_probs=action_log_probs.detach().squeeze(dim=0),
             )
 

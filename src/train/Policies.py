@@ -87,7 +87,7 @@ class MultimodalMAS(TrajCollectionPolicy):
         action = action_probs.multinomial(1).squeeze()
         log_action_prob = torch.log(action_probs)
 
-        value = int(value_logit)
+        #value = int(value_logit)
         action = int(action)
 
-        return action, value, log_action_prob[0][action]
+        return action, value_logit, log_action_prob[0][action]

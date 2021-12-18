@@ -57,8 +57,7 @@ class RolloutStorage(object):
                 self.gamma * self.values[step + 1] * self.masks[step] -
                 self.values[step]
             )
-            self.gae[step] = delta + self.gamma * \
-                tau * self.masks[step] * self.gae[step+1]
+            self.gae[step] = delta + self.gamma * tau * self.masks[step] * self.gae[step+1]
             # Q-value function (Advantage + Value)
             self.returns[step] = self.gae[step] + self.values[step]
 
