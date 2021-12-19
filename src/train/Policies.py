@@ -85,9 +85,9 @@ class MultimodalMAS(TrajCollectionPolicy):
         action_logit, value_logit = self.ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
         action = action_probs.multinomial(1).squeeze()
-        action_logs = F.log_softmax(action_probs).squeeze()
+        action_probs_log = F.log_softmax(action_logit, dim=1).squeeze()
 
         #value = int(value_logit)
         action = int(action)
 
-        return action, value_logit, action_logs[action]
+        return action, value_logit, action_probs_log[action]

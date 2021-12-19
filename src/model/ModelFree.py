@@ -41,7 +41,7 @@ class OnPolicy(nn.Module):
 
         return action
 
-    def evaluate_actions(self, frames: torch.Tensor, action_indx: torch.Tensor):
+    def evaluate_actions(self, frames: torch.Tensor, actions_indxs: torch.Tensor):
         """evaluate_actions method.
 
         compute the actions logit, value and actions probability by passing
@@ -70,14 +70,14 @@ class OnPolicy(nn.Module):
             value of the entropy given by the action with index equal to
             action_indx.
         """
-        action_logit, value = self.forward(frames)
+        action_logit, value_logit = self.forward(frames)
+
         action_probs = F.softmax(action_logit, dim=1)
-        log_probs = F.log_softmax(action_logit, dim=1)
+        action_probs_log = F.log_softmax(action_logit, dim=1)
 
-        action_log_prob = log_probs.gather(1, action_indx)
-        entropy = -(action_probs * log_probs).sum(1).mean()
+        entropy = -(action_probs * action_probs_log).sum(1).mean()
 
-        return action_logit, action_log_prob, action_probs, value, entropy
+        return action_logit, action_probs_log.gather(1, actions_indxs.unsqueeze(dim=1)), action_probs, value_logit, entropy
 
 
 class ModelFree(OnPolicy):

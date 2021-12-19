@@ -20,7 +20,7 @@ class RolloutStorage(object):
         self.values = torch.zeros(num_steps, num_agents)
         self.returns = torch.zeros(num_steps, num_agents)
         self.gae = torch.zeros(num_steps, num_agents)
-        self.action_log_probs = torch.zeros(num_steps, num_agents, num_actions)
+        self.action_log_probs = torch.zeros(num_steps, num_agents)
 
     def to(self, device):
         self.states = self.states.to(device)

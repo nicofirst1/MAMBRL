@@ -23,7 +23,11 @@ def mas_dict2tensor(agent_dict, type) -> torch.Tensor:
     """
 
     tensor = sorted(agent_dict.items())
-    tensor = [type(elem[1]) for elem in tensor]
+    if type is not None:
+        tensor = [type(elem[1]) for elem in tensor]
+    else:
+        tensor = [elem[1] for elem in tensor]
+
     return torch.as_tensor(tensor)
 
 # todo: this can be done in parallel
@@ -85,7 +89,6 @@ def collect_trajectories(
 
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
-
                 action_log_dict[agent_id] = action_log
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
@@ -99,8 +102,8 @@ def collect_trajectories(
             masks = 1 - mas_dict2tensor(dones, int)
             rewards = mas_dict2tensor(rewards, int)
             actions = mas_dict2tensor(action_dict, int)
-            values = mas_dict2tensor(values_dict, int)
-            action_log = action_log_dict.unsqueeze(dim=0)
+            values = mas_dict2tensor(values_dict, float)
+            action_log = mas_dict2tensor(action_log_dict, float)
 
             current_state = next_state.to(params.device)
             observation = observation.squeeze(dim=0)
@@ -143,14 +146,14 @@ def train_epoch_PPO(
 
     """
 
-    rollout.compute_returns(rollout.values[-1])
+    rollout.compute_returns()
     rollout.to(params.device)
 
     # # get data generation that splits rollout in batches
     data_generator = rollout.recurrent_generator()
     infos = dict(
         value_loss=[],
-        action_loss=[],
+        surrogate_loss=[],
         entropys=[],
         loss=[]
     )
@@ -177,12 +180,10 @@ def train_epoch_PPO(
 
         for agent_id in env.agents:
             agent_index = env.agents.index(agent_id)
-            agent_action = actions_minibatch[:, agent_index]
+            agent_actions = actions_minibatch[:, agent_index]
 
             agent = ac_dict[agent_id]
-            _, action_logs, action_probs, values, entropys = agent.evaluate_actions(
-                states_minibatch, agent_action
-            )
+            _, action_logs, action_probs, values, entropys = agent.evaluate_actions(states_minibatch, agent_actions)
 
             loss, value_loss, surrogate_loss = compute_PPO_update(agent, optimizer, return_minibatch, values, action_logs,
                 old_action_logs_minibatch, adv_targ_minibatch, entropys, params)
