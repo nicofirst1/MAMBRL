@@ -128,7 +128,7 @@ def train_epoch_PPO(
         rollout: RolloutStorage,
         ac_dict: Dict[str, nn.Module],
         env: RawEnv,
-        optimizer: torch.optim.Optimizer,
+        optimizers: Dict[str, torch.optim.Optimizer],
         params: Params,
 ) -> Dict[str, List[int]]:
     """
@@ -138,7 +138,7 @@ def train_epoch_PPO(
         rollout:
         ac_dict: Dictionary of agents, represented as modules
         env:
-        optimizer: The optimizer
+        optimizers: The optimizer
         params:
 
     Returns:
@@ -185,7 +185,7 @@ def train_epoch_PPO(
             agent = ac_dict[agent_id]
             _, action_logs, action_probs, values, entropys = agent.evaluate_actions(states_minibatch, agent_actions)
 
-            loss, value_loss, surrogate_loss = compute_PPO_update(agent, optimizer, return_minibatch, values, action_logs,
+            loss, value_loss, surrogate_loss = compute_PPO_update(agent, optimizers[agent_id], return_minibatch, values, action_logs,
                 old_action_logs_minibatch, adv_targ_minibatch, entropys, params)
 
             infos['value_loss'].append(float(value_loss))

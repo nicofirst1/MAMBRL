@@ -76,12 +76,18 @@ def train(params: Params):
         for agent_id in env.agents
     }
 
-    optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
-    optim_params = list(chain.from_iterable(optim_params))
+    #optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
+    #optim_params = list(chain.from_iterable(optim_params))
 
-    optimizer = optim.RMSprop(
-        optim_params, params.lr, eps=params.eps, alpha=params.alpha
-    )
+    #optimizer = optim.RMSprop(
+    #    optim_params, params.lr, eps=params.eps, alpha=params.alpha
+    #)
+
+    optimizers = {
+        agent_id: optim.RMSprop(
+            ac_dict[agent_id].parameters(), lr=params.lr, eps=params.eps,
+            alpha=params.alpha) for agent_id in env.agents
+    }
 
     rollout = RolloutStorage(
         params.horizon * params.episodes,
@@ -102,7 +108,7 @@ def train(params: Params):
 
         [model.train() for model in ac_dict.values()]
         # train for all the trajectories collected so far
-        infos = train_epoch_PPO(rollout, ac_dict, env, optimizer, params)
+        infos = train_epoch_PPO(rollout, ac_dict, env, optimizers, params)
         rollout.after_update()
 
 if __name__ == "__main__":
