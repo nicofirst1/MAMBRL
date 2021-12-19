@@ -12,14 +12,12 @@ from src.train.Policies import TrajCollectionPolicy, RandomAction
 
 def mas_dict2tensor(agent_dict, type) -> torch.Tensor:
     """
-    sort agent dict and convert to list of int of tensor
+    sort agent dict and convert to tensor of type
 
-    Args:
+    Params
+    ------
         agent_dict:
         type:
-
-    Returns:
-
     """
 
     tensor = sorted(agent_dict.items())
@@ -38,18 +36,17 @@ def collect_trajectories(
         obs_shape,
         policy: Optional[TrajCollectionPolicy] = None,
 ):
-    """
+    """collect_trajectories function.
+
     Collect a number of samples from the environment based on the current model (in eval mode)
 
-    Args:
+    Parameters
+    ----------
         params:
         env:
         rollout:
         obs_shape:
         policy: Subclass of TrajCollectionPolicy, define how the action should be computed
-
-    Returns:
-
     """
     state_channel = int(obs_shape[0])
 
@@ -83,29 +80,25 @@ def collect_trajectories(
                     continue
 
                 # call forward method
-                action, value, action_log = policy.act(agent_id, observation)
+                action, value, action_log_probs = policy.act(agent_id, observation)
 
                 # get action with softmax and multimodal (stochastic)
 
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
-                action_log_dict[agent_id] = action_log
+                action_log_dict[agent_id] = action_log_probs
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, infos = env.step(action_dict)
-
-            # if done for all agents end episode
-            #if dones.pop("__all__"):
-            #    break
+            next_state = next_state.to(params.device)
 
             # sort in agent orders and convert to list of int for tensor
             masks = 1 - mas_dict2tensor(dones, int)
             rewards = mas_dict2tensor(rewards, int)
             actions = mas_dict2tensor(action_dict, int)
             values = mas_dict2tensor(values_dict, float)
-            action_log = mas_dict2tensor(action_log_dict, float)
+            action_log_probs = mas_dict2tensor(action_log_dict, float)
 
-            current_state = next_state.to(params.device)
             observation = observation.squeeze(dim=0)
 
             rollout.insert(
@@ -116,12 +109,12 @@ def collect_trajectories(
                 values=values,
                 reward=rewards,
                 mask=masks[:-1],
-                action_log_probs=action_log,
+                action_log_probs=action_log_probs,
             )
 
             # Update observation
             observation = torch.cat(
-                [observation[state_channel:, :, :], current_state], dim=0
+                [observation[state_channel:, :, :], next_state], dim=0
             )
 
 def train_epoch_PPO(
@@ -198,11 +191,11 @@ def train_epoch_PPO(
 def compute_PPO_update(
         model,
         optimizer: torch.optim.Optimizer,
-        return_mini_batch,
+        returns,
         values,
         action_log_probs,
-        old_action_log_probs_mini_batch,
-        adv_targ_mini_batch,
+        old_action_log_probs,
+        adv_targs,
         entropys,
         params: Params
 ):
@@ -211,11 +204,11 @@ def compute_PPO_update(
     Args:
         model:
         optimizer:
-        return_mini_batch:
+        returns:
         values:
         action_log_probs:
-        old_action_log_probs_mini_batch:
-        adv_targ_mini_batch:
+        old_action_log_probs:
+        adv_targs:
         entropys:
         params
 
@@ -224,19 +217,17 @@ def compute_PPO_update(
         value_loss:
         action_loss:
     """
+    value_loss = (returns - values).pow(2).mean()
+    ratio = torch.exp(action_log_probs - old_action_log_probs)
 
-    value_loss = (return_mini_batch - values).pow(2).mean()
-
-    ratio = torch.exp(action_log_probs - old_action_log_probs_mini_batch)
-
-    surr1 = ratio * adv_targ_mini_batch
+    surr1 = ratio * adv_targs
     surr2 = (
             torch.clamp(
                 ratio,
                 1.0 - params.ppo_clip_param,
                 1.0 + params.ppo_clip_param,
             )
-            * adv_targ_mini_batch
+            * adv_targs
     )
 
     surrogate_loss = -torch.min(surr1, surr2).mean()

@@ -33,10 +33,10 @@ class RandomAction(TrajCollectionPolicy):
     def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
         action = randint(0, self.num_actions - 1)
         value = 0
-        action_probs = torch.ones((1, self.num_actions))
+        action_probs = torch.ones(self.num_actions)
         action_probs = action_probs.to(self.device)
 
-        return action, value, action_probs
+        return action, value, action_probs[action]
 
 
 class ExplorationMAS(TrajCollectionPolicy):
@@ -45,27 +45,41 @@ class ExplorationMAS(TrajCollectionPolicy):
         self.ac_dict = ac_dict
         self.num_actions = num_actions
 
-        self.epsilon = 1
+        self.epsilon = 0.9
         self.decrease = 5e-5
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, float, torch.Tensor]:
+        """act method.
+
+        implementation of the epsilon greedy exploration function
+        Returns
+        -------
+        action: int
+            index of the action chosen
+        value: float
+            value of the state
+        log_actions_prob: torch.Tensor
+            [self.num_actions] log actions prob
+        """
+        # action_logit [1, num_action] value_logit [1,1]
         action_logit, value_logit = self.ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
 
         if uniform(0, 1) < self.epsilon:
             action = randint(0, self.num_actions - 1)  # Explore action space
         else:
-            action = action_probs.multinomial(1).squeeze()
+            action = action_probs.max(1)[1]
 
-        value = int(value_logit)
+        value = float(value_logit)
         action = int(action)
 
-        log_action_prob = torch.log(action_probs).mean()
+        # log_actions_prob = torch.log(action_probs).mean()
+        actions_log_probs = F.log_softmax(action_logit, dim=1).squeeze()
 
         if self.epsilon > 0:
             self.epsilon -= self.decrease
 
-        return action, value, log_action_prob
+        return action, value, actions_log_probs[action]
 
     def increase_temp(self, actions: torch.Tensor):
         var = actions.float().var()

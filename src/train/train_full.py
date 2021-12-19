@@ -69,6 +69,7 @@ def train(params: Params):
     env = get_env(configs)
 
     obs_shape = env.reset().shape
+    num_actions = env.action_spaces["agent_0"].n
 
     reward_range = env.get_reward_range()
     ac_dict = {
@@ -93,7 +94,7 @@ def train(params: Params):
         params.horizon * params.episodes,
         obs_shape,
         num_agents=params.agents,
-        num_actions=5,
+        num_actions=num_actions,
         gamma=params.gamma,
         size_minibatch=params.minibatch,
     )

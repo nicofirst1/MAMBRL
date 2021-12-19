@@ -10,7 +10,7 @@ class OnPolicy(nn.Module):
     def __init__(self, num_actions, features_out=256):
         super(OnPolicy, self).__init__()
 
-        self._features_out=features_out
+        self._features_out = features_out
         self.critic = nn.Linear(features_out, 1)
         self.actor = nn.Linear(features_out, num_actions)
 
@@ -52,19 +52,17 @@ class OnPolicy(nn.Module):
         ----------
         frames : PyTorch Array
             a 4 dimensional tensor [batch_size, channels, width, height]
-        action_indx : torch.Tensor
-            Tensor [batch_size] index of the actions to use in order to compute the entropy
+        actions_indxs : torch.Tensor[batch_size] index of the actions to use in order to compute the entropy
 
         Returns
         -------
         action_logit : Torch.Tensor [batch_size, num_actions]
             output of the ModelFree network before passing it to the softmax
-        action_log_prob : Torch.Tensor [batch_size,1]
-            scalar value, action log of the action corresponding to the
-            action_indx
+        action_log_probs : torch.Tensor [batch_size, num_actions]
+            log_probs of all the actions
         probs : Torch.Tensor [batch_size, num_actions]
             probability of actions given by the ModelFree network
-        value : Torch.Tensor [batch_size,1]
+        value_logit : Torch.Tensor [batch_size,1]
             value of the state given by the ModelFree network
         entropy : Torch.Tensor [batch_size,1]
             value of the entropy given by the action with index equal to
@@ -102,8 +100,8 @@ class ModelFree(OnPolicy):
 
         fc_in = (
             self.features(torch.zeros(1, num_channels, *self.in_shape[1:]))
-                .view(1, -1)
-                .size(1)
+            .view(1, -1)
+            .size(1)
         )
 
         self.fc = nn.Sequential(

@@ -152,6 +152,9 @@ class Scenario(BaseScenario):
         return world
 
     def reset_world(self, world, np_random):
+
+        self.registered_collisions = {agent.name: [] for agent in world.agents}
+
         # set random initial states
         for agent in world.agents:
             agent.color = np.array([0, 0, 1])

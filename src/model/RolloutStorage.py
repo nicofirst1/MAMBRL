@@ -47,6 +47,7 @@ class RolloutStorage(object):
 
     def compute_returns(self, tau=0.95):
         """compute_returns method.
+
         compute both the return (Q-Value) and the generalizaed advantage
         estimator https://arxiv.org/pdf/1506.02438.pdf by starting from the
         last timestep and going backward.
@@ -123,14 +124,11 @@ class RolloutStorage(object):
 
                 ind = perm[start_ind + offset]
                 states_minibatch.append(self.states[ind].unsqueeze(0))
-                next_states_minibatch.append(
-                    self.next_states[ind].unsqueeze(0))
+                next_states_minibatch.append(self.next_states[ind].unsqueeze(0))
                 return_minibatch.append(self.returns[ind].unsqueeze(0))
                 masks_minibatch.append(self.masks[ind].unsqueeze(0))
                 actions_minibatch.append(self.actions[ind].unsqueeze(0))
-                old_action_log_probs_minibatch.append(
-                    self.action_log_probs[ind].unsqueeze(0)
-                )
+                old_action_log_probs_minibatch.append(self.action_log_probs[ind].unsqueeze(0))
                 adv_targ_minibatch.append(self.gae[ind].unsqueeze(0))
 
             if done:
@@ -142,8 +140,7 @@ class RolloutStorage(object):
             actions_minibatch = torch.cat(actions_minibatch, dim=0)
             return_minibatch = torch.cat(return_minibatch, dim=0)
             masks_minibatch = torch.cat(masks_minibatch, dim=0)
-            old_action_log_probs_minibatch = torch.cat(
-                old_action_log_probs_minibatch, dim=0)
+            old_action_log_probs_minibatch = torch.cat(old_action_log_probs_minibatch, dim=0)
             adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
 
             yield states_minibatch, actions_minibatch, return_minibatch,\

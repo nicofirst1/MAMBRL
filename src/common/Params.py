@@ -39,13 +39,13 @@ class Params:
     ppo_clip_param = 0.1
 
     ### Loss
-    value_loss_coef = 1
+    value_loss_coef = 0.5
     entropy_coef = 0.01
 
     #### ENVIRONMENT ####
     agents = 1
     landmarks = 1
-    horizon = 5
+    horizon = 5  # 64
     episodes = 3
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
