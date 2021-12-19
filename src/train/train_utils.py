@@ -281,16 +281,17 @@ def compute_PPO_update(
 
     surrogate_loss = -torch.min(surr1, surr2).mean()
 
-    optimizer.zero_grad()
+
     loss = (
             value_loss * params.value_loss_coef
             + surrogate_loss
             - entropys * params.entropy_coef
-    )
-    loss = loss.mean()
+    ).mean()
+
+    optimizer.zero_grad()
     loss.backward(retain_graph=True)
 
-    clip_grad_norm_(model.parameters(), params.max_grad_norm)
+    #clip_grad_norm_(model.parameters(), params.max_grad_norm)
     optimizer.step()
 
     return loss, value_loss, surrogate_loss
