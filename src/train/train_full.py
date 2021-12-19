@@ -96,8 +96,11 @@ def train(params: Params):
     policy_fn = MultimodalMAS(ac_dict)
 
     for ep in track(range(params.epochs), description=f"Epochs"):
+        [model.eval() for model in ac_dict.values()]
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, rollout, obs_shape, policy=policy_fn)
+
+        [model.train() for model in ac_dict.values()]
         # train for all the trajectories collected so far
         infos = train_epoch_PPO(rollout, ac_dict, env, optimizer, params)
         rollout.after_update()
