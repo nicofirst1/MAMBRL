@@ -87,6 +87,7 @@ def train(params: Params):
         params.horizon * params.episodes,
         obs_shape,
         num_agents=params.agents,
+        num_actions=5,
         gamma=params.gamma,
         size_minibatch=params.minibatch,
     )
@@ -100,7 +101,6 @@ def train(params: Params):
         # train for all the trajectories collected so far
         infos = train_epoch_PPO(rollout, ac_dict, env, optimizer, optim_params, params)
         rollout.after_update()
-
 
 if __name__ == "__main__":
     params = Params()

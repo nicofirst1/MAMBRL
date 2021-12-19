@@ -71,13 +71,8 @@ class OnPolicy(nn.Module):
             action_indx.
         """
         action_logit, value = self.forward(frames)
-
         action_probs = F.softmax(action_logit, dim=1)
-
         log_probs = F.log_softmax(action_logit, dim=1)
-
-        if action_indx.ndim == 1:
-            action_indx = action_indx.unsqueeze(1)
 
         action_log_prob = log_probs.gather(1, action_indx)
         entropy = -(action_probs * log_probs).sum(1).mean()
