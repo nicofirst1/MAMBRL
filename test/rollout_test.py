@@ -1,74 +1,78 @@
-"""rollout_test file."""
-import random
+"""rollout_test file.
+
+analyze in real time the trajectories collected
+"""
 import torch
-from src.env.NavEnv import get_env
-from src.common.utils import get_env_configs, mas_dict2tensor, order_state
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+
 from src.common.Params import Params
+from src.common.utils import get_env_configs
+from src.env.NavEnv import get_env
+from src.train.train_utils import collect_trajectories
 from src.model.RolloutStorage import RolloutStorage
 
-params = Params()
-params.resize = False
-params.gray_scale = False
-device = params.device
-env_config = get_env_configs(params)
-env = get_env(env_config)
-num_rewards = len(env.par_env.get_reward_range())
-num_agents = params.agents
-if params.resize:
-    obs_space = params.obs_shape
 
-else:
-    obs_space = env.render(mode="rgb_array").shape
+if __name__ == "__main__":
+
+    params = Params()
+    params.horizon = 5
+    params.device = torch.device("cpu")
+    # =============================================================================
+    # ENV
+    # =============================================================================
+    env_config = get_env_configs(params)
+    env = get_env(env_config)
+    obs_shape = params.obs_shape
     # channels are inverted
-    obs_space = (obs_space[2], obs_space[0], obs_space[1])
-num_actions = env.action_space.n
+    num_actions = env.action_spaces["agent_0"].n
 
-current_state = env.reset()
-current_state = order_state(current_state)
-
-
-size_minibatch = params.minibatch  # 2
-epochs = params.epochs  # 1
-steps_per_episode = params.horizon  # params.horizon
-number_of_episodes = 10  # int(10e5)
-
-dones = {agent_id: False for agent_id in env.agents}
-action_dict = {agent_id: False for agent_id in env.agents}
-values_dict = {agent_id: False for agent_id in env.agents}
-
-counter = 0
-for step in range(steps_per_episode):
-    action_log_probs_list = []
-    current_state = current_state.to(params.device).unsqueeze(dim=0)
-
-    # let every agent act
-    for agent_id in env.agents:
-
-        # skip action for done agents
-        if dones[agent_id]:
-            action_dict[agent_id] = None
-            continue
-        action_dict[agent_id] = random.randint(0, num_actions-1)
-
-    next_state, rewards, dones, _ = env.step(action_dict)
-
-    if dones.pop("__all__"):
-        break
-
-    masks = 1 - mas_dict2tensor(dones)
-    rewards = mas_dict2tensor(rewards)
-    actions = mas_dict2tensor(action_dict)
-    values = mas_dict2tensor(values_dict)
-    action_log_probs = torch.cat(action_log_probs_list, dim=-1)
-
-    current_state = next_state
-    current_state = order_state(current_state)
-    rollout.insert(
-        step=step,
-        state=current_state,
-        action=actions,
-        values=values,
-        reward=rewards,
-        mask=masks,
-        action_log_probs=action_log_probs.detach().squeeze(),
+    rollout = RolloutStorage(
+        params.horizon * params.episodes,
+        obs_shape,
+        num_agents=params.agents,
+        gamma=params.gamma,
+        size_minibatch=params.minibatch,
     )
+    rollout.to(params.device)
+
+    # get logging step based on num of batches
+    num_minibatches = rollout.get_num_minibatches()
+    num_minibatches = int(num_minibatches * 0.01) + 1
+
+    collect_trajectories(params, env, rollout, obs_shape)
+    rewards_np = np.array(rollout.rewards)
+    states_np = np.array(rollout.states)
+    masks_np = np.array(rollout.masks)
+    actions_np = np.array(rollout.actions)
+    action_log_probs_np = np.array(rollout.action_log_probs)
+    values_np = np.array(rollout.values)
+    returns_np = np.array(rollout.returns)
+    gae_np = np.array(rollout.gae)
+
+    # max 30 subplot otherwise it will fail the rendering
+    n_samples = len(states_np)
+    max_elem = min(n_samples, 30)
+    fig = plt.figure(figsize=(14, 14))
+    if max_elem == 30:
+        columns = 6
+        rows = 5
+    else:
+        columns = math.ceil(max_elem**(1/2))
+        rows = math.ceil(max_elem/columns)
+
+    ax = []
+    for i in range(max_elem-1):
+        state_transp = states_np[i].transpose(1, 2, 0)
+        img = np.ndarray.astype(state_transp, np.uint8)
+        ax.append(fig.add_subplot(rows, columns, i+1))
+
+        info = f"rw: {float(rewards_np[i])}, act: {int(actions_np[i])}, mask: {int(masks_np[i])}, \n val: {float(values_np[i])} , gae: {round(float(gae_np[i]),2)} "
+        # ax[-1].set_title(info)
+        ax[-1].axis("off")
+        #ax[-1].text(0.5, -0.1, "(a) my label", size=12, ha="center")
+        ax[-1].text(15.0, 0.0, info, size=8, ha="center")
+        plt.imshow(img)
+
+    plt.show()

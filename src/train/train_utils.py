@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple, Optional
 import torch
 from torch import nn
 from torch.nn.utils import clip_grad_norm_
+import torch.nn.functional as F
 
 from src.common import Params
 from src.env.NavEnv import RawEnv
@@ -10,34 +11,18 @@ from src.model import RolloutStorage
 from src.train.Policies import TrajCollectionPolicy, RandomAction
 
 
-def mas_dict2IntTensor(agent_dict) -> torch.Tensor:
+def mas_dict2tensor(agent_dict) -> torch.Tensor:
     """
     sort agent dict and convert to list of int of tensor
 
-    Args:
+    sort agent dict and convert to tensor of int
+
+    Params
+    ------
         agent_dict:
-
-    Returns:
-
     """
-
     tensor = sorted(agent_dict.items())
     tensor = [int(elem[1]) for elem in tensor]
-    return torch.as_tensor(tensor)
-
-def mas_dict2FloatTensor(agent_dict) -> torch.Tensor:
-    """
-    sort agent dict and convert to list of float of tensor
-
-    Args:
-        agent_dict:
-
-    Returns:
-
-    """
-
-    tensor = sorted(agent_dict.items())
-    tensor = [float(elem[1]) for elem in tensor]
     return torch.as_tensor(tensor)
 
 
@@ -45,105 +30,110 @@ def train_epoch_PPO(
         rollout: RolloutStorage,
         ac_dict: Dict[str, nn.Module],
         env: RawEnv,
-        optimizer: torch.optim.Optimizer,
-        optim_params: List[torch.nn.Parameter],
+        optimizers: Dict[str, torch.optim.Optimizer],
         params: Params,
 ) -> Dict[str, List[int]]:
-    """
+    """train_epoch_PPO method.
+
     Performs a PPO update on a full rollout storage (aka one epoch).
     The update also estimate the loss and does the backpropagation
-    Args:
+    Parameters
+    ----------
         rollout:
         ac_dict: Dictionary of agents, represented as modules
         env:
-        optimizer: The optimizer
-        optim_params: A list of agent.parameters() chained together
+        optimizers: the optimizers
         params:
 
-    Returns:
+    Returns
+    -------
         infos: dict of loss values for logging
 
     """
-
-    # fixme: non ho capito questo cosa faccia
-    """
-        current_state = current_state.to(params.device).unsqueeze(dim=0)
-        for agent_id in env.agents:
-            _, next_value = ac_dict[agent_id](current_state)
-            values_dict[agent_id] = float(next_value)
-        next_value = mas_dict2tensor(values_dict)
-        # estimate advantages
-        rollout.compute_returns(next_value)
-        advantages = rollout.gae
-        # normalize advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
-
-   
-    """
-
-    rollout.compute_returns(rollout.values[-1])
-    rollout.to(params.device)
-
     # # get data generation that splits rollout in batches
     data_generator = rollout.recurrent_generator()
     infos = dict(
         value_loss=[],
-        action_loss=[],
+        surrogate_loss=[],
         entropys=[],
         loss=[]
     )
+    num_minibatches = rollout.get_num_minibatches()
+    assert num_minibatches > 0, "Assertion Error: params.horizon*params.episodes should be greater than params.minibatches"
 
     # MINI BATCHES ARE NECESSARY FOR PPO (SINCE IT USES OLD AND NEW POLICIES)
     for sample in data_generator:
         (
-            states_mini_batch,
-            actions_mini_batch,
-            return_mini_batch,
-            masks_mini_batch,
-            old_action_log_probs_mini_batch,
-            adv_targ_mini_batch,
+            states_minibatch,
+            actions_minibatch,
+            return_minibatch,
+            masks_minibatch,
+            old_action_log_probs_minibatch,
+            adv_targ_minibatch,
             _,
         ) = sample
 
-        # states_mini_batch = [mini_batch_len, num_channels, width, height]
-        # actions_mini_batch = [mini_batch_len, num_agents]
-        # return_mini_batch = [mini_batch_len, num_agents]
-        # masks_mini_batch = [mini_batch_len, num_agents]
-        # old_action_log_probs_mini_batch = [mini_batch_len, num_agents]
-        # adv_targ_mini_batch = [mini_batch_len, num_agents]
-        # next_states_mini_batch = [mini_batch_len, num_channels, width,
-        # height]
-
-        action_probs, action_log_probs, values, entropys = [], [], [], []
+        # states_minibatch = [minibatch_len, num_channels, width, height]
+        # actions_minibatch = [minibatch_len, num_agents]
+        # return_minibatch = [minibatch_len, num_agents]
+        # masks_minibatch = [minibatch_len, num_agents]
+        # old_action_log_probs_minibatch = [minibatch_len, num_agents, num_actions]
+        # adv_targ_minibatch = [minibatch_len, num_agents]
+        # next_states_minibatch = [minibatch_len, num_channels, width, height]
 
         for agent_id in env.agents:
             agent_index = env.agents.index(agent_id)
-            agent_action = actions_mini_batch[:, agent_index]
-
             agent = ac_dict[agent_id]
-            _, action_log_prob, action_prob, value, entropy = agent.evaluate_actions(
-                states_mini_batch, agent_action
+            agent_actions = actions_minibatch[:, agent_index].unsqueeze(dim=-1)
+
+            _, action_log_probs, action_prob, values, entropys = agent.compute_action_entropy(states_minibatch)
+
+            # we set the model in training mode after taking the action_probs
+            # othewise it modifies them
+            agent.train()
+            single_action_log_prob = action_log_probs.gather(-1, agent_actions)
+            single_action_old_log_prob = old_action_log_probs_minibatch[:, agent_index].gather(-1, agent_actions)
+
+            value_loss = (return_mini_batch[:, agent_index] - values.squeeze(-1)).pow(2)
+
+            value_loss_mean = value_loss.mean()
+            ratio = torch.exp(single_action_log_prob -
+                              single_action_old_log_prob)
+
+            ratio = ratio.squeeze()
+            ratio = ratio.nan_to_num(
+                posinf=params.abs_max_loss, neginf=-params.abs_max_loss)
+            # fix: this gives a lot of problem since ratio goes to -inf
+            # and in the surrogate loss it's taken as min
+            surr1 = ratio * adv_targ_mini_batch[:, agent_index]
+            surr2 = (
+                torch.clamp(
+                    ratio,
+                    1.0 - params.ppo_clip_param,
+                    1.0 + params.ppo_clip_param,
+                )
+                * adv_targ_mini_batch[:, agent_index]
             )
-            action_probs.append(action_prob)
-            action_log_probs.append(action_log_prob)
-            values.append(value)
-            entropys.append(entropy.unsqueeze(dim=-1))
 
-        action_probs = torch.cat(action_probs, dim=-1)
-        action_log_probs = torch.cat(action_log_probs, dim=-1)
-        values = torch.cat(values, dim=-1)
-        entropys = torch.cat(entropys, dim=-1)
+            surrogate_loss = -torch.min(surr1, surr2)
+            surrogate_loss_mean = surrogate_loss.mean()
 
-        loss, value_loss, action_loss = compute_PPO_update(optimizer, return_mini_batch, values, action_log_probs,
-            old_action_log_probs_mini_batch, adv_targ_mini_batch, entropys, params)
+            optimizers[agent_id].zero_grad()
+            loss = (
+                value_loss * params.value_loss_coef
+                + surrogate_loss
+                - entropys * params.entropy_coef
+            )
+            loss = loss.mean()
+            loss.backward()
 
-        infos['value_loss'].append(float(value_loss))
-        infos['action_loss'].append(float(action_loss))
-        infos['entropys'].append(float(entropys))
-        infos['loss'].append(float(loss))
+            infos['value_loss'].append(float(value_loss_mean))
+            infos['surrogate_loss'].append(float(surrogate_loss_mean))
+            infos['entropys'].append(float(entropys))
+            infos['loss'].append(float(loss))
 
-        clip_grad_norm_(optim_params, params.max_grad_norm)
-        optimizer.step()
+            clip_grad_norm_(agent.parameters(), params.max_grad_norm)
+            optimizers[agent_id].step()
 
     return infos
 
@@ -156,18 +146,17 @@ def collect_trajectories(
         obs_shape,
         policy: Optional[TrajCollectionPolicy] = None,
 ):
-    """
+    """collect_trajectories function.
+
     Collect a number of samples from the environment based on the current model (in eval mode)
 
-    Args:
+    Parameters
+    ----------
         params:
         env:
         rollout:
         obs_shape:
         policy: Subclass of TrajCollectionPolicy, define how the action should be computed
-
-    Returns:
-
     """
     state_channel = int(obs_shape[0])
 
@@ -182,9 +171,6 @@ def collect_trajectories(
         action_log_dict = {agent_id: False for agent_id in env.agents}
 
         current_state = env.reset()
-
-        # Insert first state
-        rollout.states[episode * params.horizon] = current_state.unsqueeze(dim=0)
 
         ## Initialize Observation
         observation = torch.zeros(obs_shape)
@@ -201,41 +187,33 @@ def collect_trajectories(
                     continue
 
                 # call forward method
-                action, value, action_log_prob = policy.act(agent_id, observation)
+                action, value, action_log_probs = policy.act(agent_id, observation)
 
                 # get action with softmax and multimodal (stochastic)
 
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
-                #fixme: why is action_log_probs treated as a scalar and not a tensor?
-                action_log_dict[agent_id] = (
-                    0e-10 if action_log_prob.isinf() else float(action_log_prob)
-                )
+                action_log_dict[agent_id] = action_log_probs
 
             # Our reward/dones are dicts {'agent_0': val0,'agent_1': val1}
             next_state, rewards, dones, infos = env.step(action_dict)
 
-            # if done for all agents end episode
-            #if dones.pop("__all__"):
-            #    break
-
             # sort in agent orders and convert to list of int for tensor
-            masks = 1 - mas_dict2IntTensor(dones)
-            rewards = mas_dict2IntTensor(rewards)
-            actions = mas_dict2IntTensor(action_dict)
-            values = mas_dict2FloatTensor(values_dict)
-            action_log_probs = mas_dict2FloatTensor(action_log_dict)
-
-            current_state = next_state.to(params.device)
+            masks = 1 - mas_dict2tensor(dones, int)
+            rewards = mas_dict2tensor(rewards, int)
+            actions = mas_dict2tensor(action_dict, int)
+            values = mas_dict2tensor(values_dict, float)
+            action_log_probs = mas_dict2tensor(action_log_dict, float)
 
             rollout.insert(
                 step=step + episode * params.horizon,
-                state=current_state,
+                state=observation,
+                next_state=next_state,
                 action=actions,
                 values=values,
                 reward=rewards,
                 mask=masks[:-1],
-                action_log_probs=action_log_probs.detach().squeeze(dim=0),
+                action_log_probs=action_log_probs,
             )
 
             # Update observation
@@ -243,6 +221,21 @@ def collect_trajectories(
             observation = torch.cat(
                 [observation[state_channel:, :, :], current_state], dim=0
             )
+
+        # Please Note: next step is needed to associate a value to the ending
+        # state to compute the GAE (when the trajectory is < len_episode)
+        # at the moment we don't need it since one trajectory is exactly
+        # one episode
+        # current_state = current_state.to(
+        #     params.device).unsqueeze(dim=0)
+        # for agent_id in env.agents:
+        #     _, next_value, _ = policy.act(
+        #         agent_id, current_state)
+        #     values_dict[agent_id] = float(next_value)
+        # next_value = mas_dict2tensor(values_dict)
+
+    # estimate advantages
+    rollout.compute_returns()
 
 def compute_PPO_update(
         optimizer: torch.optim.Optimizer,
