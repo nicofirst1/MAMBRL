@@ -21,16 +21,18 @@ from src.train.train_utils import (collect_trajectories, train_epoch_PPO)
 
 if __name__ == "__main__":
 
-    TENSORBOARD_DIR = os.path.join(
-        os.path.abspath(os.pardir), os.pardir, "tensorboard")
+    TENSORBOARD_DIR = os.path.join(os.path.abspath(os.pardir), os.pardir, "tensorboard")
     params = Params()
-    params.device = torch.device("cpu")
+
+    # params.device = torch.device("cpu")
     # =============================================================================
     # ENV
     # =============================================================================
+
     env_config = get_env_configs(params)
     env = get_env(env_config)
-    obs_shape = params.obs_shape
+    obs_shape = env.reset().shape
+
     # channels are inverted
     num_actions = env.action_spaces["agent_0"].n
     if not params.param_sharing:
@@ -46,7 +48,7 @@ if __name__ == "__main__":
         raise NotImplementedError()
 
     rollout = RolloutStorage(
-        (params.horizon) * params.episodes,
+        params.horizon * params.episodes,
         obs_shape,
         num_agents=params.agents,
         num_actions=num_actions,
@@ -80,15 +82,12 @@ if __name__ == "__main__":
         # action_log_prob inside the PPO, we need to understand exactly how
         # to manage the computational graph before moving on
         # set model to train mode
-        # [model.train() for model in ac_dict.values()]
+        #[model.train() for model in ac_dict.values()]
 
-        infos = train_epoch_PPO(
-            rollout, ac_dict, env, opt_dict, params
-        )
-
+        infos = train_epoch_PPO(rollout, ac_dict, env, opt_dict, params)
         infos['exploration_temp'] = [policy.epsilon]
 
-       # wandb_callback.on_batch_end(infos,  epoch, rollout)
+        # wandb_callback.on_batch_end(infos,  epoch, rollout)
         policy.increase_temp(rollout.actions)
         # reset the rollout by overwriting it (saves memory)
         rollout.after_update()

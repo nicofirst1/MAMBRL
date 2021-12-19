@@ -20,7 +20,7 @@ class RolloutStorage(object):
         self.values = torch.zeros(num_steps, num_agents)
         self.returns = torch.zeros(num_steps, num_agents)
         self.gae = torch.zeros(num_steps, num_agents)
-        self.action_log_probs = torch.zeros(num_steps, num_agents, num_actions)
+        self.action_log_probs = torch.zeros(num_steps, num_agents)
 
     def to(self, device):
         self.states = self.states.to(device)
@@ -134,14 +134,11 @@ class RolloutStorage(object):
 
                 ind = perm[start_ind + offset]
                 states_minibatch.append(self.states[ind].unsqueeze(0))
-                next_states_minibatch.append(
-                    self.next_states[ind].unsqueeze(0))
+                next_states_minibatch.append(self.next_states[ind].unsqueeze(0))
                 return_minibatch.append(self.returns[ind].unsqueeze(0))
                 masks_minibatch.append(self.masks[ind].unsqueeze(0))
                 actions_minibatch.append(self.actions[ind].unsqueeze(0))
-                old_action_log_probs_minibatch.append(
-                    self.action_log_probs[ind].unsqueeze(0)
-                )
+                old_action_log_probs_minibatch.append(self.action_log_probs[ind].unsqueeze(0))
                 adv_targ_minibatch.append(self.gae[ind].unsqueeze(0))
 
             if done:
@@ -153,8 +150,7 @@ class RolloutStorage(object):
             actions_minibatch = torch.cat(actions_minibatch, dim=0)
             return_minibatch = torch.cat(return_minibatch, dim=0)
             masks_minibatch = torch.cat(masks_minibatch, dim=0)
-            old_action_log_probs_minibatch = torch.cat(
-                old_action_log_probs_minibatch, dim=0)
+            old_action_log_probs_minibatch = torch.cat(old_action_log_probs_minibatch, dim=0)
             adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
 
             yield states_minibatch, actions_minibatch, return_minibatch,\

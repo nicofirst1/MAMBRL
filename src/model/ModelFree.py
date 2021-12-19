@@ -67,14 +67,15 @@ class OnPolicy(nn.Module):
             action_indx.
         """
         action_logit, value = self.forward(frames)
-
         action_probs = F.softmax(action_logit, dim=1)
+        action = action_probs.multinomial(1).squeeze()
 
         action_log_probs = F.log_softmax(action_logit, dim=1)
-
         entropy = -(action_probs * action_log_probs).sum(1).mean()
 
-        return action_logit, action_log_probs, action_probs, value, entropy
+        #action_log_probs = torch.Tensor([action_log_probs[i][action[i]] for i in range(action_log_probs.size()[0])])
+
+        return action, action_log_probs.gather(-1, action.unsqueeze(dim=-1)), action_probs, value, entropy
 
 
 class ModelFree(OnPolicy):
