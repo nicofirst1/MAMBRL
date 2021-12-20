@@ -10,7 +10,7 @@ class Params:
 
     #### DIRECTORIES ####
     WORKING_DIR = os.getcwd().split("MAMBRL")[0]
-    WORKING_DIR = os.path.join(WORKING_DIR, "MAMBRL")
+    WORKING_DIR = os.path.join(WORKING_DIR,"MAMBRL")
     SRC_DIR = os.path.join(WORKING_DIR, "src")
     LOG_DIR = os.path.join(WORKING_DIR, "log_dir")
     RAY_DIR = os.path.join(LOG_DIR, "ray_results")
@@ -21,28 +21,24 @@ class Params:
     debug = False
     device = torch.device("cuda")
     resize = True
-    param_sharing = False
     obs_shape = [3, 32, 32]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
-    minibatch = 2  # 64
+    minibatch = 2
     epochs = 1000
 
-    # Optimizer
+    ### Optimizer
     lr = 3e-4
     eps = 1e-5
     alpha = 0.99
     max_grad_norm = 5
 
-    # Algo parameters
+    ### Algo parameters
     gamma = 0.998
     ppo_clip_param = 0.1
-    # due to log all losses goes to -inf and +inf pretty fast, to limit this
-    # we use an upper and a lower bound
-    abs_max_loss = 10e10
 
-    # Loss
+    ### Loss
     value_loss_coef = 0.5
     entropy_coef = 0.01
 

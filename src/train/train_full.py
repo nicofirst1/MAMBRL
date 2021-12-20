@@ -65,10 +65,11 @@ def get_actor_critic(obs_space, params, reward_range):
 
 def train(params: Params):
     configs = get_env_configs(params)
-    configs["mode"] = "rgb_array"
+    #configs["mode"] = "rgb_array"
     env = get_env(configs)
 
     obs_shape = env.reset().shape
+    num_actions = env.action_spaces["agent_0"].n
 
     reward_range = env.get_reward_range()
     ac_dict = {
@@ -76,17 +77,24 @@ def train(params: Params):
         for agent_id in env.agents
     }
 
-    optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
-    optim_params = list(chain.from_iterable(optim_params))
+    #optim_params = [list(ac.parameters()) for ac in ac_dict.values()]
+    #optim_params = list(chain.from_iterable(optim_params))
 
-    optimizer = optim.RMSprop(
-        optim_params, params.lr, eps=params.eps, alpha=params.alpha
-    )
+    #optimizer = optim.RMSprop(
+    #    optim_params, params.lr, eps=params.eps, alpha=params.alpha
+    #)
+
+    optimizers = {
+        agent_id: optim.RMSprop(
+            ac_dict[agent_id].parameters(), lr=params.lr, eps=params.eps,
+            alpha=params.alpha) for agent_id in env.agents
+    }
 
     rollout = RolloutStorage(
         params.horizon * params.episodes,
         obs_shape,
         num_agents=params.agents,
+        num_actions=num_actions,
         gamma=params.gamma,
         size_minibatch=params.minibatch,
     )
@@ -95,12 +103,14 @@ def train(params: Params):
     policy_fn = MultimodalMAS(ac_dict)
 
     for ep in track(range(params.epochs), description=f"Epochs"):
+        [model.eval() for model in ac_dict.values()]
         # fill rollout storage with trajcetories
         collect_trajectories(params, env, rollout, obs_shape, policy=policy_fn)
-        # train for all the trajectories collected so far
-        infos = train_epoch_PPO(rollout, ac_dict, env, optimizer, optim_params, params)
-        rollout.after_update()
 
+        [model.train() for model in ac_dict.values()]
+        # train for all the trajectories collected so far
+        infos = train_epoch_PPO(rollout, ac_dict, env, optimizers, params)
+        rollout.after_update()
 
 if __name__ == "__main__":
     params = Params()

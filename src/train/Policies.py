@@ -74,12 +74,12 @@ class EpsilonGreedy(TrajCollectionPolicy):
         action = int(action)
 
         # log_actions_prob = torch.log(action_probs).mean()
-        log_actions_prob = F.log_softmax(action_logit, dim=1).squeeze()
+        actions_log_probs = F.log_softmax(action_logit, dim=1).squeeze()
 
         if self.epsilon > 0:
             self.epsilon -= self.decrease
 
-        return action, value, log_actions_prob
+        return action, value, actions_log_probs[action]
 
     def increase_temp(self, actions: torch.Tensor):
         return
@@ -100,9 +100,9 @@ class MultimodalMAS(TrajCollectionPolicy):
         action_logit, value_logit = self.ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
         action = action_probs.multinomial(1).squeeze()
-        log_action_prob = torch.log(action_probs)
+        action_probs_log = F.log_softmax(action_logit, dim=1).squeeze()
 
-        value = int(value_logit)
+        #value = int(value_logit)
         action = int(action)
 
-        return action, value, log_action_prob
+        return action, value_logit, action_probs_log[action]

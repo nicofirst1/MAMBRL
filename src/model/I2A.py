@@ -16,7 +16,7 @@ class I2A(OnPolicy):
         num_frames,
         full_rollout=True,
     ):
-        super(I2A, self).__init__()
+        super(I2A, self).__init__(num_actions)
 
         self.in_shape = in_shape
         self.num_actions = num_actions
@@ -52,8 +52,6 @@ class I2A(OnPolicy):
                 nn.Linear(features_out + hidden_size, 256),
                 nn.ReLU(),
             )
-
-
 
     def forward(self, input):
         batch_size = input.size(0)
