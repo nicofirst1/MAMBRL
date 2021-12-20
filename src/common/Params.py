@@ -63,6 +63,7 @@ class Params:
     #### EVALUATION ####
     log_step = 500
     checkpoint_freq = 50
+    restore=True
     resume_training = False
     alternating = False
     max_checkpoint_keep = 10

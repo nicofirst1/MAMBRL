@@ -39,7 +39,7 @@ class RandomAction(TrajCollectionPolicy):
         return action, value, action_probs[action]
 
 
-class ExplorationMAS(TrajCollectionPolicy):
+class EpsilonGreedy(TrajCollectionPolicy):
 
     def __init__(self, ac_dict, num_actions):
         self.ac_dict = ac_dict
@@ -82,12 +82,13 @@ class ExplorationMAS(TrajCollectionPolicy):
         return action, value, log_actions_prob
 
     def increase_temp(self, actions: torch.Tensor):
+        return
         var = actions.float().var()
         mean = actions.float().mean()
 
         if not mean - var < self.num_actions / 2 < mean + var:
             if self.epsilon < 1:
-                self.epsilon += 0.2
+                self.epsilon += 0.01
 
 
 class MultimodalMAS(TrajCollectionPolicy):

@@ -8,16 +8,29 @@ from itertools import chain
 import torch
 import torch.optim as optim
 from rich.progress import track
-from torch.utils.tensorboard import SummaryWriter
 
 from logging_callbacks import PPOWandb
 from src.common.Params import Params
 from src.common.utils import get_env_configs
 from src.env.NavEnv import get_env
-from src.model.ModelFree import ModelFree, ModelFreeResnet
+from src.model.ModelFree import ModelFreeResnet
 from src.model.RolloutStorage import RolloutStorage
-from src.train.Policies import ExplorationMAS
+from src.train.Policies import EpsilonGreedy
 from src.train.train_utils import (collect_trajectories, train_epoch_PPO)
+
+
+def get_model_free(agents, restore, device):
+    ac_dict = {agent_id: ModelFreeResnet(in_shape=obs_shape, num_actions=num_actions) for agent_id in
+               agents}
+
+    if restore:
+        for agent_id, agent in ac_dict.items():
+            agent.load_state_dict(torch.load(f"ModelFree_{agent_id}.pt"))
+
+    ac_dict = {k: v.to(device) for k, v in ac_dict.items()}
+
+    return ac_dict
+
 
 if __name__ == "__main__":
 
@@ -70,7 +83,7 @@ if __name__ == "__main__":
     # )
 
     # init policy
-    policy = ExplorationMAS(ac_dict, params.num_actions)
+    policy = EpsilonGreedy(ac_dict, params.num_actions)
 
     for epoch in range(params.epochs):  # track(range(params.epochs)):
         [model.eval() for model in ac_dict.values()]
@@ -98,6 +111,3 @@ if __name__ == "__main__":
         agent_index = env.agents.index(agent_id)
         agent = ac_dict[agent_id]
         torch.save(agent.state_dict(), f"ModelFree_agent_{agent_index}.pt")
-
-        #writer.add_graph(agent, states_mini_batch[0].unsqueeze(dim=0))
-    writer.close()
