@@ -10,9 +10,8 @@ TENSORBOARD_DIR = os.path.join(os.path.abspath(os.pardir), "tensorboard")
 params = Params()
 env_config = get_env_configs(params)
 env = get_env(env_config)
-obs_space = env.render(mode="rgb_array").shape
-obs_space = (obs_space[2], obs_space[0], obs_space[1])
-num_actions = env.action_space.n
+obs_space = env.reset().shape
+num_actions = params.num_actions
 
 model_free = ModelFree(obs_space, num_actions)
 
