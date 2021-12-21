@@ -157,13 +157,41 @@ class ModelFreeResnet(ModelFree):
 
         model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
         model = model.eval()
+        for param in model.parameters():
+            param.requires_grad = False
         model = torch.nn.Sequential(*(list(model.children())[:-1]))
+
+
         self.features = model
 
         self.fc = nn.Sequential(
             nn.Linear(512, 256),
             nn.ReLU(),
         )
+
+    def train(self, mode: bool = True):
+        r"""Sets the module in training mode.
+
+        This has any effect only on certain modules. See documentations of
+        particular modules for details of their behaviors in training/evaluation
+        mode, if they are affected, e.g. :class:`Dropout`, :class:`BatchNorm`,
+        etc.
+
+        Args:
+            mode (bool): whether to set training mode (``True``) or evaluation
+                         mode (``False``). Default: ``True``.
+
+        Returns:
+            Module: self
+        """
+        if not isinstance(mode, bool):
+            raise ValueError("training mode is expected to be boolean")
+        self.training = mode
+        for module in self.children():
+            if module == self.features:
+                module.eval()
+            module.train(mode)
+        return self
 
     def forward(self, x):
         x = self.preprocess(x)
