@@ -43,7 +43,7 @@ Return a matrix Y which gives the sequence of points needed by each of the bots 
 
 <b> Y[i,j] = ith point in the path of bot j.
 
-# Attempt to Solution
+## Attempt to Solution
 This project aims to design and test a customized model of Markov Decision Process and attempt to solve it using Cooperative Q-Learning.
 
 <b> Reasons for Multi Agent Reinforcement Learning to be the best approach for solution </b>
@@ -56,6 +56,9 @@ This project aims to design and test a customized model of Markov Decision Proce
 
 In this project, the notion of multi-agent envronment is implemented using a novel method which we call <b> ConnectedQ </b>
 
+
+## Model based RL 
+- Check [this](https://bair.berkeley.edu/blog/2019/12/12/mbpo/) out for an overview on model based RL. Specifically we refer to the data generation technique.
 
 ## TODOs
 

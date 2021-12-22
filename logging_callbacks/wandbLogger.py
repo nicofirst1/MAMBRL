@@ -29,11 +29,8 @@ class EnvModelWandb(WandbLogger):
             **kwargs:
         """
 
-        # create wandb dir if not existing
-        if not os.path.isdir(out_dir):
-            os.mkdir(out_dir)
 
-        super(EnvModelWandb, self).__init__(dir=out_dir, config=model_config, **kwargs)
+        super(EnvModelWandb, self).__init__(**kwargs)
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2

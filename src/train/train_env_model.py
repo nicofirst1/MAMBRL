@@ -7,7 +7,8 @@ from torch.nn.utils import clip_grad_norm_
 from logging_callbacks import EnvModelWandb
 from src.common import Params, get_env_configs
 from src.env import get_env
-from src.model import EnvModel, RolloutStorage, target_to_pix
+from src.model import  RolloutStorage
+from src.model.EnvModel import StochasticModel, NextFramePredictor
 from src.train.train_utils import collect_trajectories
 
 
@@ -30,32 +31,46 @@ def train_env_model(rollouts, env_model, params, optimizer, callback_fn):
             _,
         ) = sample
 
-        # discard last state since prediction is on the next one
-        input_states_batch = states_batch[:-1]
-        output_states_batch = states_batch[1:]
-        actions_batch = actions_batch[:-1]
-        reward_batch = reward_batch[:-1]
 
+        split=params.minibatch//2
+
+        # discard last state since prediction is on the next one
+        input_states_batch = states_batch[:params.num_frames]
+        target_states_batch = states_batch[params.num_frames+1]
+        actions_batch = actions_batch[params.num_frames + 1]
+        reward_batch = reward_batch[params.num_frames + 1]
+
+        channel_size=params.obs_shape[0]
+
+        input_states_batch = input_states_batch.resize(1, channel_size * params.num_frames, *params.obs_shape[1:])
+        target_states_batch=target_states_batch.unsqueeze(dim=0)
+        new_states_input = target_states_batch.float() / 255
         # call forward method
-        imagined_state, imagined_reward = env_model.full_pipeline(
-            actions_batch, input_states_batch
+        imagined_frames, imagined_reward = env_model(
+            input_states_batch, actions_batch, target=new_states_input
         )
 
-        reward_loss = (reward_batch.float() - imagined_reward).pow(2).mean()
-        reward_loss = Variable(reward_loss, requires_grad=True)
-        image_loss = criterion(imagined_state, output_states_batch)
+
+        reward_loss = nn.CrossEntropyLoss()(imagined_reward, reward_batch)
+        loss_reconstruct = nn.CrossEntropyLoss(reduction='none')(imagined_frames, target_states_batch.long())
+        clip = torch.tensor(params.target_loss_clipping).to(params.device)
+        loss_reconstruct = torch.max(loss_reconstruct, clip)
+        loss_reconstruct = loss_reconstruct.mean() - params.target_loss_clipping
+
+        loss_lstm = env_model.stochastic_model.get_lstm_loss()
 
         optimizer.zero_grad()
-        loss = reward_loss + image_loss
+        loss = reward_loss + loss_reconstruct + loss_lstm
         loss.backward()
 
         mean_loss += loss.detach()
 
         logs = dict(
             reward_loss=reward_loss,
-            image_loss=image_loss,
-            imagined_state=imagined_state[0].float(),
-            actual_state=output_states_batch[0].float(),
+            image_loss=loss_reconstruct,
+            imagined_state=imagined_frames[0].float(),
+            actual_state=target_states_batch[0].float(),
+            loss_lstm=loss_lstm
         )
 
         callback_fn(logs=logs, loss=loss, batch_id=batch_id, is_training=True)
@@ -76,14 +91,11 @@ if __name__ == "__main__":
 
     params.agents = 1
     env_config = get_env_configs(params)
-    env_config["mode"] = "rgb_array"
     env = get_env(env_config)
 
     obs_shape = env.reset().shape
 
     num_colors = len(params.color_index)
-
-    t2p = target_to_pix(params.color_index, gray_scale=params.gray_scale)
 
     rollout = RolloutStorage(
         params.horizon * params.episodes,
@@ -91,21 +103,15 @@ if __name__ == "__main__":
         num_agents=params.agents,
         gamma=params.gamma,
         size_minibatch=params.minibatch,
+        num_actions=params.num_actions,
     )
     rollout.to(params.device)
 
     # ========================================
     #  init the env model
     # ========================================
+    env_model=NextFramePredictor(params, n_action=params.num_actions).to(params.device)
 
-    env_model = EnvModel(
-        obs_shape,
-        reward_range=env.get_reward_range(),
-        num_frames=params.num_frames,
-        num_actions=params.num_actions,
-        num_colors=num_colors,
-        target2pix=t2p,
-    )
 
     optimizer = optim.RMSprop(
         env_model.parameters(), params.lr, eps=params.eps, alpha=params.alpha
@@ -125,7 +131,7 @@ if __name__ == "__main__":
         model_config=params.__dict__,
         out_dir=params.WANDB_DIR,
         opts={},
-        mode="disabled",  # if params.debug else "online",
+        mode="disabled" if params.debug else "online",
     )
 
     for ep in track(range(params.epochs), description=f"Epochs"):

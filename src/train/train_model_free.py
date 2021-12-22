@@ -8,12 +8,13 @@ from itertools import chain
 import torch
 import torch.optim as optim
 from rich.progress import track
+from torch.utils.tensorboard import SummaryWriter
 
 from logging_callbacks import PPOWandb
 from src.common.Params import Params
 from src.common.utils import get_env_configs
 from src.env.NavEnv import get_env
-from src.model.ModelFree import ModelFreeResnet
+from src.model.ModelFree import ModelFreeResnet, ModelFree
 from src.model.RolloutStorage import RolloutStorage
 from src.train.Policies import EpsilonGreedy
 from src.train.train_utils import (collect_trajectories, train_epoch_PPO)
@@ -49,7 +50,7 @@ if __name__ == "__main__":
     # channels are inverted
     num_actions = env.action_spaces["agent_0"].n
     if not params.param_sharing:
-        ac_dict = {agent_id: ModelFreeResnet(in_shape=obs_shape,
+        ac_dict = {agent_id: ModelFree(in_shape=obs_shape,
                    num_actions=num_actions).to(params.device)
                    for agent_id in env.agents}
         opt_dict = {
@@ -74,33 +75,32 @@ if __name__ == "__main__":
     num_minibatches = rollout.get_num_minibatches()
     num_minibatches = int(num_minibatches * 0.01) + 1
 
-    # wandb_callback = PPOWandb(
-    #     train_log_step=num_minibatches,
-    #     val_log_step=num_minibatches,
-    #     project="model_free",
-    #     opts={},
-    #     models=ac_dict,
-    #     horizon=params.horizon,
-    #     mode="disabled" if params.debug else "online",
-    # )
+    wandb_callback = PPOWandb(
+        train_log_step=num_minibatches,
+        val_log_step=num_minibatches,
+        project="model_free",
+        opts={},
+        models=ac_dict,
+        horizon=params.horizon,
+        mode="disabled" if params.debug else "online",
+    )
 
     # init policy
     policy = EpsilonGreedy(ac_dict, params.num_actions)
 
-    for epoch in range(params.epochs):  # track(range(params.epochs)):
-        [model.eval() for model in ac_dict.values()]
-
-        collect_trajectories(params, env, rollout, obs_shape, policy=policy)
-        # fix: if we use model.train() here, it will compute the wrong
+    for epoch in  track(range(params.epochs)):
+        with torch.no_grad():
+            collect_trajectories(params, env, rollout, obs_shape, policy=policy)
+        # fixme: if we use model.train() here, it will compute the wrong
         # action_log_prob inside the PPO, we need to understand exactly how
         # to manage the computational graph before moving on
         # set model to train mode
-        #[model.train() for model in ac_dict.values()]
+        [model.train() for model in ac_dict.values()]
 
         infos = train_epoch_PPO(rollout, ac_dict, env, opt_dict, params)
         infos['exploration_temp'] = [policy.epsilon]
 
-        # wandb_callback.on_batch_end(infos,  epoch, rollout)
+        wandb_callback.on_batch_end(infos,  epoch, rollout)
         policy.increase_temp(rollout.actions)
         # reset the rollout by overwriting it (saves memory)
         rollout.after_update()

@@ -25,8 +25,27 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
-    minibatch = 2
+    minibatch = 8
     epochs = 1000
+    param_sharing=False
+
+    ### ENV model
+    stack_internal_states=True
+    recurrent_state_size=64
+    hidden_size=96
+    compress_steps=2
+    filter_double_steps=3
+    hidden_layers=2
+    bottleneck_bits=128
+    latent_state_size=128
+    dropout=0.15
+    bottleneck_noise= 0.1
+    latent_rnn_max_sampling= 0.5
+    latent_use_max_probability= 0.8
+    residual_dropout=0.5
+    target_loss_clipping=0.03
+
+
 
     ### Optimizer
     lr = 3e-4
@@ -45,12 +64,12 @@ class Params:
     #### ENVIRONMENT ####
     agents = 1
     landmarks = 1
-    horizon = 5  # 64
+    horizon =  64
     episodes = 3
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
-    num_frames = 1
+    num_frames = 4
     num_steps = horizon // num_frames
     full_rollout = False
     gray_scale = False

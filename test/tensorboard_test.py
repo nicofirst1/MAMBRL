@@ -17,6 +17,6 @@ model_free = ModelFree(obs_space, num_actions)
 
 random_input = torch.rand((1, *obs_space))
 
-writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "model_free"))
+writer = SummaryWriter(os.path.join(TENSORBOARD_DIR, "./model_free"))
 writer.add_graph(model_free, random_input)
 writer.close()
