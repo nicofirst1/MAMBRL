@@ -207,7 +207,7 @@ class StochasticModel(nn.Module):
 
 class NextFramePredictor(Container):
 
-    def __init__(self, config, n_action):
+    def __init__(self, config):
         super().__init__()
         self.config = config
         filters = self.config.hidden_size
@@ -250,9 +250,9 @@ class NextFramePredictor(Container):
         middle_shape = shape
 
         self.upscale_layers = []
-        self.action_injectors = [ActionInjector(n_action, filters)]
+        self.action_injectors = [ActionInjector(self.config.num_action, filters)]
         for i in range(self.config.compress_steps):
-            self.action_injectors.append(ActionInjector(n_action, filters))
+            self.action_injectors.append(ActionInjector(self.config.num_action, filters))
 
             in_filters = filters
             if i >= self.config.compress_steps - self.config.filter_double_steps:
@@ -277,7 +277,7 @@ class NextFramePredictor(Container):
         self.middle_network = MiddleNetwork(self.config, middle_shape[0])
         self.reward_estimator = RewardEstimator(self.config, middle_shape[0] + filters)
         self.value_estimator = ValueEstimator(middle_shape[0] * middle_shape[1] * middle_shape[2])
-        self.stochastic_model = StochasticModel(self.config, middle_shape, n_action)
+        self.stochastic_model = StochasticModel(self.config, middle_shape, self.config.num_action)
 
         if self.config.stack_internal_states:
             self.init_internal_states(self.config.agents)

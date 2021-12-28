@@ -1,6 +1,7 @@
 import gym
 import numpy as np
 import torch
+import torch.nn as nn
 
 from src.common.Params import Params
 from src.env import get_env
@@ -121,3 +122,9 @@ def rgb2gray(rgb, dimension):
     rgb = rgb.transpose(-1, dimension)
 
     return rgb
+
+
+def init(module, weight_init, bias_init, gain=1):
+    weight_init(module.weight.data, gain=gain)
+    bias_init(module.bias.data)
+    return module

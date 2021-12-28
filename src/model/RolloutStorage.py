@@ -2,25 +2,18 @@ import torch
 
 
 class RolloutStorage(object):
-    def __init__(
-        self, num_steps, state_shape, num_agents, num_actions, gamma, size_minibatch
-    ):
-        self.num_steps = num_steps
-        self.num_channels = state_shape[0]
-        self.num_agents = num_agents
-        self.gamma = gamma
-        self.size_minibatch = size_minibatch
-        self.num_actions = num_actions
+    def __init__(self, num_steps, obs_shape, num_agents, num_actions):
+        self.num_channels = obs_shape[0]
 
-        self.states = torch.zeros(num_steps, *state_shape)
-        self.next_states = torch.zeros(num_steps, *state_shape)
+        self.states = torch.zeros(num_steps + 1, *obs_shape)
+        #self.next_states = torch.zeros(num_steps, *state_shape)
         self.rewards = torch.zeros(num_steps, num_agents)
-        self.masks = torch.ones(num_steps, num_agents).long()
+        self.masks = torch.ones(num_steps + 1, num_agents).long()
         self.actions = torch.zeros(num_steps, num_agents).long()
-        self.values = torch.zeros(num_steps, num_agents)
-        self.returns = torch.zeros(num_steps, num_agents)
-        self.gae = torch.zeros(num_steps, num_agents)
-        self.action_log_probs = torch.zeros(num_steps, num_agents)
+        self.values = torch.zeros(num_steps + 1, num_agents)
+        self.returns = torch.zeros(num_steps + 1, num_agents)
+        #self.gae = torch.zeros(num_steps, num_agents)
+        self.action_log_probs = torch.zeros(num_steps, num_actions, num_agents)
 
     def to(self, device):
         self.states = self.states.to(device)
@@ -30,28 +23,41 @@ class RolloutStorage(object):
         self.action_log_probs = self.action_log_probs.to(device)
         self.values = self.values.to(device)
         self.returns = self.returns.to(device)
-        self.gae = self.gae.to(device)
+        #self.gae = self.gae.to(device)
 
     def insert(self, step, state, next_state, action, values, reward, mask, action_log_probs):
-        self.states[step].copy_(state)
-        self.next_states[step].copy_(next_state)
+        self.states[step + 1].copy_(state)
+        #self.next_states[step].copy_(next_state)
         self.actions[step].copy_(action)
         self.values[step].copy_(values)
         self.rewards[step].copy_(reward)
-        self.masks[step].copy_(mask)
+        self.masks[step + 1].copy_(mask)
         self.action_log_probs[step].copy_(action_log_probs)
 
     def after_update(self):
         self.states[0].copy_(self.states[-1])
         self.masks[0].copy_(self.masks[-1])
 
-    def compute_returns(self, tau=0.95):
-        """compute_returns method.
+    def compute_returns(self, next_value, use_gae, gamma, gae_lambda):
+        if use_gae:
+            self.values[-1] = next_value
+            gae = 0
+            for step in reversed(range(self.rewards.size(0))):
+                delta = self.rewards[step] + gamma * self.values[step + 1] * self.masks[step + 1] - self.values[step]
+                gae = delta + gamma * gae_lambda * self.masks[step + 1] * gae
+                self.returns[step] = gae + self.values[step]
+        else:
+            self.returns[-1] = next_value
+            for step in reversed(range(self.rewards.size(0))):
+                self.returns[step] = self.returns[step + 1] * gamma * self.masks[step + 1] + self.rewards[step]
+
+    """def compute_returns(self, tau=0.95):
+        compute_returns method.
 
         compute both the return (Q-Value) and the generalizaed advantage
         estimator https://arxiv.org/pdf/1506.02438.pdf by starting from the
         last timestep and going backward.
-        """
+        
         # self.gae[-1] = 0
         # self.values[-1] = next_value
         # for step in reversed(range(self.rewards.size(0))):
@@ -77,7 +83,7 @@ class RolloutStorage(object):
             # fix: advantage normalization, not sure if we should use it or not
             # self.gae = (self.gae - self.gae.mean()) / (self.gae.std() + 1e-5)
             # Q-value function (Advantage + Value)
-            self.returns[step] = self.gae[step] + self.values[step]
+            self.returns[step] = self.gae[step] + self.values[step] """
 
     def get_num_minibatches(self):
         """get_num_minibatches method.
@@ -124,7 +130,7 @@ class RolloutStorage(object):
 
                 ind = perm[start_ind + offset]
                 states_minibatch.append(self.states[ind].unsqueeze(0))
-                next_states_minibatch.append(self.next_states[ind].unsqueeze(0))
+                #next_states_minibatch.append(self.next_states[ind].unsqueeze(0))
                 return_minibatch.append(self.returns[ind].unsqueeze(0))
                 masks_minibatch.append(self.masks[ind].unsqueeze(0))
                 actions_minibatch.append(self.actions[ind].unsqueeze(0))

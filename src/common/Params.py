@@ -45,8 +45,6 @@ class Params:
     residual_dropout=0.5
     target_loss_clipping=0.03
 
-
-
     ### Optimizer
     lr = 3e-4
     eps = 1e-5
