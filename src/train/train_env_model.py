@@ -98,19 +98,18 @@ if __name__ == "__main__":
     num_colors = len(params.color_index)
 
     rollout = RolloutStorage(
-        params.horizon * params.episodes,
-        obs_shape,
-        num_agents=params.agents,
-        gamma=params.gamma,
+        num_steps=params.horizon * params.episodes + 10,
         size_minibatch=params.minibatch,
+        obs_shape=obs_shape,
         num_actions=params.num_actions,
+        num_agents=1
     )
     rollout.to(params.device)
 
     # ========================================
     #  init the env model
     # ========================================
-    env_model=NextFramePredictor(params, n_action=params.num_actions).to(params.device)
+    env_model=NextFramePredictor(params).to(params.device)
 
 
     optimizer = optim.RMSprop(
@@ -121,10 +120,10 @@ if __name__ == "__main__":
     env_model = env_model.train()
 
     # get logging step based on num of batches
-    num_batches = rollout.get_num_minibatches()
-    num_batches = int(num_batches * 0.01) + 1
+    #num_batches = rollout.get_num_minibatches()
+    #num_batches = int(num_batches * 0.01) + 1
 
-    wandb_callback = EnvModelWandb(
+    """wandb_callback = EnvModelWandb(
         train_log_step=num_batches,
         val_log_step=num_batches,
         project="env_model",
@@ -132,7 +131,7 @@ if __name__ == "__main__":
         out_dir=params.WANDB_DIR,
         opts={},
         mode="disabled" if params.debug else "online",
-    )
+    )"""
 
     for ep in track(range(params.epochs), description=f"Epochs"):
         # fill rollout storage with trajcetories
@@ -141,10 +140,10 @@ if __name__ == "__main__":
 
         # train for all the trajectories collected so far
         mean_loss = train_env_model(
-            rollout, env_model, params, optimizer, wandb_callback.on_batch_end
+            rollout, env_model, params, optimizer, None
         )
         rollout.after_update()
 
         # save result and log
         torch.save(env_model.state_dict(), "env_model.pt")
-        wandb_callback.on_epoch_end(loss=mean_loss, logs={}, model_path="env_model.pt")
+        #wandb_callback.on_epoch_end(loss=mean_loss, logs={}, model_path="env_model.pt")

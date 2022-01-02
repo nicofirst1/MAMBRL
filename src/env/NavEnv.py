@@ -50,7 +50,7 @@ class RawEnv(SimpleEnv):
         self.gray_scale = gray_scale
         self.agents_dict = {agent.name: agent for agent in world.agents}
         self.obs_shape = obs_shape
-
+        self.initial_frame = None
 
         self.viewer = rendering.Viewer(obs_shape, obs_shape, visible=visible)
         self.viewer.set_max_size(scenario_kwargs['max_size'])
@@ -66,7 +66,12 @@ class RawEnv(SimpleEnv):
         for lndmrk_id in self.scenario.landmarks.values():
             lndmrk_id.reset_counter()
 
-        return self.observe()
+        self.initial_frame = self.observe()
+
+        zero_frame = torch.zeros((3, 96, 96))
+        self.initial_frame = torch.cat([zero_frame, zero_frame, zero_frame, self.initial_frame], dim=0)
+
+        return self.initial_frame
 
     def observe(self, agent="") -> torch.Tensor:
         """
@@ -96,11 +101,10 @@ class RawEnv(SimpleEnv):
 
         return observation
 
-    def step(self, actions: Dict[str, int]) -> Tuple[Dict[str, torch.Tensor], Dict[str, int], Dict[str, bool], Dict[
-        str, Dict]]:
+    def step(self, actions: Dict[str, int]) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
         """
         Takes a step in the environment.
-        All the agents act simultaneously and the the observation are collected
+        All the agents act simultaneously and the observation are collected
         Args:
             actions: dictionary mapping angent name to an action
 
@@ -137,6 +141,8 @@ class RawEnv(SimpleEnv):
 
         return observation, self.rewards, dones, self.infos
 
+    def get_initial_frame(self):
+        return self.initial_frame
 
 def get_env(kwargs:Dict
             ) -> RawEnv:

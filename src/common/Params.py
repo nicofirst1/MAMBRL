@@ -19,9 +19,10 @@ class Params:
 
     #### TRAINING ####
     debug = False
+    use_wandb = False
     device = torch.device("cuda")
     resize = True
-    obs_shape = [3, 32, 32]
+    obs_shape = [3, 96, 96]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
@@ -30,7 +31,7 @@ class Params:
     param_sharing=False
 
     ### ENV model
-    stack_internal_states=True
+    stack_internal_states=False
     recurrent_state_size=64
     hidden_size=96
     compress_steps=2

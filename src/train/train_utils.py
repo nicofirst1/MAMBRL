@@ -10,7 +10,7 @@ from src.model import RolloutStorage
 from src.train.Policies import TrajCollectionPolicy, RandomAction
 
 
-def mas_dict2tensor(agent_dict, type) -> torch.Tensor:
+def mas_dict2tensor(agent_dict, type=None) -> torch.Tensor:
     """
     sort agent dict and convert to tensor of type
 
@@ -83,7 +83,6 @@ def collect_trajectories(
                 action, value, action_log_probs = policy.act(agent_id, observation)
 
                 # get action with softmax and multimodal (stochastic)
-
                 action_dict[agent_id] = action
                 values_dict[agent_id] = value
                 action_log_dict[agent_id] = action_log_probs
@@ -104,7 +103,7 @@ def collect_trajectories(
             rollout.insert(
                 step=step + episode * params.horizon,
                 state=observation,
-                next_state = next_state,
+                #next_state = next_state,
                 action=actions,
                 values=values,
                 reward=rewards,

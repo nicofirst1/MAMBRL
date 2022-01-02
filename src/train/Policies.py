@@ -96,13 +96,13 @@ class MultimodalMAS(TrajCollectionPolicy):
     def __init__(self, ac_dict):
         self.ac_dict = ac_dict
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
-        action_logit, value_logit = self.ac_dict[agent_id](observation)
-        action_probs = F.softmax(action_logit, dim=1)
-        action = action_probs.multinomial(1).squeeze()
-        action_probs_log = F.log_softmax(action_logit, dim=1).squeeze()
+    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, float, torch.Tensor]:
+        value, action, action_probs_log = self.ac_dict.act(observation, agent_id, True)
+        #action_probs = F.softmax(action_logit, dim=1)
+        #action = action_probs.multinomial(1).squeeze()
+        #action_probs_log = F.log_softmax(action_logit, dim=1).squeeze()
 
-        #value = int(value_logit)
+        value = float(value)
         action = int(action)
 
-        return action, value_logit, action_probs_log[action]
+        return action, value, action_probs_log

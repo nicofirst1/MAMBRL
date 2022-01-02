@@ -250,9 +250,9 @@ class NextFramePredictor(Container):
         middle_shape = shape
 
         self.upscale_layers = []
-        self.action_injectors = [ActionInjector(self.config.num_action, filters)]
+        self.action_injectors = [ActionInjector(self.config.num_actions, filters)]
         for i in range(self.config.compress_steps):
-            self.action_injectors.append(ActionInjector(self.config.num_action, filters))
+            self.action_injectors.append(ActionInjector(self.config.num_actions, filters))
 
             in_filters = filters
             if i >= self.config.compress_steps - self.config.filter_double_steps:
@@ -277,7 +277,7 @@ class NextFramePredictor(Container):
         self.middle_network = MiddleNetwork(self.config, middle_shape[0])
         self.reward_estimator = RewardEstimator(self.config, middle_shape[0] + filters)
         self.value_estimator = ValueEstimator(middle_shape[0] * middle_shape[1] * middle_shape[2])
-        self.stochastic_model = StochasticModel(self.config, middle_shape, self.config.num_action)
+        self.stochastic_model = StochasticModel(self.config, middle_shape, self.config.num_actions)
 
         if self.config.stack_internal_states:
             self.init_internal_states(self.config.agents)
@@ -309,10 +309,11 @@ class NextFramePredictor(Container):
         batch_size=action.shape[0]
         expanded_actions=torch.zeros((batch_size,self.config.num_actions))
         for b in range(batch_size):
-            expanded_actions[b][action[b]]=1
+            expanded_actions[b][int(action[b])]=1
 
         action=expanded_actions.to(action.device)
 
+        ## fixme: qui qualcosa non quadra con le dimensioni, quindi per ora è disabilitato
         if self.config.stack_internal_states:
             internal_states = self.get_internal_states()
             x = torch.cat((x_start, internal_states), dim=1)
@@ -362,4 +363,4 @@ class NextFramePredictor(Container):
         x = self.logits(x)
         x = x.view((-1, 256, *self.config.obs_shape))
 
-        return x, reward_pred#, value_pred
+        return x, reward_pred, value_pred
