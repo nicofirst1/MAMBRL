@@ -61,10 +61,10 @@ class PPO:
 
             for step in range(self.num_steps):
                 observation = observation.to(self.device).unsqueeze(dim=0)
-
+                obs= torch.nn.functional.normalize(observation)
                 for agent_id in self.env.agents:
                     with torch.no_grad():
-                        value, action, action_log_prob = self.actor_critic_dict[agent_id].act(observation, full_log_prob=full_log_prob)
+                        value, action, action_log_prob = self.actor_critic_dict[agent_id].act(obs, full_log_prob=full_log_prob)
 
                     # get action with softmax and multimodal (stochastic)
                     action_dict[agent_id] = int(action)
@@ -107,7 +107,7 @@ class PPO:
             rollout.compute_returns(next_value, True, self.gamma, 0.95)
             value_loss, action_loss, entropy = self.agent.update(rollout)
 
-        return value_loss, action_loss, entropy
+        return value_loss, action_loss, entropy, rollout
 
     def set_env(self, env):
         self.env = env

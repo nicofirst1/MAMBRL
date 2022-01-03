@@ -1,12 +1,15 @@
 import torch
+import wandb
 from tqdm import trange
 
-from simple.ppo_wrapper import PPO
-from simple.simulated_env import SimulatedEnvironment
-from common import Params, get_env_configs
-from env import get_env
-from model.EnvModel import NextFramePredictor
-from train.Policies import MultimodalMAS
+from logging_callbacks import PPOWandb
+from logging_callbacks.callbacks import WandbLogger
+from ppo_wrapper import PPO
+from simulated_env import SimulatedEnvironment
+from src.common import get_env_configs, Params
+from src.env import get_env
+from src.model.EnvModel import NextFramePredictor
+from src.train.Policies import MultimodalMAS
 
 
 class MAMBRL:
@@ -41,9 +44,15 @@ class MAMBRL:
         )
 
         if self.config.use_wandb:
-            import wandb
-            wandb.init(project='SimPLe', name=self.config.experiment_name, config=config)
-            wandb.watch(self.env_models)
+            self.logger= PPOWandb(
+                train_log_step=5,
+                val_log_step=5,
+                project="model_free",
+                opts={},
+                models={},
+                horizon=params.horizon,
+                #mode="offline"
+            )
 
 
     def collect_trajectories(self):
@@ -94,7 +103,15 @@ class MAMBRL:
         self.agent.set_env(self.real_env)
 
         for step in trange(1000, desc="Training model free"):
-            losses = self.agent.learn(episodes=self.config.episodes)
+            value_loss, action_loss, entropy, rollout = self.agent.learn(episodes=self.config.episodes)
+
+            if self.config.use_wandb:
+                losses=dict(
+                value_loss=[value_loss],
+                action_loss=[action_loss],
+                entropy=[entropy]
+                )
+                self.logger.on_batch_end(logs=losses, batch_id=step,rollout=rollout)
 
 
 if __name__ == '__main__':

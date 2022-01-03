@@ -23,7 +23,6 @@ class Border(Entity):
         self.color = np.array(color)
         self.linewidth = linewidth
 
-
         p_pos = (
             (start[0] + end[0]) / 2,
             (start[1] + end[1]) / 2,
@@ -53,7 +52,7 @@ class BoundedWorld(World):
 
     @property
     def entities(self):
-        return self.landmarks + self.borders+ self.agents
+        return self.landmarks + self.borders + self.agents
 
     # @property
     # def contact_margin(self):

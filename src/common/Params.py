@@ -29,6 +29,7 @@ class Params:
     minibatch = 8
     epochs = 1000
     param_sharing=False
+    experiment_name="model_free"
 
     ### ENV model
     stack_internal_states=False
