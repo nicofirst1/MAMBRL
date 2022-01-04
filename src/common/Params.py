@@ -22,12 +22,11 @@ class Params:
     use_wandb = False
     device = torch.device("cuda")
     resize = True
-    obs_shape = [3, 96, 96]
+    obs_shape = [12, 96, 96]
+    frame_shape = [3, 96, 96]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     framework = "torch"
-    minibatch = 8
-    epochs = 1000
     param_sharing=False
     experiment_name="model_free"
 
@@ -64,12 +63,16 @@ class Params:
     #### ENVIRONMENT ####
     agents = 1
     landmarks = 1
-    horizon =  64
+    epochs = 1000
+    minibatch = 8
     episodes = 3
+    horizon =  64
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
     num_frames = 4
+    rollout_len = 1
+    batch_size = 3
     num_steps = horizon // num_frames
     full_rollout = False
     gray_scale = False
@@ -110,7 +113,9 @@ class Params:
             torch.autograd.set_detect_anomaly(True)
 
         if self.gray_scale:
-            self.obs_shape[0] = 1
+            self.frame_shape[0] = 1
+
+        self.obs_shape[0] = self.frame_shape[0] * self.num_frames
 
         self.__initialize_dirs()
 

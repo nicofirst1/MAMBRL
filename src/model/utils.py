@@ -171,6 +171,10 @@ def sample_with_temperature(logits, temperature):
     choices = choices.view((logits.shape[:len(logits.shape) - 1]))
     return choices
 
+def init(module, weight_init, bias_init, gain=1):
+    weight_init(module.weight.data, gain=gain)
+    bias_init(module.bias.data)
+    return module
 
 def one_hot_encode(action, n, dtype=torch.uint8):
     if not isinstance(action, torch.Tensor):

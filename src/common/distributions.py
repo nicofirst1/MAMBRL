@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from common.utils import init
+from model.utils import init
 
 class FixedCategorical(torch.distributions.Categorical):
     def sample(self):

@@ -8,7 +8,7 @@ from torch.nn import Flatten
 from common.distributions import Categorical, FixedCategorical
 from torchvision.transforms import transforms
 
-from common.utils import init
+from model.utils import init
 
 
 class OnPolicy(nn.Module):

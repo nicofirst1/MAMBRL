@@ -2,8 +2,8 @@ import torch
 import wandb
 from tqdm import trange
 
-from logging_callbacks import PPOWandb
-from logging_callbacks.callbacks import WandbLogger
+#from logging_callbacks import PPOWandb
+#from logging_callbacks.callbacks import WandbLogger
 from ppo_wrapper import PPO
 from simulated_env import SimulatedEnvironment
 from src.common import get_env_configs, Params
@@ -64,10 +64,7 @@ class MAMBRL:
             # init dicts and reset env
             action_dict = {agent_id: False for agent_id in self.real_env.agents}
 
-            observation = torch.zeros(self.obs_shape[0] * 4, self.obs_shape[1], self.obs_shape[2])
-
-            obs = self.real_env.reset()
-            observation[-3:, :, :] = obs
+            observation = self.real_env.reset()
 
             for step in range(self.config.horizon):
                 observation = observation.unsqueeze(dim=0).to(self.config.device)
@@ -77,8 +74,7 @@ class MAMBRL:
                         action, _, _ = agent.act(agent_id, observation)
                         action_dict[agent_id] = action
 
-                obs, _, _, _ = self.real_env.step(action_dict)
-                observation = torch.cat((observation.squeeze()[3:, :, :], obs.to(self.config.device)), dim=0)
+                observation, _, _, _ = self.real_env.step(action_dict)
 
     def train_agent_sim_env(self, epoch):
         self.agent.set_env(self.simulated_env)
@@ -97,7 +93,9 @@ class MAMBRL:
             self.train_agent_sim_env(epoch)
 
     def train_env_model(self):
-        pass
+        for step in trange(1000, desc="Training env model"):
+            self.collect_trajectories()
+            self.trainer.train(step, self.real_env)
 
     def train_model_free(self):
         self.agent.set_env(self.real_env)
@@ -106,15 +104,10 @@ class MAMBRL:
             value_loss, action_loss, entropy, rollout = self.agent.learn(episodes=self.config.episodes)
 
             if self.config.use_wandb:
-                losses=dict(
-                value_loss=[value_loss],
-                action_loss=[action_loss],
-                entropy=[entropy]
-                )
+                losses=dict(value_loss=[value_loss], action_loss=[action_loss], entropy=[entropy])
                 self.logger.on_batch_end(logs=losses, batch_id=step,rollout=rollout)
-
 
 if __name__ == '__main__':
     params = Params()
     mambrl = MAMBRL(params)
-    mambrl.train_model_free()
+    mambrl.train_env_model()

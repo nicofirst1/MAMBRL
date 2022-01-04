@@ -7,21 +7,15 @@ import numpy as np
 import torch
 from ray.rllib.utils.images import rgb2gray
 
+from model.utils import one_hot_encode
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from .Scenario import Scenario
 
 
 class RawEnv(SimpleEnv):
-    def __init__(
-            self,
-            name: str,
-            scenario_kwargs: Dict,
-            horizon,
-            continuous_actions: bool,
-            gray_scale=False,
-            obs_shape=None,
-            visible=False,
+    def __init__(self, name: str, scenario_kwargs: Dict, horizon, continuous_actions: bool,
+            device: str, gray_scale=False, obs_shape=None, num_actions=None, visible=False
     ):
         """
         This class has to manage the interaction between the agents in an environment.
@@ -32,46 +26,50 @@ class RawEnv(SimpleEnv):
             scenario_kwargs: dict of keyward for scenario initialization
             horizon: max steps before __all_done__=true
             continuous_actions: if to use continous or discrete actions
+            device: cpu or cuda
             gray_scale: if to convert obs to gray scale
             obs_shape: shape of observation space, used for rescaling
-            mode: rendering mode, either human or rgb_array
+            num_actions: number of actions
         """
         scenario = Scenario(**scenario_kwargs)
 
         world = scenario.make_world()
-        super().__init__(
-            scenario,
-            world,
-            max_cycles=horizon,
-            continuous_actions=continuous_actions,
-            # color_entities=TimerLandmark,
-        )
+        super().__init__(scenario, world, max_cycles=horizon, continuous_actions=continuous_actions) # color_entities=TimerLandmark
+
+        self.obs_shape = obs_shape
+        self.num_actions = num_actions
+
+        self.obs = None
+        self.initial_frame = None
+
+        self.agent_selection = None
+        self.agents_dict = {agent.name: agent for agent in world.agents}
+
         self.metadata["name"] = name
         self.gray_scale = gray_scale
-        self.agents_dict = {agent.name: agent for agent in world.agents}
-        self.obs_shape = obs_shape
-        self.initial_frame = None
+
+        self.device = device
+        self.buffer = []
+        self.infos = {}
 
         self.viewer = rendering.Viewer(obs_shape, obs_shape, visible=visible)
         self.viewer.set_max_size(scenario_kwargs['max_size'])
+
 
     def get_reward_range(self) -> List[int]:
         return self.scenario.get_reward_range()
 
     def reset(self):
         super(RawEnv, self).reset()
-
         self.scenario.reset_world(self.world, self.np_random)
 
         for lndmrk_id in self.scenario.landmarks.values():
             lndmrk_id.reset_counter()
 
         self.initial_frame = self.observe()
+        self.obs = torch.cat((torch.zeros((9, 96, 96)), self.initial_frame), dim=0)
 
-        zero_frame = torch.zeros((3, 96, 96))
-        self.initial_frame = torch.cat([zero_frame, zero_frame, zero_frame, self.initial_frame], dim=0)
-
-        return self.initial_frame
+        return self.obs
 
     def observe(self, agent="") -> torch.Tensor:
         """
@@ -139,13 +137,28 @@ class RawEnv(SimpleEnv):
         # add agent state to infos
         self.infos = {k: self.agents_dict[k].state for k in self.infos.keys()}
 
-        return observation, self.rewards, dones, self.infos
+        self.add_interaction(
+            torch.tensor(actions["agent_0"]),
+            torch.tensor(self.rewards["agent_0"]),
+            observation,
+            [dones["agent_0"]]
+        )
+
+        self.obs = torch.cat((self.obs[3:, :, :], observation), dim=0)
+        return self.obs, self.rewards, dones, self.infos
+
+    def add_interaction(self, actions, rewards, new_obs, done):
+        current_obs = self.obs.squeeze().byte().to(self.device)
+        action = one_hot_encode(actions, self.num_actions).to(self.device)
+        reward = (rewards.squeeze() + 1).byte().to(self.device) ## fixme: perché c'è il +1?
+        new_obs = new_obs.squeeze().byte().to(self.device)
+        done = torch.tensor(done[0], dtype=torch.uint8).to(self.device)
+        self.buffer.append([current_obs, action, reward, new_obs, done, None])
 
     def get_initial_frame(self):
         return self.initial_frame
 
-def get_env(kwargs:Dict
-            ) -> RawEnv:
+def get_env(kwargs:Dict) -> RawEnv:
     """Initialize rawEnv and wrap it in parallel petting zoo."""
     env = RawEnv(**kwargs)
     return env
