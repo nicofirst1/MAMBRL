@@ -10,11 +10,12 @@ class TrajCollectionPolicy:
     Policy class called when collecting trajectories
     """
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    def act(self, agent_id: str, observation: torch.Tensor, full_log_prob: bool) -> Tuple[int, int, torch.Tensor]:
         """
 
         :param agent_id: the agent name as string
         :param observation: an observation related to the agent
+        :param full_log_prob: whether to use full action log probabilities or not
         :return:
             action : an integer representing a discrete action
             value : the value associated with the action
@@ -30,7 +31,7 @@ class RandomAction(TrajCollectionPolicy):
         self.num_actions = num_actions
         self.device = device
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    def act(self, agent_id: str, observation: torch.Tensor, full_log_prob: bool) -> Tuple[int, int, torch.Tensor]:
         action = randint(0, self.num_actions - 1)
         value = 0
         action_probs = torch.ones(self.num_actions)
@@ -48,7 +49,7 @@ class EpsilonGreedy(TrajCollectionPolicy):
         self.epsilon = 0.9
         self.decrease = 5e-5
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, float, torch.Tensor]:
+    def act(self, agent_id: str, observation: torch.Tensor, full_log_prob: bool) -> Tuple[float, int, torch.Tensor]:
         """act method.
 
         implementation of the epsilon greedy exploration function
@@ -62,33 +63,20 @@ class EpsilonGreedy(TrajCollectionPolicy):
             [self.num_actions] log actions prob
         """
         # action_logit [1, num_action] value_logit [1,1]
-        action_logit, value_logit = self.ac_dict[agent_id](observation)
-        action_probs = F.softmax(action_logit, dim=1)
+        value, action, actions_log_probs = self.ac_dict[agent_id].act(observation, full_log_prob=full_log_prob)
 
         if uniform(0, 1) < self.epsilon:
             action = randint(0, self.num_actions - 1)  # Explore action space
         else:
-            action = action_probs.max(1)[1]
+            action = actions_log_probs.max(1)[1]
 
-        value = float(value_logit)
+        value = float(value)
         action = int(action)
-
-        # log_actions_prob = torch.log(action_probs).mean()
-        actions_log_probs = F.log_softmax(action_logit, dim=1).squeeze()
 
         if self.epsilon > 0:
             self.epsilon -= self.decrease
 
-        return action, value, actions_log_probs[action]
-
-    def increase_temp(self, actions: torch.Tensor):
-        return
-        var = actions.float().var()
-        mean = actions.float().mean()
-
-        if not mean - var < self.num_actions / 2 < mean + var:
-            if self.epsilon < 1:
-                self.epsilon += 0.01
+        return value, action, actions_log_probs
 
 
 class MultimodalMAS(TrajCollectionPolicy):
@@ -96,8 +84,8 @@ class MultimodalMAS(TrajCollectionPolicy):
     def __init__(self, ac_dict):
         self.ac_dict = ac_dict
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, float, torch.Tensor]:
-        value, action, action_probs_log = self.ac_dict.act(observation, agent_id, True)
+    def act(self, agent_id: str, observation: torch.Tensor, full_log_prob: bool) -> Tuple[int, float, torch.Tensor]:
+        value, action, actions_log_probs = self.ac_dict.act(observation, agent_id, full_log_prob)
         #action_probs = F.softmax(action_logit, dim=1)
         #action = action_probs.multinomial(1).squeeze()
         #action_probs_log = F.log_softmax(action_logit, dim=1).squeeze()
@@ -105,4 +93,4 @@ class MultimodalMAS(TrajCollectionPolicy):
         value = float(value)
         action = int(action)
 
-        return action, value, action_probs_log
+        return action, value, actions_log_probs

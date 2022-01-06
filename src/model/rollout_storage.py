@@ -2,19 +2,17 @@ import torch
 
 
 class RolloutStorage(object):
-    def __init__(self, num_steps, size_minibatch, obs_shape, num_agents, num_actions):
+    def __init__(self, num_steps, obs_shape, num_agents, num_actions):
         self.num_channels = obs_shape[0]
 
-        self.size_minibatch = size_minibatch
         self.states = torch.zeros(num_steps + 1, *obs_shape)
         #self.next_states = torch.zeros(num_steps, *state_shape)
-        self.rewards = torch.zeros(num_steps, num_agents)
-        self.masks = torch.ones(num_steps + 1, num_agents).long()
-        self.actions = torch.zeros(num_steps, num_agents).long()
-        self.values = torch.zeros(num_steps + 1, num_agents)
-        self.returns = torch.zeros(num_steps + 1, num_agents)
-        #self.gae = torch.zeros(num_steps, num_agents)
-        self.action_log_probs = torch.zeros(num_steps, num_agents)
+        self.rewards = torch.zeros(num_steps, num_agents, 1)
+        self.masks = torch.ones(num_steps + 1, num_agents, 1)
+        self.actions = torch.zeros(num_steps, num_agents, 1).long()
+        self.values = torch.zeros(num_steps + 1, num_agents, 1)
+        self.returns = torch.zeros(num_steps + 1, num_agents, 1)
+        self.action_log_probs = torch.zeros(num_steps, num_agents, num_actions)
 
     def to(self, device):
         self.states = self.states.to(device)
@@ -24,7 +22,6 @@ class RolloutStorage(object):
         self.action_log_probs = self.action_log_probs.to(device)
         self.values = self.values.to(device)
         self.returns = self.returns.to(device)
-        #self.gae = self.gae.to(device)
 
     def insert(self, step, state, action, values, reward, mask, action_log_probs):
         self.states[step + 1].copy_(state)
@@ -51,66 +48,22 @@ class RolloutStorage(object):
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = self.returns[step + 1] * gamma * self.masks[step + 1] + self.rewards[step]
 
-    """def compute_returns(self, tau=0.95):
-        compute_returns method.
-
-        compute both the return (Q-Value) and the generalizaed advantage
-        estimator https://arxiv.org/pdf/1506.02438.pdf by starting from the
-        last timestep and going backward.
-        
-        # self.gae[-1] = 0
-        # self.values[-1] = next_value
-        # for step in reversed(range(self.rewards.size(0))):
-        #     delta = (
-        #         self.rewards[step] +
-        #         self.gamma * self.values[step + 1] * self.masks[step+1] -
-        #         self.values[step]
-        #     )
-        # We use this version in order to use all tensor of the same size
-        for step in reversed(range(self.rewards.size(0))):
-            if step == self.rewards.size(0)-1:
-                delta = 0.0
-                self.gae[step] = delta
-            else:
-                delta = (
-                    self.rewards[step] +
-                    self.gamma * self.values[step + 1] * self.masks[step] -
-                    self.values[step]
-                )
-                self.gae[step] = delta + self.gamma * \
-                    tau * self.masks[step] * self.gae[step+1]
-
-            # fix: advantage normalization, not sure if we should use it or not
-            # self.gae = (self.gae - self.gae.mean()) / (self.gae.std() + 1e-5)
-            # Q-value function (Advantage + Value)
-            self.returns[step] = self.gae[step] + self.values[step] """
-
-    def get_num_minibatches(self):
-        """get_num_minibatches method.
-        Returns the number of possible minibatches based on the number of
-        samples and the size of one minibatch
+    def recurrent_generator(self, advantages, minibatch_frames):
         """
-        total_samples = self.rewards.size(0)
-
-        return total_samples // self.size_minibatch
-
-    def recurrent_generator(self, advantages):
-        """recurrent_generator method.
         Generates a set of permuted minibatches (use the get_num_minibatches
         method to obtain the exact number) of size self.size_minibatch
-        Returns
-        -------
-        states_minibatch : torch.Tensor[minibatch_size, channels, width, height]
-        actions_minibatch: torch.Tensor[minibatch_size, num_agents]
-        return_minibatch: torch.Tensor[minibatch_size, num_agents]
-        masks_minibatch: torch.Tensor[minibatch_size, num_agents]
-        old_action_log_probs_minibatch: torch.Tensor[minibatch_size, num_agents]
-        adv_targ_minibatch: torch.Tensor[minibatch_size, num_agents]
-        next_states_minibatch: torch.Tensor[minibatch_size, num_channels, width, height]
+
+        Returns:
+            states_minibatch : torch.Tensor[minibatch_size, channels, width, height]
+            actions_minibatch: torch.Tensor[minibatch_size, num_agents]
+            return_minibatch: torch.Tensor[minibatch_size, num_agents]
+            masks_minibatch: torch.Tensor[minibatch_size, num_agents]
+            old_action_log_probs_minibatch: torch.Tensor[minibatch_size, num_agents]
+            adv_targ_minibatch: torch.Tensor[minibatch_size, num_agents]
+            next_states_minibatch: torch.Tensor[minibatch_size, num_channels, width, height]
         """
         total_samples = self.rewards.size(0)
         perm = torch.randperm(total_samples)
-        minibatch_frames = self.size_minibatch
         done = False
 
         for start_ind in range(0, total_samples, minibatch_frames):

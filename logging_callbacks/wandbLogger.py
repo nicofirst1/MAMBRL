@@ -7,7 +7,6 @@ import wandb
 from torch import nn
 
 from logging_callbacks.callbacks import WandbLogger
-from src.model import RolloutStorage
 
 
 class EnvModelWandb(WandbLogger):
@@ -105,16 +104,14 @@ class PPOWandb(WandbLogger):
 
         self.epoch = 0
 
-    def on_batch_end(
-            self, logs: Dict[str, Any],  batch_id: int, rollout:RolloutStorage,
-    ):
+    def on_batch_end(self, logs: Dict[str, Any],  batch_id: int, rollout):
 
         logs = {k: sum(v) / len(v) for k, v in logs.items()}
 
         logs['epoch'] = batch_id
 
         if batch_id % 5 == 0:
-            states = rollout.states[:self.horizon].cpu().numpy().astype(np.uint8)
+            states = rollout.states[:self.horizon][:, -3:, :, :].cpu().numpy().astype(np.uint8)
             actions = rollout.actions[:self.horizon].squeeze().cpu().numpy()
             rewards = rollout.rewards[:self.horizon].squeeze().cpu().numpy()
             logs['behaviour'] = wandb.Video(states, fps=16, format="gif")

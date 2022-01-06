@@ -1,8 +1,8 @@
 """tensorboard_test file."""
 import os
 from torch.utils.tensorboard import SummaryWriter
-from src.model.ModelFree import ModelFree
-from src.env.NavEnv import get_env
+from src.model.model_free import ModelFree
+from src.env.envs import get_env
 from src.common.utils import *
 
 TENSORBOARD_DIR = os.path.join(os.path.abspath(os.pardir), "tensorboard")

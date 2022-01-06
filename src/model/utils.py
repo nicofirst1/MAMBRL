@@ -5,7 +5,7 @@ from torch.nn import functional as F
 
 class ParameterSealer:
     """
-    Used to hide sub-module's parameters
+    Used to hide submodule's parameters
     """
 
     def __init__(self, module):
@@ -185,3 +185,21 @@ def one_hot_encode(action, n, dtype=torch.uint8):
     res = res.view((*action.shape, n))
 
     return res
+
+def mas_dict2tensor(agent_dict, type=None) -> torch.Tensor:
+    """
+    sort agent dict and convert to tensor of type
+
+    Params
+    ------
+        agent_dict:
+        type:
+    """
+
+    tensor = sorted(agent_dict.items())
+    if type is not None:
+        tensor = [type(elem[1]) for elem in tensor]
+    else:
+        tensor = [elem[1] for elem in tensor]
+
+    return torch.as_tensor(tensor)

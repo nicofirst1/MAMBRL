@@ -1,9 +1,8 @@
 import torch
 
-from simple import ppo
-from model import RolloutStorage
-from model.ModelFree import Policy
-from train.train_utils import mas_dict2tensor
+from model import RolloutStorage, ppo
+from model.model_free import Policy
+from model.utils import mas_dict2tensor
 
 
 class PPO:
@@ -23,7 +22,7 @@ class PPO:
         self.num_minibatch = num_minibatch
 
         self.actor_critic_dict = {
-            agent_id: Policy(obs_shape, action_space).to(device) for agent_id in self.env.env.agents
+            agent_id: Policy(obs_shape, action_space).to(device) for agent_id in self.env.agents
         }
 
         self.agent = ppo.PPO(
@@ -43,7 +42,6 @@ class PPO:
 
         rollout = RolloutStorage(
             num_steps=self.num_steps,
-            size_minibatch=self.num_minibatch,
             obs_shape=self.obs_shape,
             num_actions=self.action_space,
             num_agents=self.num_agents
@@ -60,11 +58,10 @@ class PPO:
             rollout.states[0] = observation.unsqueeze(dim=0)
 
             for step in range(self.num_steps):
-                observation = observation.to(self.device).unsqueeze(dim=0)
-                obs= torch.nn.functional.normalize(observation)
+                observation = torch.nn.functional.normalize(observation.to(self.device).unsqueeze(dim=0))
                 for agent_id in self.env.agents:
                     with torch.no_grad():
-                        value, action, action_log_prob = self.actor_critic_dict[agent_id].act(obs, full_log_prob=full_log_prob)
+                        value, action, action_log_prob = self.actor_critic_dict[agent_id].act(observation, full_log_prob=full_log_prob)
 
                     # get action with softmax and multimodal (stochastic)
                     action_dict[agent_id] = int(action)
@@ -72,33 +69,32 @@ class PPO:
                     if not full_log_prob:
                         action_log_dict[agent_id] = float(action_log_prob)
                     else:
-                        raise NotImplementedError
+                        action_log_dict[agent_id] = action_log_prob[0]
 
                 # Obser reward and next obs
                 ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
                 new_observation, rewards, done, infos = self.env.step(action_dict)
-                #observation = new_observation.squeeze(dim=0)
 
-                ## fixme: questo aggiunto per il train_model_free visto che il real env restituisce un (3, x, y) e non (z, 12, x, y) come il sim env
-                observation = torch.cat((observation.squeeze()[3:, :, :], new_observation.to(self.device)), dim=0)
-
-                masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
+                masks = (~torch.tensor(done)).float().unsqueeze(0)
 
                 #masks = 1 - mas_dict2tensor(done, int)
                 rewards = mas_dict2tensor(rewards, int)
                 actions = mas_dict2tensor(action_dict, int)
                 values = mas_dict2tensor(values_dict, float)
-                action_log_probs = mas_dict2tensor(action_log_dict, float)
+                action_log_probs = mas_dict2tensor(action_log_dict, float if not full_log_prob else list)
 
                 rollout.insert(
                     step=step,
-                    state=observation,
+                    state=observation.squeeze(dim=0),
                     action=actions,
                     values=values,
                     reward=rewards,
                     mask=masks,
                     action_log_probs=action_log_probs,
                 )
+
+                # update observation
+                observation = new_observation
 
             ## fixme: qui bisogna capire il get_value a cosa serve e come farlo per multi agent
             with torch.no_grad():

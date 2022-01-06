@@ -1,13 +1,10 @@
 import os
-
 import torch
 import torch.nn as nn
 
+from tqdm import trange
 from torch import optim
 from torch.nn.utils import clip_grad_norm_
-from tqdm import trange
-
-from logging_callbacks import EnvModelWandb
 
 
 class EnvModelTrainer:
@@ -20,19 +17,20 @@ class EnvModelTrainer:
             self.model.parameters(), self.config.lr, eps=self.config.eps, alpha=self.config.alpha
         )
 
-        if self.config.use_wandb:
-            self.logger = EnvModelWandb(
-                train_log_step=5,
-                val_log_step=5,
-                project="env_model",
-                opts={},
-                models={},
-                horizon=self.config.horizon,
-                #mode="offline"
-            )
+        self.logger = None
+        # if self.config.use_wandb:
+        #   from logging_callbacks import EnvModelWandb
+        #   self.logger = EnvModelWandb(
+        #       train_log_step=5,
+        #       val_log_step=5,
+        #       project="env_model",
+        #       opts={},
+        #       models={},
+        #       horizon=self.config.horizon,
+        #       #mode="offline"
+        #   )
 
-
-    def train(self, epoch, env, rollout, steps=15000):
+    def train(self, epoch, env, steps=15000):
         if epoch == 0:
             steps *= 3
 

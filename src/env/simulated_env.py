@@ -1,7 +1,7 @@
 import torch
+from model.utils import mas_dict2tensor
 
-from train.train_utils import mas_dict2tensor
-
+## fixme: questa classe è da sistemare
 
 class SimulatedEnvironment:
 
@@ -50,13 +50,3 @@ class SimulatedEnvironment:
 
     def get_initial_frame(self):
         return self.env.get_initial_frame()
-
-def one_hot_encode(action, n, dtype=torch.uint8):
-    if not isinstance(action, torch.Tensor):
-        action = torch.tensor(action)
-
-    res = action.long().view((-1, 1))
-    res = torch.zeros((len(res), n)).to(res.device).scatter(1, res, 1).type(dtype).to(res.device)
-    res = res.view((*action.shape, n))
-
-    return res

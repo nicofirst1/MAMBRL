@@ -7,11 +7,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 
-from src.common.Params import Params
+from src.common.params import Params
 from src.common.utils import get_env_configs
-from src.env.NavEnv import get_env
+from src.env.envs import get_env
 from src.train.train_utils import collect_trajectories
-from src.model.RolloutStorage import RolloutStorage
+from src.model.rollout_storage import RolloutStorage
 
 
 if __name__ == "__main__":

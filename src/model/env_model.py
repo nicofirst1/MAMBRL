@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from scipy.stats import truncnorm
 
+from scipy.stats import truncnorm
 from src.model.utils import MeanAttention, ActionInjector, standardize_frame, get_timing_signal_nd, mix, Container, \
     bit_to_int, int_to_bit, one_hot_encode, sample_with_temperature
 

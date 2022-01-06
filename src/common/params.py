@@ -1,9 +1,7 @@
 import multiprocessing
 import os
 import uuid
-
 import torch
-
 
 class Params:
     unique_id = str(uuid.uuid1())[:8]
@@ -21,14 +19,10 @@ class Params:
     debug = False
     use_wandb = False
     device = torch.device("cuda")
-    resize = True
-    obs_shape = [12, 96, 96]
     frame_shape = [3, 96, 96]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
-    framework = "torch"
     param_sharing=False
-    experiment_name="model_free"
 
     ### ENV model
     stack_internal_states=False
@@ -62,13 +56,14 @@ class Params:
 
     #### ENVIRONMENT ####
     agents = 1
-    landmarks = 1
+    landmarks = 2
+    step_reward = -1
+    landmark_reward = 80
     epochs = 1000
-    minibatch = 8
+    minibatch = 32
     episodes = 3
-    horizon =  64
+    horizon =  128
     env_name = "collab_nav"
-    model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
     num_frames = 4
     rollout_len = 1
@@ -86,19 +81,6 @@ class Params:
     alternating = False
     max_checkpoint_keep = 10
 
-    # Config Dict
-    configs = {
-        "rollout_fragment_length": 50,
-        # PPO parameter
-        "lambda": 0.95,
-        "gamma": 0.998,
-        "clip_param": 0.2,
-        "use_critic": True,
-        "use_gae": True,
-        "grad_clip": 5,
-        "num_sgd_iter": 10,
-    }
-
     color_index = [  # map index to RGB colors
         (0, 255, 0),  # green -> landmarks
         (0, 0, 255),  # blue -> agents
@@ -115,8 +97,7 @@ class Params:
         if self.gray_scale:
             self.frame_shape[0] = 1
 
-        self.obs_shape[0] = self.frame_shape[0] * self.num_frames
-
+        self.obs_shape = (self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
         self.__initialize_dirs()
 
     def __initialize_dirs(self):
@@ -135,3 +116,21 @@ class Params:
                 if not os.path.exists(path):
                     print(f"Mkdir {path}")
                     os.makedirs(path)
+
+    def get_env_configs(self):
+        env_config = dict(
+            horizon=self.horizon,
+            continuous_actions=False,
+            gray_scale=self.gray_scale,
+            frame_shape=self.frame_shape,
+            visible=True,
+            scenario_kwargs=dict(
+                step_reward=self.step_reward,
+                landmark_reward=self.landmark_reward,
+                num_agents=self.agents,
+                num_landmarks=self.landmarks,
+                max_size=3,
+            ),
+        )
+
+        return env_config

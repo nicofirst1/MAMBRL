@@ -1,5 +1,5 @@
-import matplotlib as mpl
 import numpy as np
+import matplotlib as mpl
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.core import Entity
 
@@ -18,13 +18,12 @@ class TimerLandmark(Entity):
     So the longer a landmark stays untouched the worse the penalty gets."""
 
     colors = [
-        colorFader(np.array([0, 1, 0]), np.array([1, 0, 0]), x / 100)
+        colorFader(np.array([0, 1, 0]), np.array([1, 0, 0]), x // 100)
         for x in range(0, 100)
     ]
 
     def __init__(self):
         super().__init__()
-        self.counter = 0
 
     def reset(self, world, np_random):
         self.color = np.array([0, 1.0, 0])
@@ -33,14 +32,3 @@ class TimerLandmark(Entity):
 
         self.state.p_pos = np_random.uniform(-world.max_size + eps, world.max_size - eps, world.dim_p)
         self.state.p_vel = np.zeros(world.dim_p)
-
-    def step(self):
-        self.counter += 1
-
-        if self.counter >= len(self.colors):
-            self.color = self.colors[-1]
-        else:
-            self.color = self.colors[self.counter]
-
-    def reset_counter(self):
-        self.counter = 0
