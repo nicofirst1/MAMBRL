@@ -23,6 +23,7 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     param_sharing=False
+    visible=True
 
     ### ENV model
     stack_internal_states=False
@@ -123,7 +124,7 @@ class Params:
             continuous_actions=False,
             gray_scale=self.gray_scale,
             frame_shape=self.frame_shape,
-            visible=True,
+            visible=self.visible,
             scenario_kwargs=dict(
                 step_reward=self.step_reward,
                 landmark_reward=self.landmark_reward,
