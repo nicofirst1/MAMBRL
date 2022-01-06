@@ -17,7 +17,7 @@ class Params:
 
     #### TRAINING ####
     debug = False
-    use_wandb = False
+    use_wandb = True
     device = torch.device("cuda")
     frame_shape = [3, 96, 96]
     num_workers = multiprocessing.cpu_count() - 1
