@@ -92,6 +92,14 @@ class Params:
         (255, 255, 255),  # white -> background
     ]
 
+    action_meanings= {
+        0: "stop",
+        1: "left",
+        2: "right",
+        3: "up",
+        4: "down"
+    }
+
     def __init__(self):
         if self.debug:
             self.device = torch.device("cpu")

@@ -116,7 +116,7 @@ class PPOWandb(WandbLogger):
             actions = rollout.actions[:self.horizon].squeeze().cpu().numpy()
             rewards = rollout.rewards[:self.horizon].squeeze().cpu().numpy()
             logs['behaviour'] = wandb.Video(states, fps=16, format="gif")
-            logs['actions'] = [self.action_meaning[ac] for ac in actions]
+            logs['actions'] = actions
             logs['rewards'] = rewards
 
         self.log_to_wandb(logs, commit=True)
