@@ -81,6 +81,7 @@ class PPOWandb(WandbLogger):
             val_log_step: int,
             models: Dict[str, nn.Module],
             horizon: int,
+            action_meaning :Dict[str,str],
             **kwargs,
     ):
         """
@@ -101,7 +102,7 @@ class PPOWandb(WandbLogger):
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
         self.horizon=horizon
-
+        self.action_meaning= action_meaning
         self.epoch = 0
 
     def on_batch_end(self, logs: Dict[str, Any],  batch_id: int, rollout):
@@ -115,7 +116,7 @@ class PPOWandb(WandbLogger):
             actions = rollout.actions[:self.horizon].squeeze().cpu().numpy()
             rewards = rollout.rewards[:self.horizon].squeeze().cpu().numpy()
             logs['behaviour'] = wandb.Video(states, fps=16, format="gif")
-            logs['actions'] = actions
+            logs['actions'] = [self.action_meaning[ac] for ac in actions]
             logs['rewards'] = rewards
 
         self.log_to_wandb(logs, commit=True)

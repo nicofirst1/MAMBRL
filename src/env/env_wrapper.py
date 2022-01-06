@@ -1,9 +1,11 @@
 import torch
+
+from env.envs import CollectLandmarkEnv
 from model.utils import one_hot_encode
 
 class EnvWrapper:
 
-    def __init__(self, env, frame_shape, num_stacked_frames, device):
+    def __init__(self, env: CollectLandmarkEnv, frame_shape, num_stacked_frames, device):
 
         self.env = env
         self.buffer = []

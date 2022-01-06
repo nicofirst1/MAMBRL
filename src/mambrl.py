@@ -57,7 +57,9 @@ class MAMBRL:
                 project="model_free",
                 opts={},
                 models={},
-                horizon=params.horizon
+                horizon=params.horizon,
+                mode="disabled" if params.debug else "online",
+                action_meaning=self.real_env.env.action_meaning_dict
             )
 
     def collect_trajectories(self):

@@ -1,19 +1,19 @@
-import torch
 import itertools
-import numpy as np
+from typing import Dict, Tuple
 
-from typing import Dict, List, Tuple
+import numpy as np
+import torch
 from ray.rllib.utils.images import rgb2gray
 
-from env.scenarios import CollectLandmarkScenario
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
+from env.scenarios import CollectLandmarkScenario
 
 
 class CollectLandmarkEnv(SimpleEnv):
     def __init__(self, scenario_kwargs: Dict, horizon, continuous_actions: bool,
-            gray_scale=False, frame_shape=None, visible=False
-    ):
+                 gray_scale=False, frame_shape=None, visible=False
+                 ):
         """
         This class has to manage the interaction between the agents in an environment.
         The env is made of N agents and M landmarks.
@@ -28,7 +28,8 @@ class CollectLandmarkEnv(SimpleEnv):
 
         scenario = CollectLandmarkScenario(**scenario_kwargs)
         world = scenario.make_world()
-        super().__init__(scenario, world, max_cycles=horizon, continuous_actions=continuous_actions, local_ratio=None) # color_entities=TimerLandmark
+        super().__init__(scenario, world, max_cycles=horizon, continuous_actions=continuous_actions,
+                         local_ratio=None)  # color_entities=TimerLandmark
 
         self.frame_shape = frame_shape
         self.render_geoms = None
@@ -43,6 +44,17 @@ class CollectLandmarkEnv(SimpleEnv):
     def reset(self):
         super(CollectLandmarkEnv, self).reset()
         return self.observe()
+
+    @property
+    def action_meaning_dict(self):
+
+        return {
+            0: "stop",
+            1: "left",
+            2: "right",
+            3: "up",
+            4: "down"
+        }
 
     def observe(self, agent="") -> torch.Tensor:
         """
@@ -61,7 +73,7 @@ class CollectLandmarkEnv(SimpleEnv):
 
             # move channel on second dimension if present, else add 1
             if len(observation.shape) == 3:
-                observation = observation.permute(2, 0, 1) ## fixme: a che serve questo?
+                observation = observation.permute(2, 0, 1)  ## fixme: a che serve questo?
             else:
                 observation = observation.unsqueeze(dim=0)
 
@@ -108,7 +120,8 @@ class CollectLandmarkEnv(SimpleEnv):
 
         return observation, self.rewards, done, {}
 
-def get_env(kwargs:Dict) -> CollectLandmarkEnv:
+
+def get_env(kwargs: Dict) -> CollectLandmarkEnv:
     """Initialize rawEnv and wrap it in parallel petting zoo."""
     env = CollectLandmarkEnv(**kwargs)
     return env
