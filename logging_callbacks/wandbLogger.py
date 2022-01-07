@@ -1,24 +1,21 @@
-import os
 from typing import Any, Dict, Optional
 
 import numpy as np
-import torch
 import wandb
-from PIL import Image
-from torch import nn
-
 from logging_callbacks.callbacks import WandbLogger
-from src.gradcam import apply_colormap_on_image, GradCam
+from PIL import Image
+from src.gradcam import apply_colormap_on_image
+from torch import nn
 
 
 class EnvModelWandb(WandbLogger):
     def __init__(
-            self,
-            train_log_step: int,
-            val_log_step: int,
-            out_dir: str,
-            model_config,
-            **kwargs,
+        self,
+        train_log_step: int,
+        val_log_step: int,
+        out_dir: str,
+        model_config,
+        **kwargs,
     ):
         """
         Logs env model training onto wandb
@@ -30,7 +27,6 @@ class EnvModelWandb(WandbLogger):
             **kwargs:
         """
 
-
         super(EnvModelWandb, self).__init__(**kwargs)
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
@@ -41,7 +37,7 @@ class EnvModelWandb(WandbLogger):
         self.epoch = 0
 
     def on_batch_end(
-            self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
+        self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
     ):
 
         flag = "training" if is_training else "validation"
@@ -78,14 +74,14 @@ class EnvModelWandb(WandbLogger):
 
 class PPOWandb(WandbLogger):
     def __init__(
-            self,
-            train_log_step: int,
-            val_log_step: int,
-            models: Dict[str, nn.Module],
-            horizon: int,
-            action_meaning :Dict[str,str],
-            cams: Optional[list],
-            **kwargs,
+        self,
+        train_log_step: int,
+        val_log_step: int,
+        models: Dict[str, nn.Module],
+        horizon: int,
+        action_meaning: Dict[str, str],
+        cams: Optional[list],
+        **kwargs,
     ):
         """
         Logs env model training onto wandb
@@ -104,51 +100,50 @@ class PPOWandb(WandbLogger):
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
-        self.horizon=horizon
-        self.action_meaning= action_meaning
+        self.horizon = horizon
+        self.action_meaning = action_meaning
         self.epoch = 0
 
         self.log_behavior_step = 5
         self.log_heatmap_step = 10
 
         # Grad cam
-        self.cams= cams
+        self.cams = cams
 
-    def on_batch_end(self, logs: Dict[str, Any],  batch_id: int, rollout):
+    def on_batch_end(self, logs: Dict[str, Any], batch_id: int, rollout):
 
         logs = {k: sum(v) / len(v) for k, v in logs.items()}
 
-        logs['epoch'] = batch_id
-
+        logs["epoch"] = batch_id
 
         if batch_id % self.log_behavior_step == 0:
-            done_idx= (rollout.masks == 0).nonzero(as_tuple=True)[0]
-            states = rollout.states[:done_idx][:, -3:, :, :].cpu().numpy().astype(np.uint8)
+            done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0]
+            states = (
+                rollout.states[:done_idx][:, -3:, :, :].cpu().numpy().astype(np.uint8)
+            )
             actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
             rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
-            logs['behaviour'] = wandb.Video(states, fps=16, format="gif")
-            logs['actions'] = actions
-            logs['rewards'] = rewards
-            logs['mean_reward'] = rewards.mean()
+            logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
+            logs["actions"] = actions
+            logs["rewards"] = rewards
+            logs["mean_reward"] = rewards.mean()
 
         if batch_id % self.log_heatmap_step == 0:
             # map heatmap on image
-            img= rollout.states[0]
-            reprs=[]
+            img = rollout.states[0]
+            reprs = []
             for c in self.cams:
-
-                cam=c.generate_cam(img.clone().unsqueeze(dim=0))
+                cam = c.generate_cam(img.clone().unsqueeze(dim=0))
                 reprs.append((c.name, cam))
-            img=img[-3:]
-            img= np.uint8(img.cpu().data.numpy())
-            img= img.transpose(2, 1, 0)
-            img=Image.fromarray(img).convert('RGB')
+            img = img[-3:]
+            img = np.uint8(img.cpu().data.numpy())
+            img = img.transpose(2, 1, 0)
+            img = Image.fromarray(img).convert("RGB")
 
             for name, rep in reprs:
-                heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, 'hsv')
-                logs[f'{name}_heatmap'] = wandb.Image(heatmap)
-                logs[f'{name}_heatmap_on_image'] = wandb.Image(heatmap_on_image)
-
+                heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
+                logs[f"{name}_heatmap"] = wandb.Image(heatmap)
+                logs[f"{name}_heatmap_on_image"] = wandb.Image(heatmap_on_image)
 
         self.log_to_wandb(logs, commit=True)
 
