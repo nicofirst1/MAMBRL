@@ -35,12 +35,12 @@ env = EnvWrapper(
     num_stacked_frames=params.num_frames,
     device=params.device
 )
-episodes = 3
+
 
 
 def test_episodes():
     action_dict = {}
-    for ep in range(3):
+    for ep in range(30):
         obs = env.reset()
         done = {_: False for _ in env.agents}
         done["__all__"] = False
@@ -105,7 +105,45 @@ def test_landmark_curriculum():
 
                 obs, reward, done, info = env.step(action_dict)
 
+                time.sleep(0.1)
+
+            print(f"End of episode {ep}\n\n\n")
+
+
+def test_reward_curriculum():
+    action_dict = {}
+
+    for land in range(3):
+
+        for ep in range(3):
+
+            env.set_curriculum(reward=land)
+
+            print_current_curriculum(env.get_curriculum())
+
+            obs = env.reset()
+            done = {_: False for _ in env.agents}
+            done["__all__"] = False
+
+            for step in range(env_configs['horizon']):
+
+                if done["__all__"]:
+                    print("GAME OVER!")
+                    break
+
+                for agent in env.agents:
+                    if done[agent]:
+                        action_dict[agent] = None
+
+                    else:
+                        action_dict[agent] = random.randint(0, 4)
+                        # action_dict[agent] = 4
+
+                obs, reward, done, info = env.step(action_dict)
 
                 time.sleep(0.1)
 
             print(f"End of episode {ep}\n\n\n")
+
+
+

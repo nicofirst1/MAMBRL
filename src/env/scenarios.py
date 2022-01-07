@@ -14,6 +14,13 @@ def is_collision(entity1, entity2):
     return True if dist < dist_min else False
 
 
+def get_distance(entity1, entity2):
+    delta_pos = entity1.state.p_pos - entity2.state.p_pos
+    dist = np.sqrt(np.sum(np.square(delta_pos)))
+
+    return dist
+
+
 class Border(Entity):
     def __init__(self, start: Tuple[int, int], end: Tuple[int, int], color=(1, 0, 0), linewidth=1):
         super(Border, self).__init__()
@@ -82,7 +89,7 @@ class CollectLandmarkScenario(BaseScenario):
         reward_modalities = {
             0: "Reward is the distance between agent and closest landmark, +landmark_reward when agent on landmark",
             1: "Reward is 0 at every time step and +landmark_reward when agent on landmark",
-            2: "Reward is -1 at every time step and +landmark_reward when agent on landmark",
+            2: "Reward is -step_reward at every time step and +landmark_reward when agent on landmark",
             "current": 0,
         }
 
@@ -107,7 +114,6 @@ class CollectLandmarkScenario(BaseScenario):
     def get_curriculum(self) -> Tuple[Tuple[int, str], Tuple[int, str]]:
         r = self.reward_curriculum['current']
         l = self.landmark_curriculum['current']
-
 
         return (r, self.reward_curriculum[r]), (l, self.landmark_curriculum[l])
 
@@ -186,12 +192,33 @@ class CollectLandmarkScenario(BaseScenario):
 
     ## fixme: needed or pettingzoo will not work
     def reward(self, agent, world):
-        rew = self.step_reward
+
+        rew = 0
+
+        if self.reward_curriculum['current'] == 0:
+
+            min_dist = 99999
+            for landmark in world.landmarks:
+                dist = get_distance(agent, landmark)
+
+                min_dist = min(min_dist, dist)
+
+            rew -= dist
+
+        elif self.reward_curriculum['current'] == 1:
+            rew = 0
+
+        elif self.reward_curriculum['current'] == 2:
+            rew = self.step_reward
+
+        else:
+            raise ValueError(
+                f"Value '{self.reward_curriculum['current']}' has not been implemented for reward mode")
 
         for landmark in world.landmarks:
             if is_collision(agent, landmark):
                 # positive reward, and add collision
-                rew = self.landmark_reward
+                rew += self.landmark_reward
                 self.visited_landmarks.append(landmark.name)
 
         return rew
