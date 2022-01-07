@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.distributions.utils import logits_to_probs
 from torch.nn import Flatten
 from torchvision.transforms import transforms
 
@@ -38,7 +39,6 @@ class Policy(nn.Module):
     def act(self, inputs, deterministic=False, full_log_prob=False):
         value, actor_features = self.base(inputs)
         logits = self.dist(actor_features)
-        # fixme: initializing distr is very slow
         dist = FixedCategorical(logits=logits)
 
         if deterministic:
@@ -66,9 +66,14 @@ class Policy(nn.Module):
         if full_log_prob:
             action_log_probs = torch.log_softmax(logits, dim=-1)
         else:
-            action_log_probs = dist.log_probs(action)
+            action_log_probs= dist.log_probs(action)
 
-        dist_entropy = dist.entropy().mean()
+
+
+        min_real = torch.finfo(logits.dtype).min
+        logits = torch.clamp(logits, min=min_real)
+        p_log_p = logits * dist.probs
+        dist_entropy = -p_log_p.sum(-1).mean()
 
         return value, action_log_probs, dist_entropy
 
