@@ -1,21 +1,23 @@
+import random
 from typing import Any, Dict, Optional
 
 import numpy as np
 import wandb
-from logging_callbacks.callbacks import WandbLogger
 from PIL import Image
-from src.gradcam import apply_colormap_on_image
 from torch import nn
+
+from logging_callbacks.callbacks import WandbLogger
+from src.gradcam import apply_colormap_on_image
 
 
 class EnvModelWandb(WandbLogger):
     def __init__(
-        self,
-        train_log_step: int,
-        val_log_step: int,
-        out_dir: str,
-        model_config,
-        **kwargs,
+            self,
+            train_log_step: int,
+            val_log_step: int,
+            out_dir: str,
+            model_config,
+            **kwargs,
     ):
         """
         Logs env model training onto wandb
@@ -37,7 +39,7 @@ class EnvModelWandb(WandbLogger):
         self.epoch = 0
 
     def on_batch_end(
-        self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
+            self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
     ):
 
         flag = "training" if is_training else "validation"
@@ -74,14 +76,14 @@ class EnvModelWandb(WandbLogger):
 
 class PPOWandb(WandbLogger):
     def __init__(
-        self,
-        train_log_step: int,
-        val_log_step: int,
-        models: Dict[str, nn.Module],
-        horizon: int,
-        action_meaning: Dict[str, str],
-        cams: Optional[list],
-        **kwargs,
+            self,
+            train_log_step: int,
+            val_log_step: int,
+            models: Dict[str, nn.Module],
+            horizon: int,
+            action_meaning: Dict[str, str],
+            cams: Optional[list],
+            **kwargs,
     ):
         """
         Logs env model training onto wandb
@@ -116,11 +118,16 @@ class PPOWandb(WandbLogger):
 
         logs["epoch"] = batch_id
 
-        if batch_id % self.log_behavior_step == 0:
+        if batch_id % 1 == 0:
             done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0]
+
+            if len(done_idx) > 1:
+                done_idx = done_idx[0]
+
             states = (
                 rollout.states[:done_idx][:, -3:, :, :].cpu().numpy().astype(np.uint8)
             )
+
             actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
             rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
             logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
@@ -130,7 +137,8 @@ class PPOWandb(WandbLogger):
 
         if batch_id % self.log_heatmap_step == 0:
             # map heatmap on image
-            img = rollout.states[0]
+            idx=random.choice(range(done_idx))
+            img = rollout.states[idx]
             reprs = []
             for c in self.cams:
                 cam = c.generate_cam(img.clone().unsqueeze(dim=0))
@@ -142,7 +150,7 @@ class PPOWandb(WandbLogger):
 
             for name, rep in reprs:
                 heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
-                #logs[f"{name}_heatmap"] = wandb.Image(heatmap)
+                # logs[f"{name}_heatmap"] = wandb.Image(heatmap)
                 logs[f"{name}_heatmap_on_image"] = wandb.Image(heatmap_on_image)
 
         self.log_to_wandb(logs, commit=True)

@@ -242,7 +242,7 @@ class CollectLandmarkScenario(BaseScenario):
                 rew += self.landmark_reward
                 self.visited_landmarks.append(landmark.name)
 
-        upper_bound=self.landmark_reward
+        upper_bound=max(self.landmark_reward, world.max_size)
 
         rew=min_max_norm(rew, lower_bound, upper_bound)
 

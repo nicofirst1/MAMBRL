@@ -98,11 +98,12 @@ class PPO:
                     value_loss = 0.5 * (agent_returns - values).pow(2).mean()
 
                 self.optimizers[agent_id].zero_grad()
-
+                value_loss*=self.value_loss_coef
+                entropy*= self.entropy_coef
                 loss = (
-                    value_loss * self.value_loss_coef
+                    value_loss
                     + action_loss
-                    - entropy * self.entropy_coef
+                    - entropy
                 )
                 loss.backward()
 

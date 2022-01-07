@@ -1,6 +1,10 @@
 ## Installation 
 This project requires python>= 3.6
 
+First clone the repo with"
+```
+git clone --recurse-submodules https://github.com/nicofirst1/MAMBRL.git
+```
 
 We are using a custom version of the PettingZoo library, in order to install it execute:
 

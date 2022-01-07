@@ -7,18 +7,18 @@ from model.utils import mas_dict2tensor
 
 class PPO:
     def __init__(
-        self,
-        env,
-        obs_shape,
-        action_space,
-        num_agents,
-        config,
-        clip_param=0.1,
-        value_loss_coef=0.5,
-        entropy_coef=0.01,
-        eps=1e-5,
-        max_grad_norm=0.5,
-        ppo_epoch=4,
+            self,
+            env,
+            obs_shape,
+            action_space,
+            num_agents,
+            config,
+            clip_param=0.1,
+            value_loss_coef=0.5,
+            entropy_coef=0.01,
+            eps=1e-5,
+            max_grad_norm=0.5,
+            ppo_epoch=4,
     ):
 
         self.env = env
@@ -64,7 +64,7 @@ class PPO:
             use_clipped_value_loss=config.clip_value_loss,
         )
 
-    def learn(self, episodes, full_log_prob=False):
+    def learn(self, episodes, full_log_prob=False, entropy_coef=None):
 
         rollout = RolloutStorage(
             num_steps=self.num_steps,
@@ -73,6 +73,9 @@ class PPO:
             num_agents=self.num_agents,
         )
         rollout.to(self.device)
+
+        if entropy_coef is not None:
+            self.agent.entropy_coef = entropy_coef
 
         for episode in range(episodes):
             # init dicts and reset env
@@ -135,8 +138,8 @@ class PPO:
             with torch.no_grad():
                 next_value = (
                     self.actor_critic_dict["agent_0"]
-                    .get_value(rollout.states[-1].unsqueeze(0))
-                    .detach()
+                        .get_value(rollout.states[-1].unsqueeze(0))
+                        .detach()
                 )
 
             rollout.compute_returns(next_value, True, self.gamma, 0.95)

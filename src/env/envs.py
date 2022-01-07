@@ -3,7 +3,6 @@ from typing import Dict, Tuple
 
 import numpy as np
 import torch
-from ray.rllib.utils.images import rgb2gray
 
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
@@ -93,6 +92,7 @@ class CollectLandmarkEnv(SimpleEnv):
                 observation = observation.unsqueeze(dim=0)
 
             if self.gray_scale:
+                #fixme: add rgb2gray func
                 observation = rgb2gray(observation)
                 observation = np.expand_dims(observation, axis=0)
 
