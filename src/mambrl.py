@@ -7,8 +7,11 @@ from model.env_model_trainer import EnvModelTrainer
 from env.simulated_env import SimulatedEnvironment
 from src.common import Params
 from src.env import get_env
+from src.gradcam import GradCam, CamExtractor
+from src.layercam import LayerCam
 from src.model.env_model import NextFramePredictor
 from model.policies import MultimodalMAS, EpsilonGreedy
+from src.scorecam import ScoreCam
 
 
 class MAMBRL:
@@ -42,15 +45,26 @@ class MAMBRL:
             obs_shape=self.obs_shape,
             action_space=self.action_space,
             num_agents=self.config.agents,
-            device=config.device,
-            gamma=config.gamma,
-            num_steps=self.config.horizon,
-            num_minibatch=self.config.minibatch,
-            lr=config.lr
+            config=config,
+
         )
 
         if self.config.use_wandb:
             from logging_callbacks import PPOWandb
+            model= self.agent.actor_critic_dict['agent_0'].base
+
+            if config.base=="resnet":
+                target_layer = 7
+            elif config.base=="cnn":
+                target_layer = 5
+            else:
+                target_layer=1
+            extractor= CamExtractor(model, target_layer=target_layer)
+            layer = LayerCam(model, extractor)
+            score_cam = ScoreCam(model, extractor)
+
+            cams=[layer,score_cam]
+
             self.logger = PPOWandb(
                 train_log_step=5,
                 val_log_step=5,
@@ -59,7 +73,8 @@ class MAMBRL:
                 models={},
                 horizon=params.horizon,
                 mode="disabled" if params.debug else "online",
-                action_meaning=self.real_env.env.action_meaning_dict
+                action_meaning=self.real_env.env.action_meaning_dict,
+                cams=cams,
             )
 
     def collect_trajectories(self):

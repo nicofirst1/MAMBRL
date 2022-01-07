@@ -1,3 +1,5 @@
+import argparse
+import inspect
 import multiprocessing
 import os
 import uuid
@@ -10,7 +12,7 @@ class Params:
 
     #### DIRECTORIES ####
     WORKING_DIR = os.getcwd().split("MAMBRL")[0]
-    WORKING_DIR = os.path.join(WORKING_DIR,"MAMBRL")
+    WORKING_DIR = os.path.join(WORKING_DIR, "MAMBRL")
     SRC_DIR = os.path.join(WORKING_DIR, "src")
     LOG_DIR = os.path.join(WORKING_DIR, "log_dir")
     RAY_DIR = os.path.join(LOG_DIR, "ray_results")
@@ -19,14 +21,29 @@ class Params:
 
     #### TRAINING ####
     debug = False
+    use_wandb = True
     device = torch.device("cuda")
-    resize = True
-    obs_shape = [3, 32, 32]
+    frame_shape = [3, 96, 96]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
-    framework = "torch"
-    minibatch = 128
-    epochs = 1000
+    param_sharing = False
+    visible = True
+
+    ### ENV model
+    stack_internal_states = False
+    recurrent_state_size = 64
+    hidden_size = 96
+    compress_steps = 2
+    filter_double_steps = 3
+    hidden_layers = 2
+    bottleneck_bits = 128
+    latent_state_size = 128
+    dropout = 0.15
+    bottleneck_noise = 0.1
+    latent_rnn_max_sampling = 0.5
+    latent_use_max_probability = 0.8
+    residual_dropout = 0.5
+    target_loss_clipping = 0.03
 
     ### Optimizer
     lr = 3e-4
@@ -39,18 +56,25 @@ class Params:
     ppo_clip_param = 0.1
 
     ### Loss
-    value_loss_coef = 1
+    value_loss_coef = 0.5
     entropy_coef = 0.01
+    base="resnet" #[ cnn , resnet ]
+    clip_value_loss=True
 
     #### ENVIRONMENT ####
     agents = 1
-    landmarks = 1
-    horizon = 64
+    landmarks = 2
+    step_reward = -1
+    landmark_reward = 80
+    epochs = 1000
+    minibatch = 32
     episodes = 3
+    horizon = 128
     env_name = "collab_nav"
-    model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
-    num_frames = 1
+    num_frames = 4
+    rollout_len = 1
+    batch_size = 3
     num_steps = horizon // num_frames
     full_rollout = False
     gray_scale = False
@@ -59,29 +83,24 @@ class Params:
     #### EVALUATION ####
     log_step = 500
     checkpoint_freq = 50
-    restore=True
+    restore = True
     resume_training = False
     alternating = False
     max_checkpoint_keep = 10
-
-    # Config Dict
-    configs = {
-        "rollout_fragment_length": 50,
-        # PPO parameter
-        "lambda": 0.95,
-        "gamma": 0.998,
-        "clip_param": 0.2,
-        "use_critic": True,
-        "use_gae": True,
-        "grad_clip": 5,
-        "num_sgd_iter": 10,
-    }
 
     color_index = [  # map index to RGB colors
         (0, 255, 0),  # green -> landmarks
         (0, 0, 255),  # blue -> agents
         (255, 255, 255),  # white -> background
     ]
+
+    action_meanings= {
+        0: "stop",
+        1: "left",
+        2: "right",
+        3: "up",
+        4: "down"
+    }
 
     def __init__(self):
         if self.debug:
@@ -91,9 +110,11 @@ class Params:
             torch.autograd.set_detect_anomaly(True)
 
         if self.gray_scale:
-            self.obs_shape[0] = 1
+            self.frame_shape[0] = 1
 
+        self.obs_shape = (self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
         self.__initialize_dirs()
+        self.__parse_args()
 
     def __initialize_dirs(self):
         """
@@ -111,3 +132,68 @@ class Params:
                 if not os.path.exists(path):
                     print(f"Mkdir {path}")
                     os.makedirs(path)
+            # change values based on argparse
+
+    def __parse_args(self):
+        """
+        Use argparse to change the default values in the param class
+        """
+
+        att = self.__get_attributes()
+
+        """Create the parser to capture CLI arguments."""
+        parser = argparse.ArgumentParser()
+
+        # for every attribute add an arg instance
+        for k, v in att.items():
+            if isinstance(v, bool):
+                parser.add_argument(
+                    "-" + k.lower(),
+                    action='store_true',
+                    default=v,
+
+                )
+            else:
+                parser.add_argument(
+                    "--" + k.lower(),
+                    type=type(v),
+                    default=v,
+                )
+
+        args, unk = parser.parse_known_args()
+        for k, v in vars(args).items():
+            self.__setattr__(k, v)
+
+    def __get_attributes(self):
+        """
+        Get a dictionary for every attribute that does not have "filter_str" in it
+        :return:
+        """
+
+        # get every attribute
+        attributes = inspect.getmembers(self)
+        # filter based on double underscore
+        filter_str = "__"
+        attributes = [elem for elem in attributes if filter_str not in elem[0]]
+        # convert to dict
+        attributes = dict(attributes)
+
+        return attributes
+
+    def get_env_configs(self):
+        env_config = dict(
+            horizon=self.horizon,
+            continuous_actions=False,
+            gray_scale=self.gray_scale,
+            frame_shape=self.frame_shape,
+            visible=self.visible,
+            scenario_kwargs=dict(
+                step_reward=self.step_reward,
+                landmark_reward=self.landmark_reward,
+                num_agents=self.agents,
+                num_landmarks=self.landmarks,
+                max_size=3,
+            ),
+        )
+
+        return env_config

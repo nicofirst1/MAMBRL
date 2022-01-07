@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 
 from torch.nn import Flatten
+from torchvision.transforms import transforms
+
 from common.distributions import Categorical, FixedCategorical
 
 from model.utils import init
@@ -102,7 +104,7 @@ class CNNBase(NNBase):
         middle_shape = (middle_shape[0] // 2 - 1, middle_shape[1] // 2 - 1)
         middle_shape = (middle_shape[0] - 2, middle_shape[1] - 2)
 
-        self.main = nn.Sequential(
+        self.features = nn.Sequential(
             init_(nn.Conv2d(num_inputs, 32, 8, stride=4)), nn.ReLU(),
             init_(nn.Conv2d(32, 64, 4, stride=2)), nn.ReLU(),
             init_(nn.Conv2d(64, 32, 3, stride=1)), nn.ReLU(), Flatten(),
@@ -110,13 +112,13 @@ class CNNBase(NNBase):
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
 
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+        self.classifier = init_(nn.Linear(hidden_size, 1))
 
         self.train()
 
     def forward(self, inputs):
-        x = self.main(inputs / 255.0)
-        return self.critic_linear(x), x
+        x = self.features(inputs / 255.0)
+        return self.classifier(x), x
 
 
 class ResNetBase(NNBase):
@@ -135,19 +137,19 @@ class ResNetBase(NNBase):
         model = model.eval()
         for param in model.parameters():
             param.requires_grad = False
-        self.main = torch.nn.Sequential(*(list(model.children())[:-1]))
+        self.features = torch.nn.Sequential(*(list(model.children())[:-1]))
 
         num_inputs = input_shape[0]
-        self.main[0]= init_(nn.Conv2d(num_inputs, 64, kernel_size=(7,7), stride=(2,2), padding=(3,3)))
+        self.features[0]= init_(nn.Conv2d(num_inputs, 64, kernel_size=(7,7), stride=(2,2), padding=(3,3)))
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
 
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+        self.classifier = init_(nn.Linear(hidden_size, 1))
 
         self.train()
 
     def forward(self, inputs):
         x = self.preprocess(inputs / 255.0)
-        x = self.main(x)
+        x = self.features(x)
         x=x.squeeze(dim=-1).squeeze(dim=-1)
-        return self.critic_linear(x), x
+        return self.classifier(x), x

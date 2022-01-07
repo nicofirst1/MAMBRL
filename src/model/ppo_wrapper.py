@@ -1,28 +1,41 @@
 import torch
 
 from model import RolloutStorage, ppo
-from model.model_free import Policy
+from model.model_free import Policy, ResNetBase, CNNBase
 from model.utils import mas_dict2tensor
 
 
 class PPO:
-    def __init__(self, env, obs_shape, action_space, num_agents, device, num_steps=128, gamma=0.99, lr=2.5e-4,
-            clip_param=0.1, value_loss_coef=0.5, num_minibatch=4, entropy_coef=0.01, eps=1e-5, max_grad_norm=0.5, ppo_epoch=4):
+    def __init__(self, env, obs_shape, action_space, num_agents, config,
+            clip_param=0.1, value_loss_coef=0.5,  entropy_coef=0.01, eps=1e-5, max_grad_norm=0.5, ppo_epoch=4):
 
         self.env = env
         self.obs_shape = obs_shape
         self.action_space = action_space
         self.num_agents = num_agents
-        self.device = device
+
+        device = config.device
+        gamma = config.gamma
+        num_steps = config.horizon
+        num_minibatch = config.minibatch
+        lr = config.lr
 
         self.lr = lr
         self.gamma = gamma
+        self.device = device
 
         self.num_steps = num_steps
         self.num_minibatch = num_minibatch
 
+        if config.base=="resnet":
+            base= ResNetBase
+        elif config.base=="cnn":
+            base= CNNBase
+        else:
+            base=None
+
         self.actor_critic_dict = {
-            agent_id: Policy(obs_shape, action_space).to(device) for agent_id in self.env.agents
+            agent_id: Policy(obs_shape, action_space, base=base).to(device) for agent_id in self.env.agents
         }
 
         self.agent = ppo.PPO(
@@ -35,7 +48,7 @@ class PPO:
             lr=lr,
             eps=eps,
             max_grad_norm=max_grad_norm,
-            use_clipped_value_loss=False
+            use_clipped_value_loss=config.clip_value_loss
         )
 
     def learn(self, episodes, full_log_prob=False):
