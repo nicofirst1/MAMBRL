@@ -1,5 +1,5 @@
-import numpy as np
 import matplotlib as mpl
+import numpy as np
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.core import Entity
 
@@ -22,13 +22,30 @@ class TimerLandmark(Entity):
         for x in range(0, 100)
     ]
 
-    def __init__(self):
+    def __init__(self, np_random):
         super().__init__()
+        self.np_random = np_random
 
-    def reset(self, world, np_random):
-        self.color = np.array([0, 1.0, 0])
-
+    def get_random_pos(self, world):
         eps = 0.5
 
-        self.state.p_pos = np_random.uniform(-world.max_size + eps, world.max_size - eps, world.dim_p)
+        return self.np_random.uniform(-world.max_size + eps, world.max_size - eps, world.dim_p)
+
+    def get_random_size(self):
+        eps = 0.5
+
+        return self.np_random.uniform(1 + eps, 1 - eps, 1)
+
+    def reset(self, world, size=None, position=None):
+        self.color = np.array([0, 1.0, 0])
+
+        if position is not None:
+            self.state.p_pos = position
+        else:
+            self.state.p_pos = self.get_random_pos(world)
+
+        if size is not None:
+            self.size= size
+        else:
+            self.size=self.get_random_size()
         self.state.p_vel = np.zeros(world.dim_p)

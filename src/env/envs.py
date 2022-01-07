@@ -12,7 +12,7 @@ from env.scenarios import CollectLandmarkScenario
 
 class CollectLandmarkEnv(SimpleEnv):
     def __init__(self, scenario_kwargs: Dict, horizon, continuous_actions: bool,
-                 gray_scale=False, frame_shape=None, visible=False
+                 gray_scale=False, frame_shape=None, visible=False,
                  ):
         """
         This class has to manage the interaction between the agents in an environment.
@@ -26,7 +26,9 @@ class CollectLandmarkEnv(SimpleEnv):
             frame_shape: shape of a single frame
         """
 
-        scenario = CollectLandmarkScenario(**scenario_kwargs)
+        self.seed()
+
+        scenario = CollectLandmarkScenario(**scenario_kwargs, np_random=self.np_random)
         world = scenario.make_world()
         super().__init__(scenario, world, max_cycles=horizon, continuous_actions=continuous_actions,
                          local_ratio=None)  # color_entities=TimerLandmark
@@ -40,6 +42,12 @@ class CollectLandmarkEnv(SimpleEnv):
 
         self.viewer = rendering.Viewer(frame_shape[1], frame_shape[2], visible=visible)
         self.viewer.set_max_size(scenario_kwargs['max_size'])
+
+    def set_curriculum(self, reward: int = None, landmark: int = None):
+        self.scenario.set_curriculum(reward, landmark)
+
+    def get_curriculum(self) -> Tuple[Tuple[int, str], Tuple[int, str]]:
+        return self.scenario.get_curriculum()
 
     def reset(self):
         super(CollectLandmarkEnv, self).reset()
@@ -83,7 +91,7 @@ class CollectLandmarkEnv(SimpleEnv):
 
         return observation
 
-    def step(self, actions: Dict[str, int]) -> Tuple[torch.Tensor, Dict[str, int], bool, Dict[str, Dict]]:
+    def step(self, actions: Dict[str, int]) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
         """
         Takes a step in the environment.
         All the agents act simultaneously and the observation are collected
@@ -115,7 +123,9 @@ class CollectLandmarkEnv(SimpleEnv):
                 self.world.entities.remove(landmark)
                 self.world.landmarks.remove(landmark)
 
-        done = True if self.scenario.num_landmarks <= 0 else False
+        done = {ag: False for ag in self.agents}
+
+        done["__all__"] = True if self.scenario.num_landmarks <= 0 else False
         observation = self.observe()
 
         return observation, self.rewards, done, {}
