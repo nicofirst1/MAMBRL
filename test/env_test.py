@@ -146,4 +146,31 @@ def test_reward_curriculum():
             print(f"End of episode {ep}\n\n\n")
 
 
+def test_dones():
+    action_dict = {}
+    env.set_curriculum(landmark=1)
+
+    for ep in range(300):
+
+
+
+        obs = env.reset()
+        done = {_: False for _ in env.agents}
+        done["__all__"] = False
+
+        for step in range(env_configs['horizon']):
+
+            if done["__all__"]:
+                print("GAME OVER!")
+                break
+
+            for agent in env.agents:
+                if done[agent]:
+                    action_dict[agent] = None
+
+                else:
+                    action_dict[agent] = random.randint(0, 4)
+                    # action_dict[agent] = 4
+
+            obs, reward, done, info = env.step(action_dict)
 

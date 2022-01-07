@@ -110,6 +110,11 @@ class CollectLandmarkEnv(SimpleEnv):
             self.agent_selection = agent_id
             super(CollectLandmarkEnv, self).step(action)
 
+        self.steps += 1
+        if self.steps >= self.max_cycles:
+            self.dones["__all__"] = True
+
+
         # update landmarks status
         visited_landmarks = set(itertools.chain(self.scenario.visited_landmarks))
         self.scenario.visited_landmarks = []
@@ -123,12 +128,11 @@ class CollectLandmarkEnv(SimpleEnv):
                 self.world.entities.remove(landmark)
                 self.world.landmarks.remove(landmark)
 
-        done = {ag: False for ag in self.agents}
-
-        done["__all__"] = True if self.scenario.num_landmarks <= 0 else False
+        if self.scenario.num_landmarks <= 0:
+            self.dones["__all__"] = True
         observation = self.observe()
 
-        return observation, self.rewards, done, {}
+        return observation, self.rewards, self.dones, {}
 
 
 def get_env(kwargs: Dict) -> CollectLandmarkEnv:

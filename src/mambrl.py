@@ -1,16 +1,16 @@
 import torch
 from tqdm import trange
 
+from common.utils import print_current_curriculum
 from env.env_wrapper import EnvWrapper
-from model.ppo_wrapper import PPO
 from model.env_model_trainer import EnvModelTrainer
-from env.simulated_env import SimulatedEnvironment
+from model.policies import MultimodalMAS
+from model.ppo_wrapper import PPO
 from src.common import Params
 from src.env import get_env
-from src.gradcam import GradCam, CamExtractor
+from src.gradcam import CamExtractor
 from src.layercam import LayerCam
 from src.model.env_model import NextFramePredictor
-from model.policies import MultimodalMAS, EpsilonGreedy
 from src.scorecam import ScoreCam
 
 
@@ -38,7 +38,7 @@ class MAMBRL:
 
         ## fixme: anche qua bisogna capire se ne serve uno o uno per ogni agente
         self.simulated_env = None
-        #self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
+        # self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
 
         self.agent = PPO(
             env=self.real_env,
@@ -51,19 +51,19 @@ class MAMBRL:
 
         if self.config.use_wandb:
             from logging_callbacks import PPOWandb
-            model= self.agent.actor_critic_dict['agent_0'].base
+            model = self.agent.actor_critic_dict['agent_0'].base
 
-            if config.base=="resnet":
+            if config.base == "resnet":
                 target_layer = 7
-            elif config.base=="cnn":
+            elif config.base == "cnn":
                 target_layer = 5
             else:
-                target_layer=1
-            extractor= CamExtractor(model, target_layer=target_layer)
+                target_layer = 1
+            extractor = CamExtractor(model, target_layer=target_layer)
             layer = LayerCam(model, extractor)
             score_cam = ScoreCam(model, extractor)
 
-            cams=[layer,score_cam]
+            cams = [layer, score_cam]
 
             self.logger = PPOWandb(
                 train_log_step=5,
@@ -108,7 +108,7 @@ class MAMBRL:
     def train(self):
         for epoch in trange(self.config.epochs, desc="Epoch"):
             self.collect_trajectories()
-            #self.trainer.train(epoch, self.real_env)
+            # self.trainer.train(epoch, self.real_env)
             self.train_agent_sim_env(epoch)
 
     def train_env_model(self):
@@ -120,11 +120,38 @@ class MAMBRL:
         self.agent.set_env(self.real_env)
 
         for step in trange(1000, desc="Training model free"):
-            value_loss, action_loss, entropy, rollout = self.agent.learn(episodes=self.config.episodes, full_log_prob=True)
+            value_loss, action_loss, entropy, rollout = self.agent.learn(episodes=self.config.episodes,
+                                                                         full_log_prob=True)
 
             if self.config.use_wandb:
-                losses=dict(value_loss=[value_loss], action_loss=[action_loss], entropy=[entropy])
-                self.logger.on_batch_end(logs=losses, batch_id=step,rollout=rollout)
+                losses = dict(value_loss=[value_loss], action_loss=[action_loss], entropy=[entropy])
+                self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
+
+    def train_model_free_curriculum(self):
+        self.agent.set_env(self.real_env)
+
+        episodes = 1200
+
+        curriculum = {
+            200: dict(reward=0, landmark=0),
+            400: dict(reward=0, landmark=1),
+            600: dict(reward=1, landmark=0),
+            800: dict(reward=1, landmark=1),
+            1000: dict(reward=1, landmark=2),
+            1200: dict(reward=2, landmark=2),
+        }
+
+        for step in trange(episodes, desc="Training model free"):
+            value_loss, action_loss, entropy, rollout = self.agent.learn(episodes=self.config.episodes,
+                                                                         full_log_prob=True)
+
+            if self.config.use_wandb:
+                losses = dict(value_loss=[value_loss], action_loss=[action_loss], entropy=[entropy])
+                self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
+            if step in curriculum.keys():
+                self.real_env.set_curriculum(**curriculum[step])
+                self.real_env.get_curriculum()
+                print_current_curriculum(self.real_env.get_curriculum())
 
     def user_game(self):
         moves = {'w': 4, 'a': 1, 's': 3, 'd': 2}
@@ -160,6 +187,4 @@ class MAMBRL:
 if __name__ == '__main__':
     params = Params()
     mambrl = MAMBRL(params)
-    mambrl.train_model_free()
-
-
+    mambrl.train_model_free_curriculum()

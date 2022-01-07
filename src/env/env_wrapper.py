@@ -62,10 +62,10 @@ class EnvWrapper:
         return self.stacked_frames, rewards, done, infos
 
     def add_interaction(self, actions, rewards, new_obs, done):
-        current_obs = self.stacked_frames.squeeze().byte().to(self.device)
-        action = one_hot_encode(actions, self.action_space).to(self.device)
-        #reward = (rewards.squeeze() + 1).byte().to(self.device) ## fixme: perché c'è il +1?
-        reward = (rewards.squeeze() + 1).byte().to(self.device)
-        new_obs = new_obs.squeeze().byte().to(self.device)
-        done = torch.tensor(done, dtype=torch.uint8).to(self.device)
+        current_obs = self.stacked_frames.squeeze().byte().cpu()
+        action = one_hot_encode(actions, self.action_space).cpu()
+        #reward = (rewards.squeeze() + 1).byte().cpu() ## fixme: perché c'è il +1?
+        reward = (rewards.squeeze() + 1).byte().cpu()
+        new_obs = new_obs.squeeze().byte().cpu()
+        done = torch.tensor(done, dtype=torch.uint8).cpu()
         self.buffer.append([current_obs, action, reward, new_obs, done, None])

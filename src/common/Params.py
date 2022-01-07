@@ -27,7 +27,7 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     param_sharing = False
-    visible = True
+    visible = False
 
     ### ENV model
     stack_internal_states = False

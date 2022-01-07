@@ -88,7 +88,8 @@ class PPO:
                 ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
                 new_observation, rewards, done, infos = self.env.step(action_dict)
 
-                masks = (~torch.tensor(done)).float().unsqueeze(0)
+                masks = (~torch.tensor(done['__all__'])).float().unsqueeze(0)
+
 
                 #masks = 1 - mas_dict2tensor(done, int)
                 rewards = mas_dict2tensor(rewards, int)
@@ -108,6 +109,9 @@ class PPO:
 
                 # update observation
                 observation = new_observation
+
+                if done['__all__']:
+                    break
 
             ## fixme: qui bisogna capire il get_value a cosa serve e come farlo per multi agent
             with torch.no_grad():

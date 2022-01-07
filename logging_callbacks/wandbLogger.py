@@ -121,9 +121,10 @@ class PPOWandb(WandbLogger):
         logs['epoch'] = batch_id
 
         if batch_id % self.log_behavior_step == 0:
-            states = rollout.states[:self.horizon][:, -3:, :, :].cpu().numpy().astype(np.uint8)
-            actions = rollout.actions[:self.horizon].squeeze().cpu().numpy()
-            rewards = rollout.rewards[:self.horizon].squeeze().cpu().numpy()
+            done_idx= (rollout.masks == 0).nonzero(as_tuple=True)[0]
+            states = rollout.states[:done_idx][:, -3:, :, :].cpu().numpy().astype(np.uint8)
+            actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
+            rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
             logs['behaviour'] = wandb.Video(states, fps=16, format="gif")
             logs['actions'] = actions
             logs['rewards'] = rewards
