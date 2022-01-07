@@ -11,3 +11,7 @@ def print_current_curriculum(curriculum):
     """
 
     print(to_print)
+
+
+def min_max_norm(val, min_, max_):
+    return (val - min_) / (max_ - min_)

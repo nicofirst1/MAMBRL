@@ -65,7 +65,7 @@ class Params:
     agents = 1
     landmarks = 2
     step_reward = -1
-    landmark_reward = 80
+    landmark_reward = 10
     epochs = 1000
     minibatch = 32
     episodes = 3

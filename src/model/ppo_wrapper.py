@@ -108,7 +108,7 @@ class PPO:
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
 
                 # masks = 1 - mas_dict2tensor(done, int)
-                rewards = mas_dict2tensor(rewards, int)
+                rewards = mas_dict2tensor(rewards, float)
                 actions = mas_dict2tensor(action_dict, int)
                 values = mas_dict2tensor(values_dict, float)
                 action_log_probs = mas_dict2tensor(

@@ -142,7 +142,7 @@ class PPOWandb(WandbLogger):
 
             for name, rep in reprs:
                 heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
-                logs[f"{name}_heatmap"] = wandb.Image(heatmap)
+                #logs[f"{name}_heatmap"] = wandb.Image(heatmap)
                 logs[f"{name}_heatmap_on_image"] = wandb.Image(heatmap_on_image)
 
         self.log_to_wandb(logs, commit=True)
