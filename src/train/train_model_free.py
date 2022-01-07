@@ -8,20 +8,22 @@ from itertools import chain
 import torch
 import torch.optim as optim
 from rich.progress import track
+from src.env.NavEnv import get_env
+from src.model.ModelFree import ModelFreeResnet
+from src.model.RolloutStorage import RolloutStorage
+from src.train.train_utils import collect_trajectories, train_epoch_PPO
 
 from logging_callbacks import PPOWandb
 from src.common.Params import Params
 from src.common.utils import get_env_configs
-from src.env.NavEnv import get_env
-from src.model.ModelFree import ModelFreeResnet
-from src.model.RolloutStorage import RolloutStorage
 from src.train.Policies import EpsilonGreedy
-from src.train.train_utils import (collect_trajectories, train_epoch_PPO)
 
 
 def get_model_free(agents, restore, device):
-    ac_dict = {agent_id: ModelFreeResnet(in_shape=obs_shape, num_actions=num_actions) for agent_id in
-               agents}
+    ac_dict = {
+        agent_id: ModelFreeResnet(in_shape=obs_shape, num_actions=num_actions)
+        for agent_id in agents
+    }
 
     if restore:
         for agent_id, agent in ac_dict.items():
@@ -88,11 +90,9 @@ if __name__ == "__main__":
         # set model to train mode
         [model.train() for model in ac_dict.values()]
 
-        infos = train_epoch_PPO(
-            rollout, ac_dict, env, optimizer, optim_params, params
-        )
+        infos = train_epoch_PPO(rollout, ac_dict, env, optimizer, optim_params, params)
 
-        infos['exploration_temp'] = [policy.epsilon]
+        infos["exploration_temp"] = [policy.epsilon]
 
         wandb_callback.on_batch_end(infos, epoch, rollout)
         policy.increase_temp(rollout.actions)

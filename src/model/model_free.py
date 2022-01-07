@@ -1,12 +1,11 @@
 import torch
 import torch.nn as nn
-
 from torch.nn import Flatten
 from torchvision.transforms import transforms
 
 from common.distributions import Categorical, FixedCategorical
-
 from model.utils import init
+
 
 class Policy(nn.Module):
     def __init__(self, obs_shape, action_space, base=None, base_kwargs=None):
@@ -39,7 +38,7 @@ class Policy(nn.Module):
     def act(self, inputs, deterministic=False, full_log_prob=False):
         value, actor_features = self.base(inputs)
         logits = self.dist(actor_features)
-        #fixme: initializing distr is very slow
+        # fixme: initializing distr is very slow
         dist = FixedCategorical(logits=logits)
 
         if deterministic:
@@ -91,12 +90,17 @@ class NNBase(nn.Module):
     def output_size(self):
         return self._hidden_size
 
+
 class CNNBase(NNBase):
     def __init__(self, input_shape, hidden_size=512):
         super(CNNBase, self).__init__(hidden_size)
 
-        init_ = lambda m: init(m, nn.init.orthogonal_,
-                               lambda x: nn.init.constant_(x, 0), nn.init.calculate_gain('relu'))
+        init_ = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0),
+            nn.init.calculate_gain("relu"),
+        )
 
         num_inputs = input_shape[0]
         middle_shape = input_shape[1:]
@@ -105,12 +109,20 @@ class CNNBase(NNBase):
         middle_shape = (middle_shape[0] - 2, middle_shape[1] - 2)
 
         self.features = nn.Sequential(
-            init_(nn.Conv2d(num_inputs, 32, 8, stride=4)), nn.ReLU(),
-            init_(nn.Conv2d(32, 64, 4, stride=2)), nn.ReLU(),
-            init_(nn.Conv2d(64, 32, 3, stride=1)), nn.ReLU(), Flatten(),
-            init_(nn.Linear(32 * middle_shape[0] * middle_shape[1], hidden_size)), nn.ReLU())
+            init_(nn.Conv2d(num_inputs, 32, 8, stride=4)),
+            nn.ReLU(),
+            init_(nn.Conv2d(32, 64, 4, stride=2)),
+            nn.ReLU(),
+            init_(nn.Conv2d(64, 32, 3, stride=1)),
+            nn.ReLU(),
+            Flatten(),
+            init_(nn.Linear(32 * middle_shape[0] * middle_shape[1], hidden_size)),
+            nn.ReLU(),
+        )
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
+        init_ = lambda m: init(
+            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0)
+        )
 
         self.classifier = init_(nn.Linear(hidden_size, 1))
 
@@ -125,24 +137,36 @@ class ResNetBase(NNBase):
     def __init__(self, input_shape, hidden_size=512):
         super(ResNetBase, self).__init__(hidden_size)
 
-        self.preprocess = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406]*4, std=[0.229, 0.224, 0.225]*4),
-        ])
-        init_ = lambda m: init(m, nn.init.orthogonal_,
-                               lambda x: nn.init.constant_(x, 0), nn.init.calculate_gain('relu'))
+        self.preprocess = transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406] * 4, std=[0.229, 0.224, 0.225] * 4
+                ),
+            ]
+        )
+        init_ = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0),
+            nn.init.calculate_gain("relu"),
+        )
 
-        model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+        model = torch.hub.load("pytorch/vision:v0.10.0", "resnet18", pretrained=True)
         model = model.eval()
         for param in model.parameters():
             param.requires_grad = False
         self.features = torch.nn.Sequential(*(list(model.children())[:-1]))
 
         num_inputs = input_shape[0]
-        self.features[0]= init_(nn.Conv2d(num_inputs, 64, kernel_size=(7,7), stride=(2,2), padding=(3,3)))
+        self.features[0] = init_(
+            nn.Conv2d(num_inputs, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3))
+        )
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
+        init_ = lambda m: init(
+            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0)
+        )
 
         self.classifier = init_(nn.Linear(hidden_size, 1))
 
@@ -151,5 +175,5 @@ class ResNetBase(NNBase):
     def forward(self, inputs):
         x = self.preprocess(inputs / 255.0)
         x = self.features(x)
-        x=x.squeeze(dim=-1).squeeze(dim=-1)
+        x = x.squeeze(dim=-1).squeeze(dim=-1)
         return self.classifier(x), x

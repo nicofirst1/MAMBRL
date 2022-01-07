@@ -120,6 +120,7 @@ class PPOWandb(WandbLogger):
 
         logs['epoch'] = batch_id
 
+
         if batch_id % self.log_behavior_step == 0:
             done_idx= (rollout.masks == 0).nonzero(as_tuple=True)[0]
             states = rollout.states[:done_idx][:, -3:, :, :].cpu().numpy().astype(np.uint8)
@@ -128,6 +129,7 @@ class PPOWandb(WandbLogger):
             logs['behaviour'] = wandb.Video(states, fps=16, format="gif")
             logs['actions'] = actions
             logs['rewards'] = rewards
+            logs['mean_reward'] = rewards.mean()
 
         if batch_id % self.log_heatmap_step == 0:
             # map heatmap on image

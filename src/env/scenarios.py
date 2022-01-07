@@ -2,7 +2,7 @@ from typing import Tuple
 
 import numpy as np
 
-from PettingZoo.pettingzoo.mpe._mpe_utils.core import Entity, World, Agent
+from PettingZoo.pettingzoo.mpe._mpe_utils.core import Agent, Entity, World
 from PettingZoo.pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from env.timer_landmark import TimerLandmark
 
@@ -22,7 +22,9 @@ def get_distance(entity1, entity2):
 
 
 class Border(Entity):
-    def __init__(self, start: Tuple[int, int], end: Tuple[int, int], color=(1, 0, 0), linewidth=1):
+    def __init__(
+        self, start: Tuple[int, int], end: Tuple[int, int], color=(1, 0, 0), linewidth=1
+    ):
         super(Border, self).__init__()
         self.start = np.array(start)
         self.end = np.array(end)
@@ -62,8 +64,15 @@ class BoundedWorld(World):
 
 
 class CollectLandmarkScenario(BaseScenario):
-    def __init__(self, num_agents: int, num_landmarks: int, max_size: int, step_reward: int, landmark_reward: int,
-                 np_random):
+    def __init__(
+        self,
+        num_agents: int,
+        num_landmarks: int,
+        max_size: int,
+        step_reward: int,
+        landmark_reward: int,
+        np_random,
+    ):
         """
 
         Args:
@@ -82,7 +91,10 @@ class CollectLandmarkScenario(BaseScenario):
 
         self.landmarks = {}
         self.visited_landmarks = []
-        self.reward_curriculum, self.landmark_curriculum = self.init_curriculum_learning()
+        (
+            self.reward_curriculum,
+            self.landmark_curriculum,
+        ) = self.init_curriculum_learning()
 
     def init_curriculum_learning(self):
 
@@ -104,16 +116,20 @@ class CollectLandmarkScenario(BaseScenario):
 
     def set_curriculum(self, reward: int = None, landmark: int = None):
         if reward is not None:
-            assert reward in self.reward_curriculum.keys(), f"Reward curriculum modality '{reward}' is not in range"
-            self.reward_curriculum['current'] = reward
+            assert (
+                reward in self.reward_curriculum.keys()
+            ), f"Reward curriculum modality '{reward}' is not in range"
+            self.reward_curriculum["current"] = reward
 
         if landmark is not None:
-            assert landmark in self.landmark_curriculum.keys(), f"Landmark curriculum modality '{landmark}' is not in range"
-            self.landmark_curriculum['current'] = landmark
+            assert (
+                landmark in self.landmark_curriculum.keys()
+            ), f"Landmark curriculum modality '{landmark}' is not in range"
+            self.landmark_curriculum["current"] = landmark
 
     def get_curriculum(self) -> Tuple[Tuple[int, str], Tuple[int, str]]:
-        r = self.reward_curriculum['current']
-        l = self.landmark_curriculum['current']
+        r = self.reward_curriculum["current"]
+        l = self.landmark_curriculum["current"]
 
         return (r, self.reward_curriculum[r]), (l, self.landmark_curriculum[l])
 
@@ -144,7 +160,9 @@ class CollectLandmarkScenario(BaseScenario):
         self.visited_landmarks = []
 
         # add landmarks
-        world.landmarks = [TimerLandmark(self.np_random) for _ in range(self.num_landmarks)]
+        world.landmarks = [
+            TimerLandmark(self.np_random) for _ in range(self.num_landmarks)
+        ]
         landmark_pos = {}
         for i, landmark in enumerate(world.landmarks):
             landmark.name = f"landmark_{i}"
@@ -175,15 +193,16 @@ class CollectLandmarkScenario(BaseScenario):
             if landmark not in world.landmarks:
                 world.landmarks.append(landmark)
 
-            if self.landmark_curriculum['current'] == 0:
+            if self.landmark_curriculum["current"] == 0:
                 landmark.reset(world, position=self.landmark_pos[land_id], size=1)
-            elif self.landmark_curriculum['current'] == 1:
+            elif self.landmark_curriculum["current"] == 1:
                 landmark.reset(world, size=1)
-            elif self.landmark_curriculum['current'] == 2:
+            elif self.landmark_curriculum["current"] == 2:
                 landmark.reset(world)
             else:
                 raise ValueError(
-                    f"Value '{self.landmark_curriculum['current']}' has not been implemented for landmark reset")
+                    f"Value '{self.landmark_curriculum['current']}' has not been implemented for landmark reset"
+                )
 
     # return all agents that are not adversaries
     @staticmethod
@@ -195,7 +214,7 @@ class CollectLandmarkScenario(BaseScenario):
 
         rew = 0
 
-        if self.reward_curriculum['current'] == 0:
+        if self.reward_curriculum["current"] == 0:
 
             min_dist = 99999
             for landmark in world.landmarks:
@@ -205,15 +224,16 @@ class CollectLandmarkScenario(BaseScenario):
 
             rew -= dist
 
-        elif self.reward_curriculum['current'] == 1:
+        elif self.reward_curriculum["current"] == 1:
             rew = 0
 
-        elif self.reward_curriculum['current'] == 2:
+        elif self.reward_curriculum["current"] == 2:
             rew = self.step_reward
 
         else:
             raise ValueError(
-                f"Value '{self.reward_curriculum['current']}' has not been implemented for reward mode")
+                f"Value '{self.reward_curriculum['current']}' has not been implemented for reward mode"
+            )
 
         for landmark in world.landmarks:
             if is_collision(agent, landmark):

@@ -34,7 +34,6 @@ class ParameterSealer:
 
 
 class Container(nn.Module):
-
     def __init__(self):
         super().__init__()
 
@@ -70,7 +69,6 @@ class Container(nn.Module):
 
 
 class MeanAttention(nn.Module):
-
     def __init__(self, in_size, out_size):
         super().__init__()
         self.input_embedding = nn.Conv2d(in_size, 4, 1)
@@ -89,7 +87,6 @@ class MeanAttention(nn.Module):
 
 
 class ActionInjector(nn.Module):
-
     def __init__(self, n_action, size):
         super().__init__()
         self.dense1 = nn.Linear(n_action, size)
@@ -122,15 +119,18 @@ def int_to_bit(x_int, num_bits):
 def standardize_frame(x):
     x_mean = torch.mean(x, dim=(-1, -2)).view((-1, 1, 1))
     x_var = torch.var(x, dim=(-1, -2)).view((-1, 1, 1))
-    num_pixels = torch.tensor(x.shape[-1] * x.shape[-2], dtype=torch.float32).to(x.device)
+    num_pixels = torch.tensor(x.shape[-1] * x.shape[-2], dtype=torch.float32).to(
+        x.device
+    )
     return (x - x_mean) / torch.max(torch.sqrt(x_var), torch.rsqrt(num_pixels))
 
 
 def get_timing_signal_nd(shape, min_timescale=1.0, max_timescale=1.0e4):
     channels = shape[0]
     num_timescales = channels // 4
-    log_timescale_increment = (torch.log(torch.tensor(float(max_timescale) / float(min_timescale)))
-                               / (torch.tensor(num_timescales, dtype=torch.float32) - 1))
+    log_timescale_increment = torch.log(
+        torch.tensor(float(max_timescale) / float(min_timescale))
+    ) / (torch.tensor(num_timescales, dtype=torch.float32) - 1)
     inv_timescales = min_timescale * torch.exp(
         torch.arange(num_timescales, dtype=torch.float32) * -log_timescale_increment
     )
@@ -168,23 +168,32 @@ def sample_with_temperature(logits, temperature):
     reshaped_logits = logits.view((-1, logits.shape[-1])) / temperature
     reshaped_logits = torch.exp(reshaped_logits)
     choices = torch.multinomial(reshaped_logits, 1)
-    choices = choices.view((logits.shape[:len(logits.shape) - 1]))
+    choices = choices.view((logits.shape[: len(logits.shape) - 1]))
     return choices
+
 
 def init(module, weight_init, bias_init, gain=1):
     weight_init(module.weight.data, gain=gain)
     bias_init(module.bias.data)
     return module
 
+
 def one_hot_encode(action, n, dtype=torch.uint8):
     if not isinstance(action, torch.Tensor):
         action = torch.tensor(action)
 
     res = action.long().view((-1, 1))
-    res = torch.zeros((len(res), n)).to(res.device).scatter(1, res, 1).type(dtype).to(res.device)
+    res = (
+        torch.zeros((len(res), n))
+        .to(res.device)
+        .scatter(1, res, 1)
+        .type(dtype)
+        .to(res.device)
+    )
     res = res.view((*action.shape, n))
 
     return res
+
 
 def mas_dict2tensor(agent_dict, type=None) -> torch.Tensor:
     """

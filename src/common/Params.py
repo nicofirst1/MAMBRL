@@ -58,8 +58,8 @@ class Params:
     ### Loss
     value_loss_coef = 0.5
     entropy_coef = 0.01
-    base="resnet" #[ cnn , resnet ]
-    clip_value_loss=True
+    base = "resnet"  # [ cnn , resnet ]
+    clip_value_loss = True
 
     #### ENVIRONMENT ####
     agents = 1
@@ -94,13 +94,7 @@ class Params:
         (255, 255, 255),  # white -> background
     ]
 
-    action_meanings= {
-        0: "stop",
-        1: "left",
-        2: "right",
-        3: "up",
-        4: "down"
-    }
+    action_meanings = {0: "stop", 1: "left", 2: "right", 3: "up", 4: "down"}
 
     def __init__(self):
         if self.debug:
@@ -149,9 +143,8 @@ class Params:
             if isinstance(v, bool):
                 parser.add_argument(
                     "-" + k.lower(),
-                    action='store_true',
+                    action="store_true",
                     default=v,
-
                 )
             else:
                 parser.add_argument(

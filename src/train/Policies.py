@@ -10,7 +10,9 @@ class TrajCollectionPolicy:
     Policy class called when collecting trajectories
     """
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    def act(
+        self, agent_id: str, observation: torch.Tensor
+    ) -> Tuple[int, int, torch.Tensor]:
         """
 
         :param agent_id: the agent name as string
@@ -25,12 +27,13 @@ class TrajCollectionPolicy:
 
 
 class RandomAction(TrajCollectionPolicy):
-
     def __init__(self, num_actions, device):
         self.num_actions = num_actions
         self.device = device
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    def act(
+        self, agent_id: str, observation: torch.Tensor
+    ) -> Tuple[int, int, torch.Tensor]:
         action = randint(0, self.num_actions - 1)
         value = 0
         action_probs = torch.ones((1, self.num_actions))
@@ -40,7 +43,6 @@ class RandomAction(TrajCollectionPolicy):
 
 
 class EpsilonGreedy(TrajCollectionPolicy):
-
     def __init__(self, ac_dict, num_actions):
         self.ac_dict = ac_dict
         self.num_actions = num_actions
@@ -48,7 +50,9 @@ class EpsilonGreedy(TrajCollectionPolicy):
         self.epsilon = 1
         self.decrease = 5e-5
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    def act(
+        self, agent_id: str, observation: torch.Tensor
+    ) -> Tuple[int, int, torch.Tensor]:
         action_logit, value_logit = self.ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
 
@@ -78,11 +82,12 @@ class EpsilonGreedy(TrajCollectionPolicy):
 
 
 class MultimodalMAS(TrajCollectionPolicy):
-
     def __init__(self, ac_dict):
         self.ac_dict = ac_dict
 
-    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
+    def act(
+        self, agent_id: str, observation: torch.Tensor
+    ) -> Tuple[int, int, torch.Tensor]:
         action_logit, value_logit = self.ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
         action = action_probs.multinomial(1).squeeze()

@@ -1,14 +1,23 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from scipy.stats import truncnorm
-from src.model.utils import MeanAttention, ActionInjector, standardize_frame, get_timing_signal_nd, mix, Container, \
-    bit_to_int, int_to_bit, one_hot_encode, sample_with_temperature
+
+from src.model.utils import (
+    ActionInjector,
+    Container,
+    MeanAttention,
+    bit_to_int,
+    get_timing_signal_nd,
+    int_to_bit,
+    mix,
+    one_hot_encode,
+    sample_with_temperature,
+    standardize_frame,
+)
 
 
 class RewardEstimator(nn.Module):
-
     def __init__(self, config, input_size):
         super().__init__()
         self.config = config
@@ -24,7 +33,6 @@ class RewardEstimator(nn.Module):
 
 
 class ValueEstimator(nn.Module):
-
     def __init__(self, input_size):
         super().__init__()
         self.dense = nn.Linear(input_size, 1)
@@ -34,7 +42,6 @@ class ValueEstimator(nn.Module):
 
 
 class MiddleNetwork(nn.Module):
-
     def __init__(self, config, filters):
         super().__init__()
         self.config = config
@@ -45,7 +52,9 @@ class MiddleNetwork(nn.Module):
             if i == 0:
                 self.middle_network.append(None)
             else:
-                self.middle_network.append(nn.InstanceNorm2d(filters, affine=True, eps=1e-6))
+                self.middle_network.append(
+                    nn.InstanceNorm2d(filters, affine=True, eps=1e-6)
+                )
         self.middle_network = nn.ModuleList(self.middle_network)
 
     def forward(self, x):
@@ -63,8 +72,9 @@ class MiddleNetwork(nn.Module):
 
 
 class BitsPredictor(nn.Module):
-
-    def __init__(self, config, input_size, state_size, total_number_bits, bits_at_once=8):
+    def __init__(
+        self, config, input_size, state_size, total_number_bits, bits_at_once=8
+    ):
         super().__init__()
         self.config = config
         self.total_number_bits = total_number_bits
@@ -84,13 +94,21 @@ class BitsPredictor(nn.Module):
         c_state = self.dense3(x)
 
         if target_bits is not None:
-            target_bits = target_bits.view((-1, self.total_number_bits // self.bits_at_once, self.bits_at_once))
-            target_bits = torch.max(target_bits, torch.tensor(0.).to(self.config.device))
+            target_bits = target_bits.view(
+                (-1, self.total_number_bits // self.bits_at_once, self.bits_at_once)
+            )
+            target_bits = torch.max(
+                target_bits, torch.tensor(0.0).to(self.config.device)
+            )
             target_ints = bit_to_int(target_bits, self.bits_at_once).long()
-            target_hot = one_hot_encode(target_ints, 2 ** self.bits_at_once, dtype=torch.float32)
+            target_hot = one_hot_encode(
+                target_ints, 2 ** self.bits_at_once, dtype=torch.float32
+            )
             target_embedded = self.dense4(target_hot)
             target_embedded = F.dropout(target_embedded, 0.1)
-            teacher_input = torch.cat((first_lstm_input.unsqueeze(1), target_embedded), dim=1)
+            teacher_input = torch.cat(
+                (first_lstm_input.unsqueeze(1), target_embedded), dim=1
+            )
 
             outputs = []
             for i in range(self.total_number_bits // self.bits_at_once):
@@ -112,7 +130,9 @@ class BitsPredictor(nn.Module):
             discrete_logits = self.dense5(h_state)
             discrete_samples = sample_with_temperature(discrete_logits, temperature)
             outputs.append(discrete_samples)
-            lstm_input = self.dense4(one_hot_encode(discrete_samples, 256, dtype=torch.float32))
+            lstm_input = self.dense4(
+                one_hot_encode(discrete_samples, 256, dtype=torch.float32)
+            )
         outputs = torch.stack(outputs, dim=1)
         outputs = int_to_bit(outputs, self.bits_at_once)
         outputs = outputs.view((-1, self.total_number_bits))
@@ -121,7 +141,6 @@ class BitsPredictor(nn.Module):
 
 
 class StochasticModel(nn.Module):
-
     def __init__(self, config, layer_shape, n_action):
         super().__init__()
         self.config = config
@@ -130,8 +149,9 @@ class StochasticModel(nn.Module):
         self.lstm_loss = None
         self.get_lstm_loss()
 
-        self.timing_signal = get_timing_signal_nd((self.config.hidden_size, *self.config.obs_shape[1:])) \
-            .to(self.config.device)
+        self.timing_signal = get_timing_signal_nd(
+            (self.config.hidden_size, *self.config.obs_shape[1:])
+        ).to(self.config.device)
 
         self.input_embedding = nn.Conv2d(channels, self.config.hidden_size, 1)
         self.conv1 = nn.Conv2d(self.config.hidden_size, filters[0], 8, 4, padding=2)
@@ -141,12 +161,14 @@ class StochasticModel(nn.Module):
         self.dense3 = nn.Linear(self.config.bottleneck_bits, layer_shape[0])
 
         self.action_injector = ActionInjector(n_action, self.config.hidden_size)
-        self.mean_attentions = nn.ModuleList([MeanAttention(n_filter, 2 * channels) for n_filter in filters])
+        self.mean_attentions = nn.ModuleList(
+            [MeanAttention(n_filter, 2 * channels) for n_filter in filters]
+        )
         self.bits_predictor = BitsPredictor(
             config,
             layer_shape[0] * layer_shape[1] * layer_shape[2],
             self.config.latent_state_size,
-            self.config.bottleneck_bits
+            self.config.bottleneck_bits,
         )
 
     def add_bits(self, layer, bits):
@@ -176,7 +198,9 @@ class StochasticModel(nn.Module):
 
             bits_clean = (2 * (0 < x).float()).detach() - 1
             truncated_normal = truncnorm.rvs(-2, 2, size=x.shape, scale=0.2)
-            truncated_normal = torch.tensor(truncated_normal, dtype=torch.float32).to(self.config.device)
+            truncated_normal = torch.tensor(truncated_normal, dtype=torch.float32).to(
+                self.config.device
+            )
             x = x + truncated_normal
             x = torch.tanh(x)
             bits = x + (2 * (0 < x).float() - 1 - x).detach()
@@ -190,10 +214,14 @@ class StochasticModel(nn.Module):
 
             bits_pred, _ = self.bits_predictor(layer, 1.0)
             bits_pred = bits_clean + (bits_pred - bits_clean).detach()
-            bits = mix(bits_pred, bits, 1 - (1 - epsilon) * self.config.latent_rnn_max_sampling)
+            bits = mix(
+                bits_pred, bits, 1 - (1 - epsilon) * self.config.latent_rnn_max_sampling
+            )
 
             res = self.add_bits(layer, bits)
-            return mix(res, layer, 1 - (1 - epsilon) * self.config.latent_use_max_probability)
+            return mix(
+                res, layer, 1 - (1 - epsilon) * self.config.latent_use_max_probability
+            )
 
         bits, _ = self.bits_predictor(layer, 1.0)
         return self.add_bits(layer, bits)
@@ -201,12 +229,11 @@ class StochasticModel(nn.Module):
     def get_lstm_loss(self, reset=True):
         res = self.lstm_loss
         if reset:
-            self.lstm_loss = torch.tensor(0.).to(self.config.device)
+            self.lstm_loss = torch.tensor(0.0).to(self.config.device)
         return res
 
 
 class NextFramePredictor(Container):
-
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -221,7 +248,9 @@ class NextFramePredictor(Container):
         self.internal_states = None
         self.last_x_start = None
         if self.config.stack_internal_states:
-            self.gate = nn.Conv2d(channels, 2 * self.config.recurrent_state_size, 3, padding=1)
+            self.gate = nn.Conv2d(
+                channels, 2 * self.config.recurrent_state_size, 3, padding=1
+            )
 
         # Model
         self.timing_signals = []
@@ -237,13 +266,18 @@ class NextFramePredictor(Container):
             if i < self.config.filter_double_steps:
                 filters *= 2
 
-            self.timing_signals.append(get_timing_signal_nd(shape).to(self.config.device))
+            self.timing_signals.append(
+                get_timing_signal_nd(shape).to(self.config.device)
+            )
             shape = [filters, shape[1] // 2, shape[2] // 2]
             shapes.append(shape)
 
             self.downscale_layers.append(
-                nn.Conv2d(in_filters, filters, 4, stride=2, padding=1))
-            self.downscale_layers.append(nn.InstanceNorm2d(filters, affine=True, eps=1e-6))
+                nn.Conv2d(in_filters, filters, 4, stride=2, padding=1)
+            )
+            self.downscale_layers.append(
+                nn.InstanceNorm2d(filters, affine=True, eps=1e-6)
+            )
 
         self.downscale_layers = nn.ModuleList(self.downscale_layers)
 
@@ -252,36 +286,61 @@ class NextFramePredictor(Container):
         self.upscale_layers = []
         self.action_injectors = [ActionInjector(self.config.num_actions, filters)]
         for i in range(self.config.compress_steps):
-            self.action_injectors.append(ActionInjector(self.config.num_actions, filters))
+            self.action_injectors.append(
+                ActionInjector(self.config.num_actions, filters)
+            )
 
             in_filters = filters
             if i >= self.config.compress_steps - self.config.filter_double_steps:
                 filters //= 2
 
             shape = [filters, shape[1] * 2, shape[2] * 2]
-            output_padding = (0 if shape[1] == shapes[-i - 2][1] else 1, 0 if shape[2] == shapes[-i - 2][2] else 1)
-            shape = [filters, shape[1] + output_padding[0], shape[2] + output_padding[1]]
+            output_padding = (
+                0 if shape[1] == shapes[-i - 2][1] else 1,
+                0 if shape[2] == shapes[-i - 2][2] else 1,
+            )
+            shape = [
+                filters,
+                shape[1] + output_padding[0],
+                shape[2] + output_padding[1],
+            ]
 
-            self.upscale_layers.append(nn.ConvTranspose2d(
-                in_filters, filters, 4, stride=2, padding=1, output_padding=output_padding
-            ))
-            self.upscale_layers.append(nn.InstanceNorm2d(filters, affine=True, eps=1e-6))
-            self.timing_signals.append(get_timing_signal_nd(shape).to(self.config.device))
+            self.upscale_layers.append(
+                nn.ConvTranspose2d(
+                    in_filters,
+                    filters,
+                    4,
+                    stride=2,
+                    padding=1,
+                    output_padding=output_padding,
+                )
+            )
+            self.upscale_layers.append(
+                nn.InstanceNorm2d(filters, affine=True, eps=1e-6)
+            )
+            self.timing_signals.append(
+                get_timing_signal_nd(shape).to(self.config.device)
+            )
 
         self.upscale_layers = nn.ModuleList(self.upscale_layers)
         self.action_injectors = nn.ModuleList(self.action_injectors)
 
-        self.logits = nn.Conv2d(self.config.hidden_size, 256 * self.config.obs_shape[0], 1)
+        self.logits = nn.Conv2d(
+            self.config.hidden_size, 256 * self.config.obs_shape[0], 1
+        )
 
         # Sub-models
         self.middle_network = MiddleNetwork(self.config, middle_shape[0])
         self.reward_estimator = RewardEstimator(self.config, middle_shape[0] + filters)
-        self.value_estimator = ValueEstimator(middle_shape[0] * middle_shape[1] * middle_shape[2])
-        self.stochastic_model = StochasticModel(self.config, middle_shape, self.config.num_actions)
+        self.value_estimator = ValueEstimator(
+            middle_shape[0] * middle_shape[1] * middle_shape[2]
+        )
+        self.stochastic_model = StochasticModel(
+            self.config, middle_shape, self.config.num_actions
+        )
 
         if self.config.stack_internal_states:
             self.init_internal_states(self.config.agents)
-
 
     def init_internal_states(self, batch_size):
         self.internal_states = torch.zeros(
@@ -295,7 +354,9 @@ class NextFramePredictor(Container):
             return internal_states
         state_activation = torch.cat((internal_states, self.last_x_start), dim=1)
         state_gate_candidate = self.gate(state_activation)
-        state_gate, state_candidate = torch.split(state_gate_candidate, self.config.recurrent_state_size, dim=1)
+        state_gate, state_candidate = torch.split(
+            state_gate_candidate, self.config.recurrent_state_size, dim=1
+        )
         state_gate = torch.sigmoid(state_gate)
         state_candidate = torch.tanh(state_candidate)
         internal_states = internal_states * state_gate
@@ -306,12 +367,12 @@ class NextFramePredictor(Container):
     def forward(self, x, action, target=None, epsilon=0):
         x_start = torch.stack([standardize_frame(frame) for frame in x])
 
-        batch_size=action.shape[0]
-        expanded_actions=torch.zeros((batch_size,self.config.num_actions))
+        batch_size = action.shape[0]
+        expanded_actions = torch.zeros((batch_size, self.config.num_actions))
         for b in range(batch_size):
-            expanded_actions[b][int(action[b])]=1
+            expanded_actions[b][int(action[b])] = 1
 
-        action=expanded_actions.to(action.device)
+        action = expanded_actions.to(action.device)
 
         ## fixme: qui qualcosa non quadra con le dimensioni, quindi per ora è disabilitato
         if self.config.stack_internal_states:

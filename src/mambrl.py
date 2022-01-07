@@ -15,7 +15,6 @@ from src.scorecam import ScoreCam
 
 
 class MAMBRL:
-
     def __init__(self, config):
         self.config = config
         self.logger = None
@@ -24,7 +23,7 @@ class MAMBRL:
             env=get_env(self.config.get_env_configs()),
             frame_shape=self.config.frame_shape,
             num_stacked_frames=self.config.num_frames,
-            device=self.config.device
+            device=self.config.device,
         )
 
         self.obs_shape = self.real_env.obs_shape
@@ -46,12 +45,12 @@ class MAMBRL:
             action_space=self.action_space,
             num_agents=self.config.agents,
             config=config,
-
         )
 
         if self.config.use_wandb:
             from logging_callbacks import PPOWandb
-            model = self.agent.actor_critic_dict['agent_0'].base
+
+            model = self.agent.actor_critic_dict["agent_0"].base
 
             if config.base == "resnet":
                 target_layer = 7
@@ -120,11 +119,16 @@ class MAMBRL:
         self.agent.set_env(self.real_env)
 
         for step in trange(1000, desc="Training model free"):
-            value_loss, action_loss, entropy, rollout = self.agent.learn(episodes=self.config.episodes,
-                                                                         full_log_prob=True)
+            value_loss, action_loss, entropy, rollout = self.agent.learn(
+                episodes=self.config.episodes, full_log_prob=True
+            )
 
             if self.config.use_wandb:
-                losses = dict(value_loss=[value_loss], action_loss=[action_loss], entropy=[entropy])
+                losses = dict(
+                    value_loss=[value_loss],
+                    action_loss=[action_loss],
+                    entropy=[entropy],
+                )
                 self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
 
     def train_model_free_curriculum(self):
@@ -142,11 +146,16 @@ class MAMBRL:
         }
 
         for step in trange(episodes, desc="Training model free"):
-            value_loss, action_loss, entropy, rollout = self.agent.learn(episodes=self.config.episodes,
-                                                                         full_log_prob=True)
+            value_loss, action_loss, entropy, rollout = self.agent.learn(
+                episodes=self.config.episodes, full_log_prob=True
+            )
 
             if self.config.use_wandb:
-                losses = dict(value_loss=[value_loss], action_loss=[action_loss], entropy=[entropy])
+                losses = dict(
+                    value_loss=[value_loss],
+                    action_loss=[action_loss],
+                    entropy=[entropy],
+                )
                 self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
             if step in curriculum.keys():
                 self.real_env.set_curriculum(**curriculum[step])
@@ -154,7 +163,7 @@ class MAMBRL:
                 print_current_curriculum(self.real_env.get_curriculum())
 
     def user_game(self):
-        moves = {'w': 4, 'a': 1, 's': 3, 'd': 2}
+        moves = {"w": 4, "a": 1, "s": 3, "d": 2}
 
         game_reward = 0
         finish_game = False
@@ -174,17 +183,19 @@ class MAMBRL:
             if done:
                 while True:
                     print("Finee! Total reward: ", game_reward)
-                    exit_input = input("Gioco terminato! Iniziare un'altra partita? (y/n)")
-                    if exit_input == 'n':
+                    exit_input = input(
+                        "Gioco terminato! Iniziare un'altra partita? (y/n)"
+                    )
+                    if exit_input == "n":
                         finish_game = True
                         break
-                    elif exit_input == 'y':
+                    elif exit_input == "y":
                         game_reward = 0
                         self.real_env.reset()
                         break
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     params = Params()
     mambrl = MAMBRL(params)
     mambrl.train_model_free_curriculum()

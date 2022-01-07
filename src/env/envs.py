@@ -11,9 +11,15 @@ from env.scenarios import CollectLandmarkScenario
 
 
 class CollectLandmarkEnv(SimpleEnv):
-    def __init__(self, scenario_kwargs: Dict, horizon, continuous_actions: bool,
-                 gray_scale=False, frame_shape=None, visible=False,
-                 ):
+    def __init__(
+        self,
+        scenario_kwargs: Dict,
+        horizon,
+        continuous_actions: bool,
+        gray_scale=False,
+        frame_shape=None,
+        visible=False,
+    ):
         """
         This class has to manage the interaction between the agents in an environment.
         The env is made of N agents and M landmarks.
@@ -30,8 +36,13 @@ class CollectLandmarkEnv(SimpleEnv):
 
         scenario = CollectLandmarkScenario(**scenario_kwargs, np_random=self.np_random)
         world = scenario.make_world()
-        super().__init__(scenario, world, max_cycles=horizon, continuous_actions=continuous_actions,
-                         local_ratio=None)  # color_entities=TimerLandmark
+        super().__init__(
+            scenario,
+            world,
+            max_cycles=horizon,
+            continuous_actions=continuous_actions,
+            local_ratio=None,
+        )  # color_entities=TimerLandmark
 
         self.frame_shape = frame_shape
         self.render_geoms = None
@@ -41,7 +52,7 @@ class CollectLandmarkEnv(SimpleEnv):
         self.agents_dict = {agent.name: agent for agent in world.agents}
 
         self.viewer = rendering.Viewer(frame_shape[1], frame_shape[2], visible=visible)
-        self.viewer.set_max_size(scenario_kwargs['max_size'])
+        self.viewer.set_max_size(scenario_kwargs["max_size"])
 
     def set_curriculum(self, reward: int = None, landmark: int = None):
         self.scenario.set_curriculum(reward, landmark)
@@ -56,13 +67,7 @@ class CollectLandmarkEnv(SimpleEnv):
     @property
     def action_meaning_dict(self):
 
-        return {
-            0: "stop",
-            1: "left",
-            2: "right",
-            3: "up",
-            4: "down"
-        }
+        return {0: "stop", 1: "left", 2: "right", 3: "up", 4: "down"}
 
     def observe(self, agent="") -> torch.Tensor:
         """
@@ -81,7 +86,9 @@ class CollectLandmarkEnv(SimpleEnv):
 
             # move channel on second dimension if present, else add 1
             if len(observation.shape) == 3:
-                observation = observation.permute(2, 0, 1)  ## fixme: a che serve questo?
+                observation = observation.permute(
+                    2, 0, 1
+                )  ## fixme: a che serve questo?
             else:
                 observation = observation.unsqueeze(dim=0)
 
@@ -91,7 +98,9 @@ class CollectLandmarkEnv(SimpleEnv):
 
         return observation
 
-    def step(self, actions: Dict[str, int]) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
+    def step(
+        self, actions: Dict[str, int]
+    ) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
         """
         Takes a step in the environment.
         All the agents act simultaneously and the observation are collected
@@ -113,7 +122,6 @@ class CollectLandmarkEnv(SimpleEnv):
         self.steps += 1
         if self.steps >= self.max_cycles:
             self.dones["__all__"] = True
-
 
         # update landmarks status
         visited_landmarks = set(itertools.chain(self.scenario.visited_landmarks))

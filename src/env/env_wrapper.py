@@ -5,16 +5,20 @@ import torch
 from env.envs import CollectLandmarkEnv
 from model.utils import one_hot_encode
 
-class EnvWrapper:
 
-    def __init__(self, env: CollectLandmarkEnv, frame_shape, num_stacked_frames, device):
+class EnvWrapper:
+    def __init__(
+        self, env: CollectLandmarkEnv, frame_shape, num_stacked_frames, device
+    ):
 
         self.env = env
         self.buffer = []
 
         self.initial_frame = None
         self.channel_size = frame_shape[0]
-        self.stacked_frames = torch.zeros(self.channel_size * num_stacked_frames, *frame_shape[1:])
+        self.stacked_frames = torch.zeros(
+            self.channel_size * num_stacked_frames, *frame_shape[1:]
+        )
 
         self.obs_shape = self.stacked_frames.shape
         self.action_space = self.env.action_spaces["agent_0"].n
@@ -42,11 +46,18 @@ class EnvWrapper:
 
     def step(self, actions):
         new_obs, rewards, done, infos = self.env.step(actions)
-        self.add_interaction(torch.tensor(actions["agent_0"]), torch.tensor(rewards["agent_0"]), new_obs, done["__all__"])
+        self.add_interaction(
+            torch.tensor(actions["agent_0"]),
+            torch.tensor(rewards["agent_0"]),
+            new_obs,
+            done["__all__"],
+        )
 
-        self.stacked_frames = torch.cat((self.stacked_frames[self.channel_size:], new_obs), dim=0)
+        self.stacked_frames = torch.cat(
+            (self.stacked_frames[self.channel_size :], new_obs), dim=0
+        )
         if done["__all__"]:
-            value = torch.tensor(0.).to(self.device)
+            value = torch.tensor(0.0).to(self.device)
             self.buffer[0][5] = value
             index = 0
             while True:
@@ -64,7 +75,7 @@ class EnvWrapper:
     def add_interaction(self, actions, rewards, new_obs, done):
         current_obs = self.stacked_frames.squeeze().byte().cpu()
         action = one_hot_encode(actions, self.action_space).cpu()
-        #reward = (rewards.squeeze() + 1).byte().cpu() ## fixme: perché c'è il +1?
+        # reward = (rewards.squeeze() + 1).byte().cpu() ## fixme: perché c'è il +1?
         reward = (rewards.squeeze() + 1).byte().cpu()
         new_obs = new_obs.squeeze().byte().cpu()
         done = torch.tensor(done, dtype=torch.uint8).cpu()

@@ -6,7 +6,7 @@ class RolloutStorage(object):
         self.num_channels = obs_shape[0]
 
         self.states = torch.zeros(num_steps + 1, *obs_shape)
-        #self.next_states = torch.zeros(num_steps, *state_shape)
+        # self.next_states = torch.zeros(num_steps, *state_shape)
         self.rewards = torch.zeros(num_steps, num_agents, 1)
         self.masks = torch.ones(num_steps + 1, num_agents, 1)
         self.actions = torch.zeros(num_steps, num_agents, 1).long()
@@ -40,13 +40,20 @@ class RolloutStorage(object):
             self.values[-1] = next_value
             gae = 0
             for step in reversed(range(self.rewards.size(0))):
-                delta = self.rewards[step] + gamma * self.values[step + 1] * self.masks[step + 1] - self.values[step]
+                delta = (
+                    self.rewards[step]
+                    + gamma * self.values[step + 1] * self.masks[step + 1]
+                    - self.values[step]
+                )
                 gae = delta + gamma * gae_lambda * self.masks[step + 1] * gae
                 self.returns[step] = gae + self.values[step]
         else:
             self.returns[-1] = next_value
             for step in reversed(range(self.rewards.size(0))):
-                self.returns[step] = self.returns[step + 1] * gamma * self.masks[step + 1] + self.rewards[step]
+                self.returns[step] = (
+                    self.returns[step + 1] * gamma * self.masks[step + 1]
+                    + self.rewards[step]
+                )
 
     def recurrent_generator(self, advantages, minibatch_frames):
         """
@@ -90,7 +97,9 @@ class RolloutStorage(object):
                 return_minibatch.append(self.returns[ind].unsqueeze(0))
                 masks_minibatch.append(self.masks[ind].unsqueeze(0))
 
-                old_action_log_probs_minibatch.append(self.action_log_probs[ind].unsqueeze(0))
+                old_action_log_probs_minibatch.append(
+                    self.action_log_probs[ind].unsqueeze(0)
+                )
                 adv_targ_minibatch.append(advantages[ind].unsqueeze(0))
 
             if done:
@@ -98,13 +107,14 @@ class RolloutStorage(object):
 
             # cat on firt dimension
             states_minibatch = torch.cat(states_minibatch, dim=0)
-            #next_states_minibatch = torch.cat(next_states_minibatch, dim=0)
+            # next_states_minibatch = torch.cat(next_states_minibatch, dim=0)
             actions_minibatch = torch.cat(actions_minibatch, dim=0)
             values_minibatch = torch.cat(values_minibatch, dim=0)
             return_minibatch = torch.cat(return_minibatch, dim=0)
             masks_minibatch = torch.cat(masks_minibatch, dim=0)
-            old_action_log_probs_minibatch = torch.cat(old_action_log_probs_minibatch, dim=0)
+            old_action_log_probs_minibatch = torch.cat(
+                old_action_log_probs_minibatch, dim=0
+            )
             adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
 
-            yield states_minibatch, actions_minibatch, values_minibatch, return_minibatch,\
-                masks_minibatch, old_action_log_probs_minibatch, adv_targ_minibatch, next_states_minibatch
+            yield states_minibatch, actions_minibatch, values_minibatch, return_minibatch, masks_minibatch, old_action_log_probs_minibatch, adv_targ_minibatch, next_states_minibatch
