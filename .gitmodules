@@ -1,3 +1,6 @@
 [submodule "PettingZoo"]
 	path = PettingZoo
 	url = https://github.com/nicofirst1/PettingZoo
+[submodule "pytorch-cnn-visualizations"]
+	path = pytorch-cnn-visualizations
+	url = https://github.com/nicofirst1/pytorch-cnn-visualizations.git
