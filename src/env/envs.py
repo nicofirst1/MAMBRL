@@ -2,7 +2,7 @@ import torch
 import itertools
 import numpy as np
 
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 from ray.rllib.utils.images import rgb2gray
 
 from env.scenarios import CollectLandmarkScenario
@@ -12,8 +12,7 @@ from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 
 class CollectLandmarkEnv(SimpleEnv):
     def __init__(self, scenario_kwargs: Dict, horizon, continuous_actions: bool,
-            gray_scale=False, frame_shape=None, visible=False
-    ):
+            gray_scale=False, frame_shape=None, visible=False):
         """
         This class has to manage the interaction between the agents in an environment.
         The env is made of N agents and M landmarks.
@@ -43,6 +42,17 @@ class CollectLandmarkEnv(SimpleEnv):
     def reset(self):
         super(CollectLandmarkEnv, self).reset()
         return self.observe()
+
+    @property
+    def action_meaning_dict(self):
+
+        return {
+            0: "stop",
+            1: "left",
+            2: "right",
+            3: "up",
+            4: "down"
+        }
 
     def observe(self, agent="") -> torch.Tensor:
         """
@@ -108,7 +118,8 @@ class CollectLandmarkEnv(SimpleEnv):
 
         return observation, self.rewards, done, {}
 
-def get_env(kwargs:Dict) -> CollectLandmarkEnv:
+
+def get_env(kwargs: Dict) -> CollectLandmarkEnv:
     """Initialize rawEnv and wrap it in parallel petting zoo."""
     env = CollectLandmarkEnv(**kwargs)
     return env
