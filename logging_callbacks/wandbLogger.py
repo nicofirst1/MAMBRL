@@ -1,13 +1,13 @@
-import random
-from typing import Any, Dict, Optional
-
 import numpy as np
+import random
 import wandb
+
 from PIL import Image
 from torch import nn
-
+from typing import Any, Dict, Optional
 from logging_callbacks.callbacks import WandbLogger
-from src.gradcam import apply_colormap_on_image
+#from src.gradcam import apply_colormap_on_image, GradCam
+#from src.gradcam import apply_colormap_on_image
 
 
 class EnvModelWandb(WandbLogger):
@@ -135,9 +135,9 @@ class PPOWandb(WandbLogger):
             logs["rewards"] = rewards
             logs["mean_reward"] = rewards.mean()
 
-        if batch_id % self.log_heatmap_step == 0:
+        if batch_id % self.log_heatmap_step == 0 and self.cams is not None:
             # map heatmap on image
-            idx=random.choice(range(done_idx))
+            idx = random.choice(range(done_idx))
             img = rollout.states[idx]
             reprs = []
             for c in self.cams:
@@ -149,9 +149,10 @@ class PPOWandb(WandbLogger):
             img = Image.fromarray(img).convert("RGB")
 
             for name, rep in reprs:
-                heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
+                pass
+                # heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
                 # logs[f"{name}_heatmap"] = wandb.Image(heatmap)
-                logs[f"{name}_heatmap_on_image"] = wandb.Image(heatmap_on_image)
+                # logs[f"{name}_heatmap_on_image"] = wandb.Image(heatmap_on_image)
 
         self.log_to_wandb(logs, commit=True)
 

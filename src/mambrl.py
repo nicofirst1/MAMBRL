@@ -8,10 +8,10 @@ from model.policies import MultimodalMAS
 from model.ppo_wrapper import PPO
 from src.common import Params
 from src.env import get_env
-from src.gradcam import CamExtractor
-from src.layercam import LayerCam
+#from src.gradcam import CamExtractor
+#from src.layercam import LayerCam
 from src.model.env_model import NextFramePredictor
-from src.scorecam import ScoreCam
+#from src.scorecam import ScoreCam
 
 
 class MAMBRL:
@@ -37,15 +37,9 @@ class MAMBRL:
 
         ## fixme: anche qua bisogna capire se ne serve uno o uno per ogni agente
         self.simulated_env = None
-        # self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
+        #self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
 
-        self.agent = PPO(
-            env=self.real_env,
-            obs_shape=self.obs_shape,
-            action_space=self.action_space,
-            num_agents=self.config.agents,
-            config=config,
-        )
+        self.agent = PPO(env=self.real_env, config=config)
 
         if self.config.use_wandb:
             from logging_callbacks import PPOWandb
@@ -54,16 +48,17 @@ class MAMBRL:
             cams=[]
             if config.base == "resnet":
                 target_layer = 7
-                extractor = CamExtractor(model, target_layer=target_layer)
-                layer = LayerCam(model, extractor)
-                score_cam = ScoreCam(model, extractor)
+                #extractor = CamExtractor(model, target_layer=target_layer)
+                #layer = LayerCam(model, extractor)
+                #score_cam = ScoreCam(model, extractor)
 
-                cams = [layer, score_cam]
+                #cams = [layer, score_cam]
             elif config.base == "cnn":
                 target_layer = 5
             else:
                 target_layer = 1
 
+            cams=None
 
             self.logger = PPOWandb(
                 train_log_step=5,
@@ -74,7 +69,7 @@ class MAMBRL:
                 horizon=params.horizon,
                 mode="disabled" if params.debug else "online",
                 action_meaning=self.real_env.env.action_meaning_dict,
-                cams=cams,
+                cams=None,
             )
 
     def collect_trajectories(self):
@@ -108,7 +103,7 @@ class MAMBRL:
     def train(self):
         for epoch in trange(self.config.epochs, desc="Epoch"):
             self.collect_trajectories()
-            # self.trainer.train(epoch, self.real_env)
+            #self.trainer.train(epoch, self.real_env)
             self.train_agent_sim_env(epoch)
 
     def train_env_model(self):

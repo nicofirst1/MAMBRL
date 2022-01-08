@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 from torch import optim
 
+from model.policies import EpsilonGreedy
+
 
 class PPO:
     def __init__(
         self,
         actor_critic_dict,
         clip_param,
-        ppo_epoch,
         num_minibatch,
         value_loss_coef,
         entropy_coef,
@@ -20,7 +21,6 @@ class PPO:
 
         self.actor_critic_dict = actor_critic_dict
 
-        self.ppo_epoch = ppo_epoch
         self.clip_param = clip_param
         self.num_minibatch = num_minibatch
 
@@ -50,21 +50,11 @@ class PPO:
         )
 
         for sample in data_generator:
-            (
-                states_batch,
-                actions_batch,
-                values_batch,
-                return_batch,
-                masks_batch,
-                old_action_logs_probs_batch,
-                adv_targ,
-                _,
-            ) = sample
+            states_batch, actions_batch, values_batch, return_batch, \
+            masks_batch, old_action_logs_probs_batch, adv_targ, _, = sample
 
             for agent_id in self.actor_critic_dict.keys():
-                agent_index = int(
-                    agent_id[-1]
-                )  ## fixme: per il momento fatto così per l'indice
+                agent_index = int(agent_id[-1]) ## fixme: per il momento fatto così per l'indice
 
                 agent_actions = actions_batch[:, agent_index]
                 agent_values = values_batch[:, agent_index]
@@ -72,9 +62,7 @@ class PPO:
                 agent_action_log_probs = old_action_logs_probs_batch[:, agent_index, :]
                 agent_adv_targ = adv_targ[:, agent_index]
 
-                values, actions_log_probs, entropy = self.actor_critic_dict[
-                    agent_id
-                ].evaluate_actions(states_batch, agent_actions)
+                values, actions_log_probs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(states_batch, agent_actions)
 
                 ratio = torch.exp(actions_log_probs - agent_action_log_probs)
                 surr1 = ratio * agent_adv_targ
@@ -98,8 +86,8 @@ class PPO:
                     value_loss = 0.5 * (agent_returns - values).pow(2).mean()
 
                 self.optimizers[agent_id].zero_grad()
-                value_loss*=self.value_loss_coef
-                entropy*= self.entropy_coef
+                value_loss *=self.value_loss_coef
+                entropy *= self.entropy_coef
                 loss = (
                     value_loss
                     + action_loss
