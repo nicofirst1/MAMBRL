@@ -35,7 +35,7 @@ class PPO:
             lr=lr,
             eps=eps,
             max_grad_norm=max_grad_norm,
-            use_clipped_value_loss=False
+            use_clipped_value_loss=True
         )
 
     def learn(self, episodes, full_log_prob=False):
@@ -58,10 +58,10 @@ class PPO:
             rollout.states[0] = observation.unsqueeze(dim=0)
 
             for step in range(self.num_steps):
-                observation = (observation.float() / 255).to(self.device).unsqueeze(dim=0)
+                normalize_obs = (observation.float() / 255).to(self.device).unsqueeze(dim=0)
                 for agent_id in self.env.agents:
                     with torch.no_grad():
-                        value, action, action_log_prob = self.actor_critic_dict[agent_id].act(observation, full_log_prob=full_log_prob)
+                        value, action, action_log_prob = self.actor_critic_dict[agent_id].act(normalize_obs, full_log_prob=full_log_prob)
 
                     # get action with softmax and multimodal (stochastic)
                     action_dict[agent_id] = int(action)
@@ -85,7 +85,7 @@ class PPO:
 
                 rollout.insert(
                     step=step,
-                    state=observation.squeeze(dim=0),
+                    state=observation,
                     action=actions,
                     values=values,
                     reward=rewards,

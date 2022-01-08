@@ -61,7 +61,7 @@ class CollectLandmarkEnv(SimpleEnv):
 
             # move channel on second dimension if present, else add 1
             if len(observation.shape) == 3:
-                observation = observation.permute(2, 0, 1) ## fixme: a che serve questo?
+                observation = observation.permute(2, 0, 1)
             else:
                 observation = observation.unsqueeze(dim=0)
 

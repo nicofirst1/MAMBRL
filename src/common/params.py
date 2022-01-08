@@ -23,6 +23,7 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     param_sharing=False
+    visible = False
 
     ### ENV model
     stack_internal_states=False
@@ -41,13 +42,13 @@ class Params:
     target_loss_clipping=0.03
 
     ### Optimizer
-    lr = 3e-4
+    lr = 1e-4
     eps = 1e-5
     alpha = 0.99
     max_grad_norm = 5
 
     ### Algo parameters
-    gamma = 0.998
+    gamma = 0.99
     ppo_clip_param = 0.1
 
     ### Loss
@@ -123,7 +124,7 @@ class Params:
             continuous_actions=False,
             gray_scale=self.gray_scale,
             frame_shape=self.frame_shape,
-            visible=True,
+            visible=self.visible,
             scenario_kwargs=dict(
                 step_reward=self.step_reward,
                 landmark_reward=self.landmark_reward,

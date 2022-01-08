@@ -105,13 +105,6 @@ class MAMBRL:
         for step in trange(1000, desc="Training model free"):
             value_loss, action_loss, entropy, rollout = self.agent.learn(episodes=self.config.episodes, full_log_prob=True)
 
-            import matplotlib.pyplot as plt
-            plt.figure()
-            for element in rollout.states:
-                state = element[-3:, :, :].permute(1, 2, 0)
-                plt.imshow(state.cpu().detach().numpy())
-                plt.show(block=True)
-
             if self.config.use_wandb:
                 losses=dict(value_loss=[value_loss], action_loss=[action_loss], entropy=[entropy])
                 self.logger.on_batch_end(logs=losses, batch_id=step,rollout=rollout)

@@ -32,22 +32,22 @@ class EnvWrapper:
 
     def step(self, actions):
         new_obs, rewards, done, infos = self.env.step(actions)
-        self.add_interaction(torch.tensor(actions["agent_0"]), torch.tensor(rewards["agent_0"]), new_obs, done)
-
+        #self.add_interaction(torch.tensor(actions["agent_0"]), torch.tensor(rewards["agent_0"]), new_obs, done)
         self.stacked_frames = torch.cat((self.stacked_frames[self.channel_size:], new_obs), dim=0)
-        if done:
-            value = torch.tensor(0.).to(self.device)
-            self.buffer[-1][5] = value
-            index = len(self.buffer) - 2
-            while True:
-                ## fixme: nell'add_interaction c'è il +1 e qua -1.. da capire se serve più avanti quel +1
-                # value = (self.buffer[index][2] - 1).to(self.device) + 0.998 * value
-                value = (self.buffer[index][2]).to(self.device) + 0.998 * value
-                self.buffer[index][5] = value
-                index -= 1
 
-                if self.buffer[index][4] == 1:
-                    break
+        # if done:
+        #     value = torch.tensor(0.).to(self.device)
+        #     self.buffer[-1][5] = value
+        #     index = len(self.buffer) - 2
+        #     while True:
+        #         ## fixme: nell'add_interaction c'è il +1 e qua -1.. da capire se serve più avanti quel +1
+        #         # value = (self.buffer[index][2] - 1).to(self.device) + 0.998 * value
+        #         value = (self.buffer[index][2]).to(self.device) + 0.998 * value
+        #         self.buffer[index][5] = value
+        #         index -= 1
+        #
+        #         if self.buffer[index][4] == 1:
+        #             break
 
         return self.stacked_frames, rewards, done, infos
 
