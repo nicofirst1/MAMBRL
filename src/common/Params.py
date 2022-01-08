@@ -1,3 +1,5 @@
+import argparse
+import inspect
 import multiprocessing
 import os
 import uuid
@@ -54,8 +56,8 @@ class Params:
     ### Loss
     value_loss_coef = 0.5
     entropy_coef = 0.01
-    base="resnet" #[ cnn , resnet ]
-    clip_value_loss=True
+    base = "resnet" #[ cnn , resnet ]
+    clip_value_loss = True
 
     #### ENVIRONMENT ####
     agents = 1

@@ -6,12 +6,11 @@ from model.policies import EpsilonGreedy
 
 
 class PPO:
-    def __init__(self, actor_critic_dict, clip_param, ppo_epoch, num_minibatch, value_loss_coef,
+    def __init__(self, actor_critic_dict, clip_param, num_minibatch, value_loss_coef,
             entropy_coef, lr, eps, max_grad_norm, use_clipped_value_loss=True):
 
         self.actor_critic_dict = actor_critic_dict
 
-        self.ppo_epoch = ppo_epoch
         self.clip_param = clip_param
         self.num_minibatch = num_minibatch
 

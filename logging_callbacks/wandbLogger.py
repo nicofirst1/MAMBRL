@@ -1,14 +1,11 @@
-import os
-from typing import Any, Dict, Optional
-
 import numpy as np
-import torch
 import wandb
+
 from PIL import Image
 from torch import nn
-
+from typing import Any, Dict, Optional
 from logging_callbacks.callbacks import WandbLogger
-from src.gradcam import apply_colormap_on_image, GradCam
+#from src.gradcam import apply_colormap_on_image, GradCam
 
 
 class EnvModelWandb(WandbLogger):
@@ -112,7 +109,7 @@ class PPOWandb(WandbLogger):
         self.log_heatmap_step = 10
 
         # Grad cam
-        self.cams= cams
+        self.cams = cams
 
     def on_batch_end(self, logs: Dict[str, Any],  batch_id: int, rollout):
 
@@ -128,24 +125,23 @@ class PPOWandb(WandbLogger):
             logs['actions'] = actions
             logs['rewards'] = rewards
 
-        if batch_id % self.log_heatmap_step == 0:
+        if batch_id % self.log_heatmap_step == 0 and self.cams is not None:
             # map heatmap on image
-            img= rollout.states[0]
-            reprs=[]
+            img = rollout.states[0]
+            reprs =[]
             for c in self.cams:
-
-                cam=c.generate_cam(img.clone().unsqueeze(dim=0))
+                cam = c.generate_cam(img.clone().unsqueeze(dim=0))
                 reprs.append((c.name, cam))
-            img=img[-3:]
-            img= np.uint8(img.cpu().data.numpy())
-            img= img.transpose(2, 1, 0)
-            img=Image.fromarray(img).convert('RGB')
+
+            img = img[-3:]
+            img = np.uint8(img.cpu().data.numpy())
+            img = img.transpose(2, 1, 0)
+            img = Image.fromarray(img).convert('RGB')
 
             for name, rep in reprs:
                 heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, 'hsv')
                 logs[f'{name}_heatmap'] = wandb.Image(heatmap)
                 logs[f'{name}_heatmap_on_image'] = wandb.Image(heatmap_on_image)
-
 
         self.log_to_wandb(logs, commit=True)
 

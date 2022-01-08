@@ -7,11 +7,11 @@ from model.env_model_trainer import EnvModelTrainer
 from env.simulated_env import SimulatedEnvironment
 from src.common import Params
 from src.env import get_env
-from src.gradcam import GradCam, CamExtractor
-from src.layercam import LayerCam
+#from src.gradcam import GradCam, CamExtractor
+#from src.layercam import LayerCam
 from src.model.env_model import NextFramePredictor
 from model.policies import MultimodalMAS, EpsilonGreedy
-from src.scorecam import ScoreCam
+#from src.scorecam import ScoreCam
 
 
 class MAMBRL:
@@ -40,14 +40,7 @@ class MAMBRL:
         self.simulated_env = None
         #self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
 
-        self.agent = PPO(
-            env=self.real_env,
-            obs_shape=self.obs_shape,
-            action_space=self.action_space,
-            num_agents=self.config.agents,
-            config=config,
-
-        )
+        self.agent = PPO(env=self.real_env, config=config)
 
         if self.config.use_wandb:
             from logging_callbacks import PPOWandb
@@ -59,11 +52,12 @@ class MAMBRL:
                 target_layer = 5
             else:
                 target_layer=1
-            extractor= CamExtractor(model, target_layer=target_layer)
-            layer = LayerCam(model, extractor)
-            score_cam = ScoreCam(model, extractor)
 
-            cams=[layer,score_cam]
+            #extractor = CamExtractor(model, target_layer=target_layer)
+            #layer = LayerCam(model, extractor)
+            #score_cam = ScoreCam(model, extractor)
+
+            #cams = [layer, score_cam]
 
             self.logger = PPOWandb(
                 train_log_step=5,
@@ -74,7 +68,7 @@ class MAMBRL:
                 horizon=params.horizon,
                 mode="disabled" if params.debug else "online",
                 action_meaning=self.real_env.env.action_meaning_dict,
-                cams=cams,
+                cams=None,
             )
 
     def collect_trajectories(self):
