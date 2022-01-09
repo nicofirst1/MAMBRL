@@ -1,11 +1,10 @@
-import random
-from typing import Any, Dict, Optional
-
 import numpy as np
+import random
 import wandb
+
 from PIL import Image
 from torch import nn
-
+from typing import Any, Dict, Optional
 from logging_callbacks.callbacks import WandbLogger
 from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image, save_gradient_images
 

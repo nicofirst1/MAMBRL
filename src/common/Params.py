@@ -3,9 +3,7 @@ import inspect
 import multiprocessing
 import os
 import uuid
-
 import torch
-
 
 class Params:
     unique_id = str(uuid.uuid1())[:8]
@@ -46,13 +44,13 @@ class Params:
     target_loss_clipping = 0.03
 
     ### Optimizer
-    lr = 3e-4
+    lr = 1e-4
     eps = 1e-5
     alpha = 0.99
     max_grad_norm = 5
 
     ### Algo parameters
-    gamma = 0.998
+    gamma = 0.99
     ppo_clip_param = 0.1
 
     ### Loss
@@ -65,7 +63,7 @@ class Params:
     agents = 1
     landmarks = 2
     step_reward = -1
-    landmark_reward = 10
+    landmark_reward = 50
     epochs = 1000
     minibatch = 32
     episodes = 3
