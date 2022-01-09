@@ -138,6 +138,8 @@ class CNNBase(NNBase):
 
 class ResNetBase(NNBase):
     def __init__(self, input_shape, hidden_size=512):
+        hidden_size = 64
+
         super(ResNetBase, self).__init__(hidden_size)
 
         self.preprocess = transforms.Compose(
@@ -160,12 +162,17 @@ class ResNetBase(NNBase):
         model = model.eval()
         for param in model.parameters():
             param.requires_grad = False
-        self.features = torch.nn.Sequential(*(list(model.children())[:-1]))
+        self.features = (list(model.children())[:-1])
 
         num_inputs = input_shape[0]
         self.features[0] = init_(
             nn.Conv2d(num_inputs, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3))
         )
+
+        end=self.features[-1]
+        self.features= self.features[:6]
+        self.features[-1]=end
+        self.features=torch.nn.Sequential(*self.features)
 
         init_ = lambda m: init(
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0)

@@ -1,10 +1,11 @@
-import numpy as np
 import random
-import wandb
-
-from PIL import Image
-from torch import nn
 from typing import Any, Dict, Optional
+
+import numpy as np
+import wandb
+from PIL import Image, ImageDraw, ImageFont
+from torch import nn
+
 from logging_callbacks.callbacks import WandbLogger
 from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image, save_gradient_images
 
@@ -117,7 +118,7 @@ class PPOWandb(WandbLogger):
 
         logs["epoch"] = batch_id
 
-        if batch_id % 1 == 0:
+        if batch_id % self.log_behavior_step == 0:
             done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0]
 
             if len(done_idx) > 1:
@@ -129,6 +130,9 @@ class PPOWandb(WandbLogger):
 
             actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
             rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
+
+            states = write_rewards(states, rewards)
+
             logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
             logs["hist/actions"] = actions
             logs["hist/rewards"] = rewards
@@ -154,9 +158,32 @@ class PPOWandb(WandbLogger):
 
                 logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
 
-                #save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
+                save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
         self.log_to_wandb(logs, commit=True)
 
     def on_epoch_end(self, loss: float, logs: Dict[str, Any], model_path: str):
         self.epoch += 1
+
+
+def write_rewards(states, rewards):
+    """
+    Write reward on state image
+    :param states:
+    :param rewards:
+    :return:
+    """
+    states = states.transpose((0, 2, 3, 1))
+    states = [Image.fromarray(states[i]) for i in range(states.shape[0])]
+    draws = [ImageDraw.Draw(img) for img in states]
+    font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", 10)
+    for idx in range(len(rewards)):
+        rew = rewards[idx]
+        draw = draws[idx]
+        draw.rectangle(((0, 00), (160, 10)), fill="black")
+        draw.text((0, 0), f"Rew {rew}", font=font, fill=(255, 255, 255))
+
+    states = [np.asarray(state) for state in states]
+    states = np.asarray(states)
+    states = states.transpose((0, 3, 1, 2))
+    return states

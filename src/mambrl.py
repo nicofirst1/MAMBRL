@@ -48,40 +48,23 @@ class MAMBRL:
             model = self.agent.actor_critic_dict["agent_0"].base
             if config.base == "resnet":
 
-                extractor = CamExtractor(model, target_layer=7)
-                score_cam7 = ScoreCam(model, extractor)
+                cams = []
+                for idx, layer in enumerate(list(model.features)):
+                    extractor = CamExtractor(model, target_layer=idx)
+                    name = type(layer).__name__
+                    score_cam = ScoreCam(model, extractor, name=name)
+                    cams.append(score_cam)
 
-                extractor = CamExtractor(model, target_layer=6)
-                score_cam6 = ScoreCam(model, extractor)
-                extractor = CamExtractor(model, target_layer=5)
-                score_cam5 = ScoreCam(model, extractor)
 
-                extractor = CamExtractor(model, target_layer=4)
-                score_cam4 = ScoreCam(model, extractor)
-                extractor = CamExtractor(model, target_layer=3)
-                score_cam3 = ScoreCam(model, extractor)
-
-                extractor = CamExtractor(model, target_layer=2)
-                score_cam2 = ScoreCam(model, extractor)
-                extractor = CamExtractor(model, target_layer=1)
-                score_cam1 = ScoreCam(model, extractor)
-
-                extractor = CamExtractor(model, target_layer=0)
-                score_cam0 = ScoreCam(model, extractor)
-
-                cams = [score_cam7, score_cam6, score_cam5, score_cam4, score_cam3, score_cam2, score_cam1, score_cam0]
 
             elif config.base == "cnn":
-                extractor = CamExtractor(model, target_layer=0)
-                score_cam0 = ScoreCam(model, extractor)
+                cams = []
+                for idx, layer in enumerate(list(model.modules())):
+                    extractor = CamExtractor(model, target_layer=idx)
+                    name = type(layer).__name__
+                    score_cam = ScoreCam(model, extractor, name=name)
+                    cams.append(score_cam)
 
-                extractor = CamExtractor(model, target_layer=2)
-                score_cam2 = ScoreCam(model, extractor)
-
-                extractor = CamExtractor(model, target_layer=4)
-                score_cam4 = ScoreCam(model, extractor)
-
-                cams = [score_cam0, score_cam2, score_cam4]
 
             else:
                 cams = []
@@ -93,6 +76,7 @@ class MAMBRL:
                 val_log_step=5,
                 project="model_free",
                 opts={},
+                #fixme: add model
                 models={},
                 horizon=params.horizon,
                 mode="disabled" if params.debug else "online",
@@ -161,12 +145,11 @@ class MAMBRL:
         episodes = 1200
 
         curriculum = {
-            200: dict(reward=1, landmark=0),
-            400: dict(reward=1, landmark=1),
-            600: dict(reward=2, landmark=0),
-            800: dict(reward=2, landmark=1),
-            1000: dict(reward=2, landmark=2),
-            1200: dict(reward=3, landmark=2),
+            400: dict(reward=0, landmark=1),
+            600: dict(reward=1, landmark=0),
+            800: dict(reward=1, landmark=1),
+            1000: dict(reward=1, landmark=2),
+            1200: dict(reward=2, landmark=2),
         }
 
         for step in trange(episodes, desc="Training model free"):
@@ -175,8 +158,7 @@ class MAMBRL:
             )
 
             if self.config.use_wandb:
-
-                losses={
+                losses = {
                     "loss/value_loss": [value_loss],
                     "loss/action_loss": [action_loss],
                     "loss/entropy_loss": [entropy],

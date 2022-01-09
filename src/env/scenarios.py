@@ -101,10 +101,9 @@ class CollectLandmarkScenario(BaseScenario):
     def init_curriculum_learning():
 
         reward_modalities = {
-            0: "Reward is the (world.maxsize - distance between agent and closest landmark)",
-            1: "Reward is the (world.maxsize - distance between agent and closest landmark), +landmark_reward when agent on landmark",
-            2: "Reward is 0 at every time step and +landmark_reward when agent on landmark",
-            3: "Reward is -step_reward at every time step and +landmark_reward when agent on landmark",
+            0: "Reward is the (world.maxsize - distance between agent and closest landmark), +landmark_reward when agent on landmark",
+            1: "Reward is 0 at every time step and +landmark_reward when agent on landmark",
+            2: "Reward is -step_reward at every time step and +landmark_reward when agent on landmark",
             "current": 0,
         }
 
@@ -237,22 +236,16 @@ class CollectLandmarkScenario(BaseScenario):
 
             return rew
 
+
         if self.reward_curriculum["current"] == 0:
-            rew = dist_reward()
-
-
-        elif self.reward_curriculum["current"] == 1:
             rew = dist_reward()
             rew += collision_reward()
             rew = min_max_norm(rew, 0, self.landmark_reward + 1)
 
-
-
-        elif self.reward_curriculum["current"] == 2:
+        elif self.reward_curriculum["current"] == 1:
             rew = collision_reward()
 
-
-        elif self.reward_curriculum["current"] == 3:
+        elif self.reward_curriculum["current"] == 2:
 
             rew = self.step_reward
             rew += collision_reward()
