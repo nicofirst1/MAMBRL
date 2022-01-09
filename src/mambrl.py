@@ -3,13 +3,13 @@ from tqdm import trange
 
 from src.common import Params
 
-
-params=Params()
+params = Params()
 
 if not params.visible:
     import pyglet
-    pyglet.options['shadow_window']=False
-    pyglet.options['headless']=True
+
+    pyglet.options['shadow_window'] = False
+    pyglet.options['headless'] = True
 
 from common.utils import print_current_curriculum
 from env.env_wrapper import EnvWrapper
@@ -19,7 +19,6 @@ from model.ppo_wrapper import PPO
 from src.env import get_env
 
 from src.model.env_model import NextFramePredictor
-
 
 
 class MAMBRL:
@@ -56,13 +55,11 @@ class MAMBRL:
         )
 
         if self.config.use_wandb:
+            from pytorchCnnVisualizations.src import CamExtractor, LayerCam, ScoreCam
 
             model = self.agent.actor_critic_dict["agent_0"].base
-            cams=[]
-            if config.base == "aaa":
-                from src.scorecam import ScoreCam
-                from src.gradcam import CamExtractor
-                from src.layercam import LayerCam
+            cams = []
+            if config.base == "resnet":
 
                 target_layer = 7
                 extractor = CamExtractor(model, target_layer=target_layer)
@@ -159,7 +156,7 @@ class MAMBRL:
 
         for step in trange(episodes, desc="Training model free"):
             value_loss, action_loss, entropy, rollout = self.agent.learn(
-                episodes=self.config.episodes, full_log_prob=True, entropy_coef=1/(step+1)
+                episodes=self.config.episodes, full_log_prob=True, entropy_coef=1 / (step + 1)
             )
 
             if self.config.use_wandb:

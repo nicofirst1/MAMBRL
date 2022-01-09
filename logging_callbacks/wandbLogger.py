@@ -7,6 +7,7 @@ from PIL import Image
 from torch import nn
 
 from logging_callbacks.callbacks import WandbLogger
+from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
 
 
 class EnvModelWandb(WandbLogger):
@@ -135,7 +136,6 @@ class PPOWandb(WandbLogger):
             logs["mean_reward"] = rewards.mean()
 
         if batch_id % self.log_heatmap_step == 0 and len(self.cams)!=0:
-            from src.gradcam import apply_colormap_on_image
 
             # map heatmap on image
             idx=random.choice(range(done_idx))

@@ -4,7 +4,7 @@ requirements = """
 ray==1.6.0
 env==0.1.0
 rich==10.12.0
-wandb==0.12.5
+wandb==0.12.7
 numpy==1.19.5
 pettingzoo==1.11.2
 matplotlib==3.5.0
