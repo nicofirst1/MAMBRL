@@ -222,7 +222,7 @@ class CollectLandmarkScenario(BaseScenario):
 
                 min_dist = min(min_dist, dist)
 
-            rew = world.max_size - dist
+            rew = world.max_size - min_dist
 
         elif self.reward_curriculum["current"] == 1:
             rew = 0

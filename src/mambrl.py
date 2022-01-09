@@ -9,7 +9,6 @@ if not params.visible:
     import pyglet
 
     pyglet.options['shadow_window'] = False
-    pyglet.options['headless'] = True
 
 from common.utils import print_current_curriculum
 from env.env_wrapper import EnvWrapper
@@ -62,16 +61,17 @@ class MAMBRL:
             if config.base == "resnet":
 
                 target_layer = 7
-                extractor = CamExtractor(model, target_layer=target_layer)
-                layer = LayerCam(model, extractor)
-                score_cam = ScoreCam(model, extractor)
 
-                cams = [layer, score_cam]
             elif config.base == "cnn":
                 target_layer = 5
             else:
                 target_layer = 1
 
+            extractor = CamExtractor(model, target_layer=target_layer)
+            layer = LayerCam(model, extractor)
+            score_cam = ScoreCam(model, extractor)
+
+            cams = [layer, score_cam]
             from logging_callbacks import PPOWandb
 
             self.logger = PPOWandb(
@@ -156,7 +156,7 @@ class MAMBRL:
 
         for step in trange(episodes, desc="Training model free"):
             value_loss, action_loss, entropy, rollout = self.agent.learn(
-                episodes=self.config.episodes, full_log_prob=True, entropy_coef=1 / (step + 1)
+                episodes=self.config.episodes, full_log_prob=True, #entropy_coef=1 / (step + 1)
             )
 
             if self.config.use_wandb:
