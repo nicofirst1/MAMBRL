@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from scipy.stats import truncnorm
 
-from src.model.utils import (
+from .utils import (
     ActionInjector,
     Container,
     MeanAttention,
@@ -11,10 +11,10 @@ from src.model.utils import (
     get_timing_signal_nd,
     int_to_bit,
     mix,
-    one_hot_encode,
     sample_with_temperature,
     standardize_frame,
 )
+from src.common.utils import one_hot_encode
 
 
 class RewardEstimator(nn.Module):

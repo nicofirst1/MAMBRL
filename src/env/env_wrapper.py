@@ -1,8 +1,8 @@
 import torch
 
 from typing import Tuple
-from env.envs import CollectLandmarkEnv
-from model.utils import one_hot_encode
+from .envs import CollectLandmarkEnv
+from src.common.utils import one_hot_encode
 
 
 class EnvWrapper:

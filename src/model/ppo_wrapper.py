@@ -1,11 +1,12 @@
 import torch
 
-from model import RolloutStorage, ppo
-from model.model_free import Policy, ResNetBase, CNNBase
-from model.utils import mas_dict2tensor
+from .ppo import PPO
+from .rollout_storage import RolloutStorage
+from .model_free import Policy, ResNetBase, CNNBase
+from src.common import mas_dict2tensor
 
 
-class PPO:
+class PpoWrapper:
     def __init__(self, env, config):
 
         self.env = env
@@ -30,7 +31,7 @@ class PPO:
             agent_id: Policy(self.obs_shape, self.action_space, base=base).to(self.device) for agent_id in self.env.agents
         }
 
-        self.agent = ppo.PPO(
+        self.agent = PPO(
             actor_critic_dict=self.actor_critic_dict,
             clip_param=config.ppo_clip_param,
             num_minibatch=self.num_minibatch,
@@ -65,8 +66,7 @@ class PPO:
             rollout.states[0] = observation.unsqueeze(dim=0)
 
             for step in range(self.num_steps):
-                normalize_obs = torch.nn.functional.normalize(observation.to(self.device).unsqueeze(dim=0))
-                #normalize_obs = (observation.float() / 255).to(self.device).unsqueeze(dim=0)
+                normalize_obs = (observation / 255.0).to(self.device).unsqueeze(dim=0)
                 for agent_id in self.env.agents:
                     with torch.no_grad():
                         value, action, action_log_prob = self.actor_critic_dict[agent_id].act(

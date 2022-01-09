@@ -4,8 +4,8 @@ import numpy as np
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.core import Agent, Entity, World
 from PettingZoo.pettingzoo.mpe._mpe_utils.scenario import BaseScenario
-from src.common.utils import min_max_norm
-from src.env.timer_landmark import TimerLandmark
+from src.common import min_max_norm
+from .timer_landmark import TimerLandmark
 
 
 def is_collision(entity1, entity2):
@@ -212,7 +212,6 @@ class CollectLandmarkScenario(BaseScenario):
         return [agent for agent in world.agents]
 
     def reward(self, agent, world):
-        lower_bound = 0
 
         lower_bound = 0
         upper_bound = 0

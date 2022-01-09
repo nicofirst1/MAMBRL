@@ -172,43 +172,6 @@ def sample_with_temperature(logits, temperature):
     return choices
 
 
-def init(module, weight_init, bias_init, gain=1):
-    weight_init(module.weight.data, gain=gain)
-    bias_init(module.bias.data)
-    return module
 
 
-def one_hot_encode(action, n, dtype=torch.uint8):
-    if not isinstance(action, torch.Tensor):
-        action = torch.tensor(action)
 
-    res = action.long().view((-1, 1))
-    res = (
-        torch.zeros((len(res), n))
-        .to(res.device)
-        .scatter(1, res, 1)
-        .type(dtype)
-        .to(res.device)
-    )
-    res = res.view((*action.shape, n))
-
-    return res
-
-
-def mas_dict2tensor(agent_dict, type=None) -> torch.Tensor:
-    """
-    sort agent dict and convert to tensor of type
-
-    Params
-    ------
-        agent_dict:
-        type:
-    """
-
-    tensor = sorted(agent_dict.items())
-    if type is not None:
-        tensor = [type(elem[1]) for elem in tensor]
-    else:
-        tensor = [elem[1] for elem in tensor]
-
-    return torch.as_tensor(tensor)

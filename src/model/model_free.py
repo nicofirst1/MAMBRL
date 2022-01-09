@@ -1,11 +1,9 @@
 import torch
 import torch.nn as nn
-from torch.distributions.utils import logits_to_probs
 from torch.nn import Flatten
 from torchvision.transforms import transforms
 
-from src.common.distributions import Categorical, FixedCategorical
-from src.model.utils import init
+from src.common import Categorical, FixedCategorical, init
 
 
 class Policy(nn.Module):

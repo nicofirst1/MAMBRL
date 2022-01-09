@@ -3,12 +3,10 @@ import itertools
 import numpy as np
 
 from typing import Dict, Tuple
-from ray.rllib.utils.images import rgb2gray
 
-from env.scenarios import CollectLandmarkScenario
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
-
+from .scenarios import CollectLandmarkScenario
 
 class CollectLandmarkEnv(SimpleEnv):
     def __init__(
