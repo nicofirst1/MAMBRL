@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.distributions.utils import logits_to_probs
 
-from model.utils import init
+from src.model.utils import init
 
 
 class FixedCategorical:

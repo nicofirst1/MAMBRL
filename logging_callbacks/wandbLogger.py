@@ -7,7 +7,7 @@ from PIL import Image
 from torch import nn
 
 from logging_callbacks.callbacks import WandbLogger
-from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
+from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image, save_gradient_images
 
 
 class EnvModelWandb(WandbLogger):
@@ -135,10 +135,10 @@ class PPOWandb(WandbLogger):
             logs["rewards"] = rewards
             logs["mean_reward"] = rewards.mean()
 
-        if batch_id % self.log_heatmap_step == 0 and len(self.cams)!=0:
+        if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
 
             # map heatmap on image
-            idx=random.choice(range(done_idx))
+            idx = random.choice(range(done_idx))
             img = rollout.states[idx]
             reprs = []
             for c in self.cams:
@@ -151,8 +151,10 @@ class PPOWandb(WandbLogger):
 
             for name, rep in reprs:
                 heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
-                # logs[f"{name}_heatmap"] = wandb.Image(heatmap)
-                logs[f"{name}_heatmap_on_image"] = wandb.Image(heatmap_on_image)
+
+                logs[f"cams/{name}_heatmap_on_image"] = wandb.Image(heatmap_on_image)
+
+                #save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
         self.log_to_wandb(logs, commit=True)
 

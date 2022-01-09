@@ -54,24 +54,49 @@ class MAMBRL:
         )
 
         if self.config.use_wandb:
-            from pytorchCnnVisualizations.src import CamExtractor, LayerCam, ScoreCam
+            from pytorchCnnVisualizations.src import CamExtractor, ScoreCam
 
             model = self.agent.actor_critic_dict["agent_0"].base
-            cams = []
             if config.base == "resnet":
 
-                target_layer = 7
+                extractor = CamExtractor(model, target_layer=7)
+                score_cam7 = ScoreCam(model, extractor)
+
+                extractor = CamExtractor(model, target_layer=6)
+                score_cam6 = ScoreCam(model, extractor)
+                extractor = CamExtractor(model, target_layer=5)
+                score_cam5 = ScoreCam(model, extractor)
+
+                extractor = CamExtractor(model, target_layer=4)
+                score_cam4 = ScoreCam(model, extractor)
+                extractor = CamExtractor(model, target_layer=3)
+                score_cam3 = ScoreCam(model, extractor)
+
+                extractor = CamExtractor(model, target_layer=2)
+                score_cam2 = ScoreCam(model, extractor)
+                extractor = CamExtractor(model, target_layer=1)
+                score_cam1 = ScoreCam(model, extractor)
+
+                extractor = CamExtractor(model, target_layer=0)
+                score_cam0 = ScoreCam(model, extractor)
+
+                cams = [score_cam7, score_cam6, score_cam5, score_cam4, score_cam3, score_cam2, score_cam1, score_cam0]
 
             elif config.base == "cnn":
-                target_layer = 5
+                extractor = CamExtractor(model, target_layer=0)
+                score_cam0 = ScoreCam(model, extractor)
+
+                extractor = CamExtractor(model, target_layer=2)
+                score_cam2 = ScoreCam(model, extractor)
+
+                extractor = CamExtractor(model, target_layer=4)
+                score_cam4 = ScoreCam(model, extractor)
+
+                cams = [score_cam0, score_cam2, score_cam4]
+
             else:
-                target_layer = 1
+                cams = []
 
-            extractor = CamExtractor(model, target_layer=target_layer)
-            layer = LayerCam(model, extractor)
-            score_cam = ScoreCam(model, extractor)
-
-            cams = [layer, score_cam]
             from logging_callbacks import PPOWandb
 
             self.logger = PPOWandb(
@@ -156,7 +181,7 @@ class MAMBRL:
 
         for step in trange(episodes, desc="Training model free"):
             value_loss, action_loss, entropy, rollout = self.agent.learn(
-                episodes=self.config.episodes, full_log_prob=True, #entropy_coef=1 / (step + 1)
+                episodes=self.config.episodes, full_log_prob=True,  # entropy_coef=1 / (step + 1)
             )
 
             if self.config.use_wandb:
