@@ -1,12 +1,13 @@
-import itertools
-from typing import Dict, Tuple
-
-import numpy as np
 import torch
+import itertools
+import numpy as np
 
+from typing import Dict, Tuple
+from ray.rllib.utils.images import rgb2gray
+
+from env.scenarios import CollectLandmarkScenario
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
-from env.scenarios import CollectLandmarkScenario
 
 
 class CollectLandmarkEnv(SimpleEnv):
@@ -65,7 +66,6 @@ class CollectLandmarkEnv(SimpleEnv):
 
     @property
     def action_meaning_dict(self):
-
         return {0: "stop", 1: "left", 2: "right", 3: "up", 4: "down"}
 
     def observe(self, agent="") -> torch.Tensor:
@@ -85,9 +85,7 @@ class CollectLandmarkEnv(SimpleEnv):
 
             # move channel on second dimension if present, else add 1
             if len(observation.shape) == 3:
-                observation = observation.permute(
-                    2, 0, 1
-                )  ## fixme: a che serve questo?
+                observation = observation.permute(2, 0, 1)
             else:
                 observation = observation.unsqueeze(dim=0)
 
@@ -120,6 +118,7 @@ class CollectLandmarkEnv(SimpleEnv):
             super(CollectLandmarkEnv, self).step(action)
 
         self.steps += 1
+        self.dones["__all__"] = False
         if self.steps >= self.max_cycles:
             self.dones["__all__"] = True
 
@@ -138,8 +137,8 @@ class CollectLandmarkEnv(SimpleEnv):
 
         if self.scenario.num_landmarks <= 0:
             self.dones["__all__"] = True
-        observation = self.observe()
 
+        observation = self.observe()
         return observation, self.rewards, self.dones, {}
 
 

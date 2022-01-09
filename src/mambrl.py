@@ -16,7 +16,6 @@ from model.env_model_trainer import EnvModelTrainer
 from model.policies import MultimodalMAS
 from model.ppo_wrapper import PPO
 from src.env import get_env
-
 from src.model.env_model import NextFramePredictor
 
 
@@ -43,15 +42,9 @@ class MAMBRL:
 
         ## fixme: anche qua bisogna capire se ne serve uno o uno per ogni agente
         self.simulated_env = None
-        # self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
+        #self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
 
-        self.agent = PPO(
-            env=self.real_env,
-            obs_shape=self.obs_shape,
-            action_space=self.action_space,
-            num_agents=self.config.agents,
-            config=config,
-        )
+        self.agent = PPO(env=self.real_env, config=config)
 
         if self.config.use_wandb:
             from pytorchCnnVisualizations.src import CamExtractor, ScoreCam
@@ -142,7 +135,7 @@ class MAMBRL:
     def train(self):
         for epoch in trange(self.config.epochs, desc="Epoch"):
             self.collect_trajectories()
-            # self.trainer.train(epoch, self.real_env)
+            #self.trainer.train(epoch, self.real_env)
             self.train_agent_sim_env(epoch)
 
     def train_env_model(self):
@@ -181,7 +174,7 @@ class MAMBRL:
 
         for step in trange(episodes, desc="Training model free"):
             value_loss, action_loss, entropy, rollout = self.agent.learn(
-                episodes=self.config.episodes, full_log_prob=True,  # entropy_coef=1 / (step + 1)
+                episodes=self.config.episodes, full_log_prob=True, entropy_coef=1/(step+1)
             )
 
             if self.config.use_wandb:

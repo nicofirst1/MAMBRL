@@ -97,7 +97,8 @@ class CollectLandmarkScenario(BaseScenario):
             self.landmark_curriculum,
         ) = self.init_curriculum_learning()
 
-    def init_curriculum_learning(self):
+    @staticmethod
+    def init_curriculum_learning():
 
         reward_modalities = {
             0: "Reward is the (world.maxsize - distance between agent and closest landmark), +landmark_reward when agent on landmark",
@@ -178,7 +179,7 @@ class CollectLandmarkScenario(BaseScenario):
         self.landmark_pos = landmark_pos
         return world
 
-    def reset_world(self, world):
+    def reset_world(self, world, random):
         self.num_landmarks = len(self.landmarks)
         self.visited_landmarks = []
 
@@ -211,16 +212,15 @@ class CollectLandmarkScenario(BaseScenario):
         return [agent for agent in world.agents]
 
     def reward(self, agent, world):
+        lower_bound = 0
 
         lower_bound = 0
         upper_bound = 0
 
         if self.reward_curriculum["current"] == 0:
-
             min_dist = 99999
             for landmark in world.landmarks:
                 dist = get_distance(agent, landmark)
-
                 min_dist = min(min_dist, dist)
 
             rew = world.max_size * 2 - min_dist

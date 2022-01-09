@@ -3,6 +3,7 @@ import torch
 
 class RolloutStorage(object):
     def __init__(self, num_steps, obs_shape, num_agents, num_actions):
+        self.steps = 0
         self.num_channels = obs_shape[0]
 
         self.states = torch.zeros(num_steps + 1, *obs_shape)
@@ -24,12 +25,14 @@ class RolloutStorage(object):
         self.returns = self.returns.to(device)
 
     def insert(self, step, state, action, values, reward, mask, action_log_probs):
-        self.states[step + 1].copy_(state)
-        self.actions[step].copy_(action)
-        self.values[step].copy_(values)
-        self.rewards[step].copy_(reward)
-        self.masks[step + 1].copy_(mask)
+        self.states[self.steps + 1].copy_(state)
+        self.actions[self.steps].copy_(action)
+        self.values[self.steps].copy_(values)
+        self.rewards[self.steps].copy_(reward)
+        self.masks[self.steps + 1].copy_(mask)
         self.action_log_probs[step].copy_(action_log_probs)
+
+        self.steps += 1
 
     def after_update(self):
         self.states[0].copy_(self.states[-1])
@@ -69,9 +72,13 @@ class RolloutStorage(object):
             adv_targ_minibatch: torch.Tensor[minibatch_size, num_agents]
             next_states_minibatch: torch.Tensor[minibatch_size, num_channels, width, height]
         """
-        total_samples = self.rewards.size(0)
+        #total_samples = self.rewards.size(0)
+        total_samples = self.steps
         perm = torch.randperm(total_samples)
         done = False
+
+        if minibatch_frames >= total_samples:
+            minibatch_frames = total_samples
 
         for start_ind in range(0, total_samples, minibatch_frames):
             next_states_minibatch = []
@@ -96,10 +103,7 @@ class RolloutStorage(object):
                 values_minibatch.append(self.values[ind].unsqueeze(0))
                 return_minibatch.append(self.returns[ind].unsqueeze(0))
                 masks_minibatch.append(self.masks[ind].unsqueeze(0))
-
-                old_action_log_probs_minibatch.append(
-                    self.action_log_probs[ind].unsqueeze(0)
-                )
+                old_action_log_probs_minibatch.append(self.action_log_probs[ind].unsqueeze(0))
                 adv_targ_minibatch.append(advantages[ind].unsqueeze(0))
 
             if done:
