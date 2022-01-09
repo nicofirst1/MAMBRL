@@ -16,10 +16,9 @@ from model.env_model_trainer import EnvModelTrainer
 from model.policies import MultimodalMAS
 from model.ppo_wrapper import PPO
 from src.env import get_env
-from src.gradcam import CamExtractor
-from src.layercam import LayerCam
+
 from src.model.env_model import NextFramePredictor
-from src.scorecam import ScoreCam
+
 
 
 class MAMBRL:
@@ -56,11 +55,14 @@ class MAMBRL:
         )
 
         if self.config.use_wandb:
-            from logging_callbacks import PPOWandb
 
             model = self.agent.actor_critic_dict["agent_0"].base
             cams=[]
-            if config.base == "resnet":
+            if config.base == "aaa":
+                from src.scorecam import ScoreCam
+                from src.gradcam import CamExtractor
+                from src.layercam import LayerCam
+
                 target_layer = 7
                 extractor = CamExtractor(model, target_layer=target_layer)
                 layer = LayerCam(model, extractor)
@@ -72,6 +74,7 @@ class MAMBRL:
             else:
                 target_layer = 1
 
+            from logging_callbacks import PPOWandb
 
             self.logger = PPOWandb(
                 train_log_step=5,
