@@ -1,12 +1,20 @@
 import torch
 from tqdm import trange
 
+from src.common import Params
+
+
+params=Params()
+
+if not params.visible:
+    import pyglet
+    pyglet.options['shadow_window']=False
+
 from common.utils import print_current_curriculum
 from env.env_wrapper import EnvWrapper
 from model.env_model_trainer import EnvModelTrainer
 from model.policies import MultimodalMAS
 from model.ppo_wrapper import PPO
-from src.common import Params
 from src.env import get_env
 from src.gradcam import CamExtractor
 from src.layercam import LayerCam
