@@ -26,6 +26,7 @@ class Params:
     num_gpus = torch.cuda.device_count()
     param_sharing = False
     visible = False
+    guided_learning_prob=0.95
 
     ### ENV model
     stack_internal_states = False

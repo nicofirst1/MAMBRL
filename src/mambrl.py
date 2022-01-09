@@ -76,7 +76,7 @@ class MAMBRL:
                 val_log_step=5,
                 project="model_free",
                 opts={},
-                #fixme: add model
+                # fixme: add model
                 models={},
                 horizon=params.horizon,
                 mode="disabled" if params.debug else "online",
@@ -152,22 +152,40 @@ class MAMBRL:
             1200: dict(reward=2, landmark=2),
         }
 
+        guided_learning = {
+            100: 0.9,
+            200: 0.8,
+            300: 0.7,
+            400: 0.5,
+            600: 0.3,
+            700: 0.1,
+            800: 0.0,
+        }
+
         for step in trange(episodes, desc="Training model free"):
             value_loss, action_loss, entropy, rollout = self.agent.learn(
                 episodes=self.config.episodes, full_log_prob=True,  # entropy_coef=1/(step+1)
             )
 
-            if self.config.use_wandb:
-                losses = {
-                    "loss/value_loss": [value_loss],
-                    "loss/action_loss": [action_loss],
-                    "loss/entropy_loss": [entropy],
-                }
-                self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
+
             if step in curriculum.keys():
                 self.real_env.set_curriculum(**curriculum[step])
                 self.real_env.get_curriculum()
                 print_current_curriculum(self.real_env.get_curriculum())
+
+            if step in guided_learning.keys():
+                self.agent.guided_learning_prob = guided_learning[step]
+
+            if self.config.use_wandb:
+                logs = {
+                    "loss/value_loss": value_loss,
+                    "loss/action_loss": action_loss,
+                    "loss/entropy_loss": entropy,
+                    "curriculum/guided_learning": self.agent.guided_learning_prob,
+                    "curriculum/reward": self.real_env.get_curriculum()[0][0],
+                    "curriculum/landmark": self.real_env.get_curriculum()[1][0],
+                }
+                self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
 
     def user_game(self):
         moves = {"w": 4, "a": 1, "s": 3, "d": 2}

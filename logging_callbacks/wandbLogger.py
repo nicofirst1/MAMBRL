@@ -114,7 +114,7 @@ class PPOWandb(WandbLogger):
 
     def on_batch_end(self, logs: Dict[str, Any], batch_id: int, rollout):
 
-        logs = {k: sum(v) / len(v) for k, v in logs.items()}
+        #logs = {k: sum(v) / len(v) for k, v in logs.items()}
 
         logs["epoch"] = batch_id
 

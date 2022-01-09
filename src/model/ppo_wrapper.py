@@ -1,7 +1,8 @@
-import numpy as np
+import random
+
 import torch
 
-from src.common import mas_dict2tensor, get_distance, min_max_norm
+from src.common import mas_dict2tensor
 from .model_free import Policy, ResNetBase, CNNBase
 from .ppo import PPO
 from .rollout_storage import RolloutStorage
@@ -21,7 +22,7 @@ class PpoWrapper:
         self.num_steps = config.horizon
         self.num_minibatch = config.minibatch
 
-
+        self.guided_learning_prob = config.guided_learning_prob
 
         if config.base == "resnet":
             base = ResNetBase
@@ -46,7 +47,6 @@ class PpoWrapper:
             max_grad_norm=config.max_grad_norm,
             use_clipped_value_loss=config.clip_value_loss
         )
-
 
     def learn(self, episodes, full_log_prob=False, entropy_coef=None):
 
@@ -73,12 +73,16 @@ class PpoWrapper:
             for step in range(self.num_steps):
                 normalize_obs = (observation / 255.0).to(self.device).unsqueeze(dim=0)
                 for agent_id in self.env.agents:
-                    with torch.no_grad():
-                        value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
-                            normalize_obs, full_log_prob=full_log_prob
-                        )
 
-                    value, action, action_log_prob = self.env.optimal_action(agent_id)
+                    # perform guided learning with scheduler
+                    if self.guided_learning_prob > random.uniform(0, 1):
+                        value, action, action_log_prob = self.env.optimal_action(agent_id)
+
+                    else:
+                        with torch.no_grad():
+                            value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
+                                normalize_obs, full_log_prob=full_log_prob
+                            )
 
                     # get action with softmax and multimodal (stochastic)
                     action_dict[agent_id] = int(action)
@@ -91,7 +95,6 @@ class PpoWrapper:
                 # Obser reward and next obs
                 ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
                 new_observation, rewards, done, infos = self.env.step(action_dict)
-
 
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
 

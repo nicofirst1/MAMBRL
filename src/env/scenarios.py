@@ -8,8 +8,6 @@ from src.common import min_max_norm, is_collision, get_distance
 from .timer_landmark import TimerLandmark
 
 
-
-
 class Border(Entity):
     def __init__(
             self, start: Tuple[int, int], end: Tuple[int, int], color=(1, 0, 0), linewidth=1
@@ -203,12 +201,14 @@ class CollectLandmarkScenario(BaseScenario):
 
         def dist_reward():
             min_dist = 99999
+            has_collided = False
             for landmark in world.landmarks:
                 dist = get_distance(agent, landmark)
                 min_dist = min(min_dist, dist)
-                if is_collision(agent, landmark):
+                if not has_collided and is_collision(agent, landmark):
                     # positive reward, and add collision
                     self.visited_landmarks.append(landmark.name)
+                    has_collided = True
 
             rew = world.max_size * 2 - min_dist
             rew = min_max_norm(rew, 0, world.max_size * 2)
@@ -216,14 +216,15 @@ class CollectLandmarkScenario(BaseScenario):
 
         def collision_reward():
             rew = 0
+            has_collided = False
             for landmark in world.landmarks:
-                if is_collision(agent, landmark):
+                if not has_collided and is_collision(agent, landmark):
                     # positive reward, and add collision
                     rew += self.landmark_reward
                     self.visited_landmarks.append(landmark.name)
+                    has_collided = True
 
             return rew
-
 
         if self.reward_curriculum["current"] == 0:
             rew = dist_reward()
@@ -248,7 +249,6 @@ class CollectLandmarkScenario(BaseScenario):
         assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
 
         return rew
-
 
     @staticmethod
     def observation(agent, world):
