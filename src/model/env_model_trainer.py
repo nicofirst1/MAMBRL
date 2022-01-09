@@ -1,20 +1,22 @@
 import os
+
 import torch
 import torch.nn as nn
-
-from tqdm import trange
 from torch import optim
 from torch.nn.utils import clip_grad_norm_
+from tqdm import trange
 
 
 class EnvModelTrainer:
-
     def __init__(self, model, config):
         self.model = model
         self.config = config
 
         self.optimizer = optim.RMSprop(
-            self.model.parameters(), self.config.lr, eps=self.config.eps, alpha=self.config.alpha
+            self.model.parameters(),
+            self.config.lr,
+            eps=self.config.eps,
+            alpha=self.config.alpha,
         )
 
         self.logger = None
@@ -44,7 +46,9 @@ class EnvModelTrainer:
         value_shape = values.shape
 
         if env.buffer[0][5] is None:
-            raise BufferError('Can\'t train the world model, the buffer does not contain one full episode.')
+            raise BufferError(
+                "Can't train the world model, the buffer does not contain one full episode."
+            )
 
         assert states.dtype == torch.uint8
         assert actions.dtype == torch.uint8
@@ -68,9 +72,13 @@ class EnvModelTrainer:
 
         def preprocess_state(state):
             state = state.float() / 255
-            noise_prob = torch.tensor([[self.config.input_noise, 1 - self.config.input_noise]])
+            noise_prob = torch.tensor(
+                [[self.config.input_noise, 1 - self.config.input_noise]]
+            )
             noise_prob = torch.softmax(torch.log(noise_prob), dim=-1)
-            noise_mask = torch.multinomial(noise_prob, state.numel(), replacement=True).view(state.shape)
+            noise_mask = torch.multinomial(
+                noise_prob, state.numel(), replacement=True
+            ).view(state.shape)
             noise_mask = noise_mask.to(state)
             state = state * noise_mask + torch.median(state) * (1 - noise_mask)
             return state
@@ -78,7 +86,9 @@ class EnvModelTrainer:
         self.model.train()
         reward_criterion = nn.CrossEntropyLoss()
 
-        iterator = trange(0, steps, rollout_len, desc='Training world model', unit_scale=rollout_len)
+        iterator = trange(
+            0, steps, rollout_len, desc="Training world model", unit_scale=rollout_len
+        )
         for i in iterator:
             if epoch == 0:
                 decay_steps = self.config.scheduled_sampling_decay_steps
@@ -92,7 +102,9 @@ class EnvModelTrainer:
                 epsilon = 0
 
             indices = get_indices()
-            frames = torch.zeros((self.config.batch_size, c * self.config.num_frames, h, w))
+            frames = torch.zeros(
+                (self.config.batch_size, c * self.config.num_frames, h, w)
+            )
             frames = frames.to(self.config.device)
 
             for j in range(self.config.batch_size):
@@ -107,10 +119,18 @@ class EnvModelTrainer:
                 self.model.init_internal_states(self.config.batch_size)
 
             for j in range(rollout_len):
-                actions = torch.zeros((self.config.batch_size, *action_shape)).to(self.config.device)
-                rewards = torch.zeros((self.config.batch_size, *reward_shape)).to(self.config.device)
-                new_states = torch.zeros((self.config.batch_size, *new_state_shape)).to(self.config.device)
-                values = torch.zeros((self.config.batch_size, *value_shape)).to(self.config.device)
+                actions = torch.zeros((self.config.batch_size, *action_shape)).to(
+                    self.config.device
+                )
+                rewards = torch.zeros((self.config.batch_size, *reward_shape)).to(
+                    self.config.device
+                )
+                new_states = torch.zeros((self.config.batch_size, *new_state_shape)).to(
+                    self.config.device
+                )
+                values = torch.zeros((self.config.batch_size, *value_shape)).to(
+                    self.config.device
+                )
 
                 for k in range(self.config.batch_size):
                     actions[k] = env.buffer[indices[k] + j][1]
@@ -119,7 +139,9 @@ class EnvModelTrainer:
                     values[k] = env.buffer[indices[k] + j][5]
 
                 new_states_input = new_states.float() / 255
-                frames_pred, reward_pred, values_pred = self.model(frames, actions, new_states_input, epsilon)
+                frames_pred, reward_pred, values_pred = self.model(
+                    frames, actions, new_states_input, epsilon
+                )
 
                 if j < rollout_len - 1:
                     for k in range(self.config.batch_size):
@@ -131,10 +153,16 @@ class EnvModelTrainer:
                         frame = preprocess_state(frame)
                         frames[k] = torch.cat((frames[k, c:], frame), dim=0)
 
-                loss_reconstruct = nn.CrossEntropyLoss(reduction='none')(frames_pred, new_states)
-                clip = torch.tensor(self.config.target_loss_clipping).to(self.config.device)
+                loss_reconstruct = nn.CrossEntropyLoss(reduction="none")(
+                    frames_pred, new_states
+                )
+                clip = torch.tensor(self.config.target_loss_clipping).to(
+                    self.config.device
+                )
                 loss_reconstruct = torch.max(loss_reconstruct, clip)
-                loss_reconstruct = loss_reconstruct.mean() - self.config.target_loss_clipping
+                loss_reconstruct = (
+                    loss_reconstruct.mean() - self.config.target_loss_clipping
+                )
 
                 loss_value = nn.MSELoss()(values_pred, values)
                 loss_reward = reward_criterion(reward_pred, rewards)
@@ -149,7 +177,12 @@ class EnvModelTrainer:
                 clip_grad_norm_(self.model.parameters(), self.config.clip_grad_norm)
                 self.optimizer.step()
 
-                tab = [float(loss), float(loss_reconstruct), float(loss_value), float(loss_reward)]
+                tab = [
+                    float(loss),
+                    float(loss_reconstruct),
+                    float(loss_value),
+                    float(loss_reward),
+                ]
                 if self.config.use_stochastic_model:
                     tab.append(float(loss_lstm))
 
@@ -157,17 +190,17 @@ class EnvModelTrainer:
 
             losses = torch.mean(losses, dim=0)
             metrics = {
-                'loss': float(losses[0]),
-                'loss_reconstruct': float(losses[1]),
-                'loss_value': float(losses[2]),
-                'loss_reward': float(losses[3])
+                "loss": float(losses[0]),
+                "loss_reconstruct": float(losses[1]),
+                "loss_value": float(losses[2]),
+                "loss_reward": float(losses[3]),
             }
 
             if self.config.use_stochastic_model:
-                metrics.update({'loss_lstm': float(losses[4])})
+                metrics.update({"loss_lstm": float(losses[4])})
 
             if self.logger is not None:
                 self.logger.on_batch_end(metrics, 0, j)
 
             if self.config.save_models:
-                torch.save(self.model.state_dict(), os.path.join('models', 'model.pt'))
+                torch.save(self.model.state_dict(), os.path.join("models", "model.pt"))

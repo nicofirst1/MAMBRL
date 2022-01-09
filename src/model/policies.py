@@ -2,7 +2,6 @@ from random import randint, uniform
 from typing import Tuple
 
 import torch
-import torch.nn.functional as F
 
 
 class TrajCollectionPolicy:
@@ -10,7 +9,9 @@ class TrajCollectionPolicy:
     Policy class called when collecting trajectories
     """
 
-    def act(self, agent_id: str, observation: torch.Tensor, full_log_prob: bool) -> Tuple[int, int, torch.Tensor]:
+    def act(
+        self, agent_id: str, observation: torch.Tensor, full_log_prob: bool
+    ) -> Tuple[int, int, torch.Tensor]:
         """
 
         :param agent_id: the agent name as string
@@ -26,12 +27,13 @@ class TrajCollectionPolicy:
 
 
 class RandomAction(TrajCollectionPolicy):
-
     def __init__(self, num_actions, device):
         self.num_actions = num_actions
         self.device = device
 
-    def act(self, agent_id: str, observation: torch.Tensor, full_log_prob: bool) -> Tuple[int, int, torch.Tensor]:
+    def act(
+        self, agent_id: str, observation: torch.Tensor, full_log_prob: bool
+    ) -> Tuple[int, int, torch.Tensor]:
         action = randint(0, self.num_actions - 1)
         value = 0
         action_probs = torch.ones(self.num_actions)
@@ -41,7 +43,6 @@ class RandomAction(TrajCollectionPolicy):
 
 
 class EpsilonGreedy(TrajCollectionPolicy):
-
     def __init__(self, ac_dict, num_actions):
         self.ac_dict = ac_dict
         self.num_actions = num_actions
@@ -49,7 +50,9 @@ class EpsilonGreedy(TrajCollectionPolicy):
         self.epsilon = 0.9
         self.decrease = 5e-5
 
-    def act(self, agent_id: str, observation: torch.Tensor, full_log_prob: bool) -> Tuple[float, int, torch.Tensor]:
+    def act(
+        self, agent_id: str, observation: torch.Tensor, full_log_prob: bool
+    ) -> Tuple[float, int, torch.Tensor]:
         """act method.
 
         implementation of the epsilon greedy exploration function
@@ -63,7 +66,9 @@ class EpsilonGreedy(TrajCollectionPolicy):
             [self.num_actions] log actions prob
         """
         # action_logit [1, num_action] value_logit [1,1]
-        value, action, actions_log_probs = self.ac_dict[agent_id].act(observation, full_log_prob=full_log_prob)
+        value, action, actions_log_probs = self.ac_dict[agent_id].act(
+            observation, full_log_prob=full_log_prob
+        )
 
         if uniform(0, 1) < self.epsilon:
             action = randint(0, self.num_actions - 1)  # Explore action space
@@ -80,15 +85,18 @@ class EpsilonGreedy(TrajCollectionPolicy):
 
 
 class MultimodalMAS(TrajCollectionPolicy):
-
     def __init__(self, ac_dict):
         self.ac_dict = ac_dict
 
-    def act(self, agent_id: str, observation: torch.Tensor, full_log_prob: bool) -> Tuple[int, float, torch.Tensor]:
-        value, action, actions_log_probs = self.ac_dict.act(observation, agent_id, full_log_prob)
-        #action_probs = F.softmax(action_logit, dim=1)
-        #action = action_probs.multinomial(1).squeeze()
-        #action_probs_log = F.log_softmax(action_logit, dim=1).squeeze()
+    def act(
+        self, agent_id: str, observation: torch.Tensor, full_log_prob: bool
+    ) -> Tuple[int, float, torch.Tensor]:
+        value, action, actions_log_probs = self.ac_dict.act(
+            observation, agent_id, full_log_prob
+        )
+        # action_probs = F.softmax(action_logit, dim=1)
+        # action = action_probs.multinomial(1).squeeze()
+        # action_probs_log = F.log_softmax(action_logit, dim=1).squeeze()
 
         value = float(value)
         action = int(action)

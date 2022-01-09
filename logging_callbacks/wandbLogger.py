@@ -1,11 +1,13 @@
+import random
+from typing import Any, Dict, Optional
+
 import numpy as np
 import wandb
-
 from PIL import Image
 from torch import nn
-from typing import Any, Dict, Optional
+
 from logging_callbacks.callbacks import WandbLogger
-#from src.gradcam import apply_colormap_on_image, GradCam
+from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image, save_gradient_images
 
 
 class EnvModelWandb(WandbLogger):
@@ -26,7 +28,6 @@ class EnvModelWandb(WandbLogger):
             model_config:
             **kwargs:
         """
-
 
         super(EnvModelWandb, self).__init__(**kwargs)
 
@@ -80,7 +81,7 @@ class PPOWandb(WandbLogger):
             val_log_step: int,
             models: Dict[str, nn.Module],
             horizon: int,
-            action_meaning :Dict[str,str],
+            action_meaning: Dict[str, str],
             cams: Optional[list],
             **kwargs,
     ):
@@ -101,8 +102,8 @@ class PPOWandb(WandbLogger):
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
-        self.horizon=horizon
-        self.action_meaning= action_meaning
+        self.horizon = horizon
+        self.action_meaning = action_meaning
         self.epoch = 0
 
         self.log_behavior_step = 5
@@ -111,37 +112,49 @@ class PPOWandb(WandbLogger):
         # Grad cam
         self.cams = cams
 
-    def on_batch_end(self, logs: Dict[str, Any],  batch_id: int, rollout):
+    def on_batch_end(self, logs: Dict[str, Any], batch_id: int, rollout):
 
         logs = {k: sum(v) / len(v) for k, v in logs.items()}
 
-        logs['epoch'] = batch_id
+        logs["epoch"] = batch_id
 
-        if batch_id % self.log_behavior_step == 0:
-            states = rollout.states[:self.horizon][:, -3:, :, :].cpu().numpy().astype(np.uint8)
-            actions = rollout.actions[:self.horizon].squeeze().cpu().numpy()
-            rewards = rollout.rewards[:self.horizon].squeeze().cpu().numpy()
-            logs['behaviour'] = wandb.Video(states, fps=16, format="gif")
-            logs['actions'] = actions
-            logs['rewards'] = rewards
+        if batch_id % 1 == 0:
+            done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0]
 
-        if batch_id % self.log_heatmap_step == 0 and self.cams is not None:
+            if len(done_idx) > 1:
+                done_idx = done_idx[0]
+
+            states = (
+                rollout.states[:done_idx][:, -3:, :, :].cpu().numpy().astype(np.uint8)
+            )
+
+            actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
+            rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
+            logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
+            logs["actions"] = actions
+            logs["rewards"] = rewards
+            logs["mean_reward"] = rewards.mean()
+
+        if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
+
             # map heatmap on image
-            img = rollout.states[0]
-            reprs =[]
+            idx = random.choice(range(done_idx))
+            img = rollout.states[idx]
+            reprs = []
             for c in self.cams:
                 cam = c.generate_cam(img.clone().unsqueeze(dim=0))
                 reprs.append((c.name, cam))
-
             img = img[-3:]
             img = np.uint8(img.cpu().data.numpy())
             img = img.transpose(2, 1, 0)
-            img = Image.fromarray(img).convert('RGB')
+            img = Image.fromarray(img).convert("RGB")
 
             for name, rep in reprs:
-                heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, 'hsv')
-                logs[f'{name}_heatmap'] = wandb.Image(heatmap)
-                logs[f'{name}_heatmap_on_image'] = wandb.Image(heatmap_on_image)
+                heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
+
+                logs[f"cams/{name}_heatmap_on_image"] = wandb.Image(heatmap_on_image)
+
+                #save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
         self.log_to_wandb(logs, commit=True)
 

@@ -3,18 +3,16 @@ import os
 from typing import Any, Dict, Optional, Union
 
 import wandb
-
 from src.common import Params
 
 
-
-class WandbLogger():
+class WandbLogger:
     def __init__(
-            self,
-            opts: Union[argparse.ArgumentParser, Dict, str, None] = None,
-            project: Optional[str] = None,
-            run_id: Optional[str] = None,
-            **kwargs,
+        self,
+        opts: Union[argparse.ArgumentParser, Dict, str, None] = None,
+        project: Optional[str] = None,
+        run_id: Optional[str] = None,
+        **kwargs,
     ):
         # This callback logs to wandb the interaction as they are stored in the leader process.
         # When interactions are not aggregated in a multigpu run, each process will store
@@ -29,7 +27,14 @@ class WandbLogger():
         if not os.path.isdir(out_dir):
             os.mkdir(out_dir)
 
-        wandb.init(project=project, id=run_id, dir=out_dir, entity="mambrl", config=params.__dict__, **kwargs)
+        wandb.init(
+            project=project,
+            id=run_id,
+            dir=out_dir,
+            entity="mambrl",
+            config=params.__dict__,
+            **kwargs,
+        )
         wandb.config.update(opts)
 
     @staticmethod

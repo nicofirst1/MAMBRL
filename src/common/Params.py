@@ -3,7 +3,9 @@ import inspect
 import multiprocessing
 import os
 import uuid
+
 import torch
+
 
 class Params:
     unique_id = str(uuid.uuid1())[:8]
@@ -44,26 +46,26 @@ class Params:
     target_loss_clipping = 0.03
 
     ### Optimizer
-    lr = 1e-4
+    lr = 3e-4
     eps = 1e-5
     alpha = 0.99
     max_grad_norm = 5
 
     ### Algo parameters
-    gamma = 0.99
+    gamma = 0.998
     ppo_clip_param = 0.1
 
     ### Loss
     value_loss_coef = 0.5
     entropy_coef = 0.01
-    base = "resnet" #[ cnn , resnet ]
+    base = "resnet"  # [ cnn , resnet ]
     clip_value_loss = True
 
     #### ENVIRONMENT ####
     agents = 1
     landmarks = 2
     step_reward = -1
-    landmark_reward = 80
+    landmark_reward = 10
     epochs = 1000
     minibatch = 32
     episodes = 3
@@ -92,13 +94,7 @@ class Params:
         (255, 255, 255),  # white -> background
     ]
 
-    action_meanings= {
-        0: "stop",
-        1: "left",
-        2: "right",
-        3: "up",
-        4: "down"
-    }
+    action_meanings = {0: "stop", 1: "left", 2: "right", 3: "up", 4: "down"}
 
     def __init__(self):
         if self.debug:
@@ -147,9 +143,8 @@ class Params:
             if isinstance(v, bool):
                 parser.add_argument(
                     "-" + k.lower(),
-                    action='store_true',
+                    action="store_true",
                     default=v,
-
                 )
             else:
                 parser.add_argument(
