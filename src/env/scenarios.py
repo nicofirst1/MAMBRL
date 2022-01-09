@@ -4,8 +4,8 @@ import numpy as np
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.core import Agent, Entity, World
 from PettingZoo.pettingzoo.mpe._mpe_utils.scenario import BaseScenario
-from common.utils import min_max_norm
-from env.timer_landmark import TimerLandmark
+from src.common.utils import min_max_norm
+from src.env.timer_landmark import TimerLandmark
 
 
 def is_collision(entity1, entity2):
@@ -24,7 +24,7 @@ def get_distance(entity1, entity2):
 
 class Border(Entity):
     def __init__(
-        self, start: Tuple[int, int], end: Tuple[int, int], color=(1, 0, 0), linewidth=1
+            self, start: Tuple[int, int], end: Tuple[int, int], color=(1, 0, 0), linewidth=1
     ):
         super(Border, self).__init__()
         self.start = np.array(start)
@@ -66,13 +66,13 @@ class BoundedWorld(World):
 
 class CollectLandmarkScenario(BaseScenario):
     def __init__(
-        self,
-        num_agents: int,
-        num_landmarks: int,
-        max_size: int,
-        step_reward: int,
-        landmark_reward: int,
-        np_random,
+            self,
+            num_agents: int,
+            num_landmarks: int,
+            max_size: int,
+            step_reward: int,
+            landmark_reward: int,
+            np_random,
     ):
         """
 
@@ -118,13 +118,13 @@ class CollectLandmarkScenario(BaseScenario):
     def set_curriculum(self, reward: int = None, landmark: int = None):
         if reward is not None:
             assert (
-                reward in self.reward_curriculum.keys()
+                    reward in self.reward_curriculum.keys()
             ), f"Reward curriculum modality '{reward}' is not in range"
             self.reward_curriculum["current"] = reward
 
         if landmark is not None:
             assert (
-                landmark in self.landmark_curriculum.keys()
+                    landmark in self.landmark_curriculum.keys()
             ), f"Landmark curriculum modality '{landmark}' is not in range"
             self.landmark_curriculum["current"] = landmark
 
@@ -212,7 +212,8 @@ class CollectLandmarkScenario(BaseScenario):
 
     def reward(self, agent, world):
 
-        lower_bound=0
+        lower_bound = 0
+        upper_bound = 0
 
         if self.reward_curriculum["current"] == 0:
 
@@ -222,14 +223,15 @@ class CollectLandmarkScenario(BaseScenario):
 
                 min_dist = min(min_dist, dist)
 
-            rew = world.max_size - min_dist
+            rew = world.max_size * 2 - min_dist
 
+            upper_bound = world.max_size * 2
         elif self.reward_curriculum["current"] == 1:
             rew = 0
 
         elif self.reward_curriculum["current"] == 2:
             rew = self.step_reward
-            lower_bound=self.step_reward
+            lower_bound = self.step_reward
 
         else:
             raise ValueError(
@@ -242,10 +244,10 @@ class CollectLandmarkScenario(BaseScenario):
                 rew += self.landmark_reward
                 self.visited_landmarks.append(landmark.name)
 
-        upper_bound=max(self.landmark_reward, world.max_size)
+        upper_bound += self.landmark_reward
 
-        rew=min_max_norm(rew, lower_bound, upper_bound)
-
+        rew = min_max_norm(rew, lower_bound, upper_bound)
+        assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
 
         return rew
 
