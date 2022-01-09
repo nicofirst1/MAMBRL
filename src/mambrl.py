@@ -9,6 +9,7 @@ params=Params()
 if not params.visible:
     import pyglet
     pyglet.options['shadow_window']=False
+    pyglet.options['headless']=True
 
 from common.utils import print_current_curriculum
 from env.env_wrapper import EnvWrapper
