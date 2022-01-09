@@ -104,7 +104,7 @@ class PPO:
                 action_losses[agent_index] += action_loss.item()
                 entropies[agent_index] += entropy.item()
 
-        num_updates = rollout.rewards.size(0) / self.num_minibatch
+        num_updates = max(rollout.steps / self.num_minibatch, 1)
 
         value_losses /= num_updates
         action_losses /= num_updates

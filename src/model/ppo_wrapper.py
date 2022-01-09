@@ -120,6 +120,7 @@ class PPO:
 
             rollout.compute_returns(next_value, True, self.gamma, 0.95)
             value_loss, action_loss, entropy = self.agent.update(rollout)
+            rollout.steps = 0
 
         return value_loss, action_loss, entropy, rollout
 

@@ -118,6 +118,7 @@ class CollectLandmarkEnv(SimpleEnv):
             super(CollectLandmarkEnv, self).step(action)
 
         self.steps += 1
+        self.dones["__all__"] = False
         if self.steps >= self.max_cycles:
             self.dones["__all__"] = True
 
