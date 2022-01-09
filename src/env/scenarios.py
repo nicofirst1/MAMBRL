@@ -242,8 +242,6 @@ class CollectLandmarkScenario(BaseScenario):
 
         upper_bound = max(self.landmark_reward, world.max_size)
         rew = min_max_norm(rew, lower_bound, upper_bound)
-
-
         return rew
 
     @staticmethod

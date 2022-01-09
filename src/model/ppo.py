@@ -2,9 +2,6 @@ import torch
 import torch.nn as nn
 from torch import optim
 
-from model.policies import EpsilonGreedy
-
-
 class PPO:
     def __init__(
         self,
@@ -21,7 +18,6 @@ class PPO:
 
         self.actor_critic_dict = actor_critic_dict
 
-        self.ppo_epoch = ppo_epoch
         self.clip_param = clip_param
         self.num_minibatch = num_minibatch
 
