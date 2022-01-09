@@ -21,7 +21,7 @@ class Params:
     debug = False
     use_wandb = True
     device = torch.device("cuda")
-    frame_shape = [3, 96, 96]
+    frame_shape = [3, 256, 256]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     param_sharing = False
@@ -50,20 +50,20 @@ class Params:
     max_grad_norm = 5
 
     ### Algo parameters
-    gamma = 0.99
+    gamma = 0.97
     ppo_clip_param = 0.1
 
     ### Loss
     value_loss_coef = 0.5
     entropy_coef = 0.01
     base = "resnet"  # [ cnn , resnet ]
-    clip_value_loss = True
+    clip_value_loss = False
 
     #### ENVIRONMENT ####
     agents = 1
     landmarks = 2
     step_reward = -1
-    landmark_reward = 50
+    landmark_reward = 1
     epochs = 1000
     minibatch = 32
     episodes = 3

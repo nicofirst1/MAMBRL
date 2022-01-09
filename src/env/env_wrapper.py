@@ -64,6 +64,9 @@ class EnvWrapper:
 
         return self.stacked_frames, rewards, done, infos
 
+    def optimal_action(self, agent):
+        return self.env.optimal_action(agent)
+
     def add_interaction(self, actions, rewards, new_obs, done):
         current_obs = self.stacked_frames.squeeze().byte().cpu()
         action = one_hot_encode(actions, self.action_space).cpu()

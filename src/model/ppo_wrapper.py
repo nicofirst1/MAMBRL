@@ -1,9 +1,10 @@
+import numpy as np
 import torch
 
+from src.common import mas_dict2tensor, get_distance, min_max_norm
+from .model_free import Policy, ResNetBase, CNNBase
 from .ppo import PPO
 from .rollout_storage import RolloutStorage
-from .model_free import Policy, ResNetBase, CNNBase
-from src.common import mas_dict2tensor
 
 
 class PpoWrapper:
@@ -20,6 +21,8 @@ class PpoWrapper:
         self.num_steps = config.horizon
         self.num_minibatch = config.minibatch
 
+
+
         if config.base == "resnet":
             base = ResNetBase
         elif config.base == "cnn":
@@ -28,7 +31,8 @@ class PpoWrapper:
             base = None
 
         self.actor_critic_dict = {
-            agent_id: Policy(self.obs_shape, self.action_space, base=base).to(self.device) for agent_id in self.env.agents
+            agent_id: Policy(self.obs_shape, self.action_space, base=base).to(self.device) for agent_id in
+            self.env.agents
         }
 
         self.agent = PPO(
@@ -42,6 +46,7 @@ class PpoWrapper:
             max_grad_norm=config.max_grad_norm,
             use_clipped_value_loss=config.clip_value_loss
         )
+
 
     def learn(self, episodes, full_log_prob=False, entropy_coef=None):
 
@@ -73,6 +78,8 @@ class PpoWrapper:
                             normalize_obs, full_log_prob=full_log_prob
                         )
 
+                    value, action, action_log_prob = self.env.optimal_action(agent_id)
+
                     # get action with softmax and multimodal (stochastic)
                     action_dict[agent_id] = int(action)
                     values_dict[agent_id] = float(value)
@@ -85,9 +92,10 @@ class PpoWrapper:
                 ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
                 new_observation, rewards, done, infos = self.env.step(action_dict)
 
+
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
 
-                #masks = 1 - mas_dict2tensor(done, int)
+                # masks = 1 - mas_dict2tensor(done, int)
                 rewards = mas_dict2tensor(rewards, float)
                 actions = mas_dict2tensor(action_dict, int)
                 values = mas_dict2tensor(values_dict, float)

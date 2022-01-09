@@ -69,3 +69,17 @@ def init(module, weight_init, bias_init, gain=1):
     weight_init(module.weight.data, gain=gain)
     bias_init(module.bias.data)
     return module
+
+
+def is_collision(entity1, entity2):
+    delta_pos = entity1.state.p_pos - entity2.state.p_pos
+    dist = np.sqrt(np.sum(np.square(delta_pos)))
+    dist_min = entity1.size + entity2.size
+    return True if dist < dist_min else False
+
+
+def get_distance(entity1, entity2):
+    delta_pos = entity1.state.p_pos - entity2.state.p_pos
+    dist = np.sqrt(np.sum(np.square(delta_pos)))
+
+    return dist

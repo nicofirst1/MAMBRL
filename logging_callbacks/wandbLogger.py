@@ -158,7 +158,7 @@ class PPOWandb(WandbLogger):
 
                 logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
 
-                save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
+                #save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
         self.log_to_wandb(logs, commit=True)
 

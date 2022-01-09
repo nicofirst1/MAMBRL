@@ -4,22 +4,10 @@ import numpy as np
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.core import Agent, Entity, World
 from PettingZoo.pettingzoo.mpe._mpe_utils.scenario import BaseScenario
-from src.common import min_max_norm
+from src.common import min_max_norm, is_collision, get_distance
 from .timer_landmark import TimerLandmark
 
 
-def is_collision(entity1, entity2):
-    delta_pos = entity1.state.p_pos - entity2.state.p_pos
-    dist = np.sqrt(np.sum(np.square(delta_pos)))
-    dist_min = entity1.size + entity2.size
-    return True if dist < dist_min else False
-
-
-def get_distance(entity1, entity2):
-    delta_pos = entity1.state.p_pos - entity2.state.p_pos
-    dist = np.sqrt(np.sum(np.square(delta_pos)))
-
-    return dist
 
 
 class Border(Entity):
@@ -260,6 +248,7 @@ class CollectLandmarkScenario(BaseScenario):
         assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
 
         return rew
+
 
     @staticmethod
     def observation(agent, world):

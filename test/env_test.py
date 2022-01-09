@@ -16,10 +16,9 @@ import time
 
 from rich import print
 
-from common.utils import print_current_curriculum
-from env.env_wrapper import EnvWrapper
-from src.common import Params
-from src.env import get_env
+
+from src.common import Params, print_current_curriculum
+from src.env import get_env, EnvWrapper
 
 params = Params()
 # Get configs
@@ -27,12 +26,12 @@ env_configs= params.get_env_configs()
 
 env_configs['horizon'] = 10
 env_configs['visible'] = True
-env_configs['frame_shape'] = [3,250,250]
+env_configs['frame_shape'] = [3,600,600]
 
 env = EnvWrapper(
     env=get_env(env_configs),
     frame_shape=params.frame_shape,
-    num_stacked_frames=params.num_frames,
+    num_stacked_frames=1,
     device=params.device
 )
 
@@ -152,8 +151,6 @@ def test_dones():
 
     for ep in range(300):
 
-
-
         obs = env.reset()
         done = {_: False for _ in env.agents}
         done["__all__"] = False
@@ -173,4 +170,31 @@ def test_dones():
                     # action_dict[agent] = 4
 
             obs, reward, done, info = env.step(action_dict)
+
+
+def test_optimal_action():
+    action_dict = {}
+    env.set_curriculum(landmark=1)
+
+    for ep in range(300):
+
+        obs = env.reset()
+        done = {_: False for _ in env.agents}
+        done["__all__"] = False
+
+        while True:
+
+            if done["__all__"]:
+                break
+
+            for agent in env.agents:
+                if done[agent]:
+                    action_dict[agent] = None
+
+                else:
+                    value, action, action_log_prob = env.optimal_action(agent)
+                    action_dict[agent]=action
+
+            obs, reward, done, info = env.step(action_dict)
+            time.sleep(0.1)
 
