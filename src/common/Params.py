@@ -95,18 +95,16 @@ class Params:
     action_meanings = {0: "stop", 1: "left", 2: "right", 3: "up", 4: "down"}
 
     def __init__(self):
-        if self.debug:
-            self.device = torch.device("cpu")
-            self.num_workers = 1
-            self.num_gpus = 0
-            torch.autograd.set_detect_anomaly(True)
+
+
+        self.__initialize_dirs()
+        self.__parse_args()
+
+
 
         if self.gray_scale:
             self.frame_shape[0] = 1
-
         self.obs_shape = (self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
-        self.__initialize_dirs()
-        self.__parse_args()
 
     def __initialize_dirs(self):
         """

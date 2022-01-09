@@ -161,11 +161,12 @@ class MAMBRL:
         episodes = 1200
 
         curriculum = {
-            400: dict(reward=0, landmark=1),
-            600: dict(reward=1, landmark=0),
-            800: dict(reward=1, landmark=1),
-            1000: dict(reward=1, landmark=2),
-            1200: dict(reward=2, landmark=2),
+            200: dict(reward=1, landmark=0),
+            400: dict(reward=1, landmark=1),
+            600: dict(reward=2, landmark=0),
+            800: dict(reward=2, landmark=1),
+            1000: dict(reward=2, landmark=2),
+            1200: dict(reward=3, landmark=2),
         }
 
         for step in trange(episodes, desc="Training model free"):
@@ -174,11 +175,12 @@ class MAMBRL:
             )
 
             if self.config.use_wandb:
-                losses = dict(
-                    value_loss=[value_loss],
-                    action_loss=[action_loss],
-                    entropy=[entropy],
-                )
+
+                losses={
+                    "loss/value_loss": [value_loss],
+                    "loss/action_loss": [action_loss],
+                    "loss/entropy_loss": [entropy],
+                }
                 self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
             if step in curriculum.keys():
                 self.real_env.set_curriculum(**curriculum[step])

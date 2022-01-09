@@ -130,9 +130,10 @@ class PPOWandb(WandbLogger):
             actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
             rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
             logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
-            logs["actions"] = actions
-            logs["rewards"] = rewards
+            logs["hist/actions"] = actions
+            logs["hist/rewards"] = rewards
             logs["mean_reward"] = rewards.mean()
+            logs["episode_lenght"] = done_idx
 
         if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
 
@@ -151,7 +152,7 @@ class PPOWandb(WandbLogger):
             for name, rep in reprs:
                 heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
 
-                logs[f"cams/{name}_heatmap_on_image"] = wandb.Image(heatmap_on_image)
+                logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
 
                 #save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
