@@ -97,8 +97,7 @@ class PPOWandb(WandbLogger):
 
         super(PPOWandb, self).__init__(**kwargs)
 
-        for v in models.values():
-            wandb.watch(v)
+        wandb.watch(models)
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2

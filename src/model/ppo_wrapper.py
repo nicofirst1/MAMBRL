@@ -71,7 +71,7 @@ class PpoWrapper:
             rollout.states[0] = observation.unsqueeze(dim=0)
 
             for step in range(self.num_steps):
-                normalize_obs = (observation / 255.0).to(self.device).unsqueeze(dim=0)
+                obs = observation.to(self.device).unsqueeze(dim=0)
                 for agent_id in self.env.agents:
 
                     # perform guided learning with scheduler
@@ -81,7 +81,7 @@ class PpoWrapper:
                     else:
                         with torch.no_grad():
                             value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
-                                normalize_obs, full_log_prob=full_log_prob
+                                obs, full_log_prob=full_log_prob
                             )
 
                     # get action with softmax and multimodal (stochastic)

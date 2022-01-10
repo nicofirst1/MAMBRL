@@ -30,7 +30,7 @@ class TimerLandmark(Entity):
         eps = 0.5
 
         return self.np_random.uniform(
-            -world.max_size + eps, world.max_size - eps, world.dim_p
+            -world.max_size, world.max_size - eps, world.dim_p
         )
 
     def get_random_size(self):

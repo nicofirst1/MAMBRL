@@ -20,7 +20,11 @@ class Policy(nn.Module):
                 raise NotImplementedError
 
         self.base = base(obs_shape, **base_kwargs)
-        self.dist = Categorical(self.base.output_size, action_space)
+        init_ = lambda m: init(
+            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
+        )
+
+        self.actions_layer = init_(nn.Linear(self.base.output_size, action_space))
 
     @property
     def is_recurrent(self):
@@ -36,7 +40,7 @@ class Policy(nn.Module):
 
     def act(self, inputs, deterministic=False, full_log_prob=False):
         value, actor_features = self.base(inputs)
-        logits = self.dist(actor_features)
+        logits = self.actions_layer(actor_features)
         dist = FixedCategorical(logits=logits)
 
         if deterministic:
@@ -49,7 +53,6 @@ class Policy(nn.Module):
         else:
             action_log_probs = dist.log_probs(action)
 
-        # dist_entropy = dist.entropy().mean()
 
         return value, action, action_log_probs
 
@@ -58,15 +61,13 @@ class Policy(nn.Module):
 
     def evaluate_actions(self, inputs, action, full_log_prob=False):
         value, actor_features = self.base(inputs)
-        logits = self.dist(actor_features)
+        logits = self.actions_layer(actor_features)
         dist = FixedCategorical(logits=logits)
 
         if full_log_prob:
             action_log_probs = torch.log_softmax(logits, dim=-1)
         else:
-            action_log_probs= dist.log_probs(action)
-
-
+            action_log_probs = dist.log_probs(action)
 
         min_real = torch.finfo(logits.dtype).min
         logits = torch.clamp(logits, min=min_real)
@@ -138,7 +139,6 @@ class CNNBase(NNBase):
 
 class ResNetBase(NNBase):
     def __init__(self, input_shape, hidden_size=512):
-        hidden_size = 64
 
         super(ResNetBase, self).__init__(hidden_size)
 
@@ -162,17 +162,27 @@ class ResNetBase(NNBase):
         model = model.eval()
         for param in model.parameters():
             param.requires_grad = False
+
+
+        # remove last linear layer
         self.features = (list(model.children())[:-1])
 
+        # add initial convolution for stacked frames input
         num_inputs = input_shape[0]
         self.features[0] = init_(
             nn.Conv2d(num_inputs, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3))
         )
 
-        end=self.features[-1]
-        self.features= self.features[:6]
-        self.features[-1]=end
-        self.features=torch.nn.Sequential(*self.features)
+        end = self.features[-1]
+        # get up to the N+1 layer and discard the rest
+        self.features = self.features[:7]
+        # add average pool as last
+        self.features[-1] = end
+        self.features = torch.nn.Sequential(*self.features)
+
+        self.hidden_layer = nn.Sequential(
+            nn.Linear(128, hidden_size),
+            nn.ReLU())
 
         init_ = lambda m: init(
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0)
@@ -183,7 +193,9 @@ class ResNetBase(NNBase):
         self.train()
 
     def forward(self, inputs):
-        x = self.preprocess(inputs / 255.0)
+        x = self.preprocess(inputs/255.0)
         x = self.features(x)
-        x = x.squeeze(dim=-1).squeeze(dim=-1)
-        return self.classifier(x), x
+        x = x.reshape(x.shape[0], -1)
+        x=self.hidden_layer(x)
+        values=self.classifier(x)
+        return values, x

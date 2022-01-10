@@ -193,7 +193,6 @@ class CollectLandmarkEnv(SimpleEnv):
                 # move right
                 action = 4
 
-        eta = 0.00001
         probs = torch.zeros((1, 5))
         probs[0, action] = 1
         probs = torch.log_softmax(probs, dim=1)

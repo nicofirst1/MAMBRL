@@ -76,8 +76,7 @@ class MAMBRL:
                 val_log_step=5,
                 project="model_free",
                 opts={},
-                # fixme: add model
-                models={},
+                models=self.agent.actor_critic_dict["agent_0"],
                 horizon=params.horizon,
                 mode="disabled" if params.debug else "online",
                 action_meaning=self.real_env.env.action_meaning_dict,
@@ -142,24 +141,28 @@ class MAMBRL:
     def train_model_free_curriculum(self):
         self.agent.set_env(self.real_env)
 
-        episodes = 1200
+        episodes = 3000
 
         curriculum = {
             400: dict(reward=0, landmark=1),
             600: dict(reward=1, landmark=0),
             800: dict(reward=1, landmark=1),
-            1000: dict(reward=1, landmark=2),
-            1200: dict(reward=2, landmark=2),
+            900: dict(reward=0, landmark=2),
+            1100: dict(reward=1, landmark=2),
+            1300: dict(reward=2, landmark=2),
         }
 
         guided_learning = {
-            100: 0.9,
-            200: 0.8,
-            300: 0.7,
-            400: 0.5,
-            600: 0.3,
-            700: 0.1,
-            800: 0.0,
+            100: 0.8,
+            200: 0.7,
+            400: 0.6,
+            600: 0.4,
+            800: 0.2,
+            900: 0.0,
+            1200: 0.4,
+            1400: 0.2,
+            1600: 0.1,
+            1700: 0.0,
         }
 
         for step in trange(episodes, desc="Training model free"):
