@@ -166,10 +166,9 @@ class MAMBRL:
         }
 
         for step in trange(episodes, desc="Training model free"):
-            value_loss, action_loss, entropy, rollout = self.agent.learn(
-                episodes=self.config.episodes, full_log_prob=True,  # entropy_coef=1/(step+1)
+            value_loss, action_loss, entropy, rollout, logs = self.agent.learn(
+                episodes=self.config.episodes, full_log_prob=True,
             )
-
 
             if step in curriculum.keys():
                 self.real_env.set_curriculum(**curriculum[step])
@@ -180,14 +179,29 @@ class MAMBRL:
                 self.agent.guided_learning_prob = guided_learning[step]
 
             if self.config.use_wandb:
-                logs = {
+
+                # merge logs with agent id
+                new_logs = {}
+                for agent, values in logs.items():
+                    new_key = f"agents/{agent}"
+
+                    for k, v in values.items():
+                        new_logs[f"{new_key}/{k}"] = v
+
+                logs = new_logs
+
+                general_logs = {
                     "loss/value_loss": value_loss,
                     "loss/action_loss": action_loss,
                     "loss/entropy_loss": entropy,
+                    "loss/total": value_loss + action_loss + entropy,
                     "curriculum/guided_learning": self.agent.guided_learning_prob,
                     "curriculum/reward": self.real_env.get_curriculum()[0][0],
                     "curriculum/landmark": self.real_env.get_curriculum()[1][0],
                 }
+
+                logs.update(general_logs)
+
                 self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
 
     def user_game(self):

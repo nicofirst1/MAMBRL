@@ -48,7 +48,7 @@ class PpoWrapper:
             use_clipped_value_loss=config.clip_value_loss
         )
 
-    def learn(self, episodes, full_log_prob=False, entropy_coef=None):
+    def learn(self, episodes, full_log_prob=False,):
 
         rollout = RolloutStorage(
             num_steps=self.num_steps,
@@ -58,8 +58,16 @@ class PpoWrapper:
         )
         rollout.to(self.device)
 
-        if entropy_coef is not None:
-            self.agent.entropy_coef = entropy_coef
+        logs = {ag: dict(
+            ratio=[],
+            surr1=[],
+            surr2=[],
+            returns=[],
+            adv_targ=[],
+            perc_surr1=[],
+            perc_surr2=[],
+        ) for ag in self.actor_critic_dict.keys()}
+
 
         for episode in range(episodes):
             # init dicts and reset env
@@ -131,10 +139,11 @@ class PpoWrapper:
                 )
 
             rollout.compute_returns(next_value, True, self.gamma, 0.95)
-            value_loss, action_loss, entropy = self.agent.update(rollout)
+            with torch.enable_grad():
+                value_loss, action_loss, entropy = self.agent.update(rollout, logs)
             rollout.steps = 0
 
-        return value_loss, action_loss, entropy, rollout
+        return value_loss, action_loss, entropy, rollout, logs
 
     def set_env(self, env):
         self.env = env

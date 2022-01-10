@@ -78,7 +78,7 @@ class RolloutStorage(object):
         done = False
 
         if minibatch_frames >= total_samples:
-            minibatch_frames = total_samples
+            minibatch_frames = total_samples-1
 
         for start_ind in range(0, total_samples, minibatch_frames):
             next_states_minibatch = []
