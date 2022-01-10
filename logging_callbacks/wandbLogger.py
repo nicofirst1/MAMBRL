@@ -107,7 +107,7 @@ class PPOWandb(WandbLogger):
         self.epoch = 0
 
         self.log_behavior_step = 5
-        self.log_heatmap_step = 10
+        self.log_heatmap_step = 100
 
         # Grad cam
         self.cams = cams
@@ -118,7 +118,7 @@ class PPOWandb(WandbLogger):
         logs["epoch"] = batch_id
 
         if batch_id % self.log_behavior_step == 0:
-            done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0]
+            done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
 
             if len(done_idx) > 1:
                 done_idx = done_idx[0]
@@ -176,7 +176,11 @@ def write_rewards(states, rewards):
     states = [Image.fromarray(states[i]) for i in range(states.shape[0])]
     draws = [ImageDraw.Draw(img) for img in states]
     font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", 10)
-    for idx in range(len(rewards)):
+
+    if rewards.size==1:
+        rewards= np.expand_dims(rewards, 0)
+
+    for idx in range(rewards.size):
         rew = rewards[idx]
         draw = draws[idx]
         draw.rectangle(((0, 00), (160, 10)), fill="black")
