@@ -48,6 +48,10 @@ class PpoWrapper:
             use_clipped_value_loss=config.clip_value_loss
         )
 
+
+    def set_guided_learning_prob(self, value):
+        self.guided_learning_prob=value
+
     def learn(self, episodes, full_log_prob=False,):
 
         rollout = RolloutStorage(
@@ -80,11 +84,15 @@ class PpoWrapper:
 
             for step in range(self.num_steps):
                 obs = observation.to(self.device).unsqueeze(dim=0)
+                guided_learning = {agent_id: False for agent_id in self.env.agents}
+
                 for agent_id in self.env.agents:
 
                     # perform guided learning with scheduler
                     if self.guided_learning_prob > random.uniform(0, 1):
-                        value, action, action_log_prob = self.env.optimal_action(agent_id)
+                        action, action_log_prob = self.env.optimal_action(agent_id)
+                        guided_learning[agent_id]=True
+                        value=-1
 
                     else:
                         with torch.no_grad():
@@ -103,6 +111,12 @@ class PpoWrapper:
                 # Obser reward and next obs
                 ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
                 new_observation, rewards, done, infos = self.env.step(action_dict)
+
+                # if guided then use actual reward as predicted value
+                for agent_id, b in guided_learning.items():
+                    if b:
+                        values_dict[agent_id]=rewards[agent_id]
+
 
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
 

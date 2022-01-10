@@ -7,7 +7,7 @@ import torch
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from .scenarios import CollectLandmarkScenario
-from ..common.utils import rgb2gray, get_distance, min_max_norm
+from ..common.utils import rgb2gray, get_distance
 
 
 class CollectLandmarkEnv(SimpleEnv):
@@ -163,9 +163,10 @@ class CollectLandmarkEnv(SimpleEnv):
             if dist < mind_dist:
                 mind_dist = dist
                 min_idx = idx
-        value = self.world.max_size * 2 - mind_dist
-        rew = min_max_norm(value, 0, self.world.max_size * 2)
 
+        #############################
+        # Estimate optimal action
+        #############################
         closest_land = landmarks[min_idx]
 
         agent_pos = agent.state.p_pos
@@ -193,11 +194,15 @@ class CollectLandmarkEnv(SimpleEnv):
                 # move right
                 action = 4
 
+        #############################
+        # Build fake log probs
+        #############################
+
         probs = torch.zeros((1, 5))
         probs[0, action] = 1
         probs = torch.log_softmax(probs, dim=1)
 
-        return rew, action, probs
+        return action, probs
 
 
 def get_env(kwargs: Dict) -> CollectLandmarkEnv:
