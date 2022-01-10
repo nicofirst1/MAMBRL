@@ -97,7 +97,8 @@ class PPOWandb(WandbLogger):
 
         super(PPOWandb, self).__init__(**kwargs)
 
-        wandb.watch(models)
+        for idx, mod in enumerate(models.values()):
+            wandb.watch(mod, log_freq=1000, log_graph=True, idx=idx, log="all")
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
@@ -113,7 +114,6 @@ class PPOWandb(WandbLogger):
 
     def on_batch_end(self, logs: Dict[str, Any], batch_id: int, rollout):
 
-        #logs = {k: sum(v) / len(v) for k, v in logs.items()}
 
         logs["epoch"] = batch_id
 

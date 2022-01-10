@@ -76,7 +76,7 @@ class MAMBRL:
                 val_log_step=5,
                 project="model_free",
                 opts={},
-                models=self.agent.actor_critic_dict["agent_0"],
+                models=self.agent.actor_critic_dict["agent_0"].get_modules(),
                 horizon=params.horizon,
                 mode="disabled" if params.debug else "online",
                 action_meaning=self.real_env.env.action_meaning_dict,
