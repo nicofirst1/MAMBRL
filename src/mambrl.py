@@ -1,7 +1,9 @@
+import numpy as np
 import torch
 from tqdm import trange
 
-from src.common import Params, print_current_curriculum
+from src.common import Params
+from src.common.schedulers import CurriculumScheduler, GuidedLearningScheduler
 
 params = Params()
 
@@ -143,40 +145,15 @@ class MAMBRL:
 
         episodes = 3000
 
-        curriculum = {
-            400: dict(reward=0, landmark=1),
-            600: dict(reward=1, landmark=0),
-            800: dict(reward=1, landmark=1),
-            900: dict(reward=0, landmark=2),
-            1100: dict(reward=1, landmark=2),
-            1300: dict(reward=2, landmark=2),
-        }
-
-        guided_learning = {
-            100: 0.8,
-            200: 0.7,
-            400: 0.6,
-            600: 0.4,
-            800: 0.2,
-            900: 0.0,
-            1200: 0.4,
-            1400: 0.2,
-            1600: 0.1,
-            1700: 0.0,
-        }
+        schedulers = init_schedulers(self, episodes)
 
         for step in trange(episodes, desc="Training model free"):
             value_loss, action_loss, entropy, rollout, logs = self.agent.learn(
                 episodes=self.config.episodes, full_log_prob=True,
             )
 
-            if step in curriculum.keys():
-                self.real_env.set_curriculum(**curriculum[step])
-                self.real_env.get_curriculum()
-                print_current_curriculum(self.real_env.get_curriculum())
-
-            if step in guided_learning.keys():
-                self.agent.guided_learning_prob = guided_learning[step]
+            for s in schedulers:
+                s.update_step(step)
 
             if self.config.use_wandb:
 
@@ -186,7 +163,7 @@ class MAMBRL:
                     new_key = f"agents/{agent}"
 
                     for k, v in values.items():
-                        new_logs[f"{new_key}/{k}"] = v
+                        new_logs[f"{new_key}_{k}"] = np.asarray(v).mean()
 
                 logs = new_logs
 
@@ -235,6 +212,41 @@ class MAMBRL:
                         game_reward = 0
                         self.real_env.reset()
                         break
+
+
+def init_schedulers(mambrl: MAMBRL, episodes):
+    curriculum = {
+        400: dict(reward=0, landmark=1),
+        600: dict(reward=1, landmark=0),
+        800: dict(reward=1, landmark=1),
+        900: dict(reward=0, landmark=2),
+        1100: dict(reward=1, landmark=2),
+        1300: dict(reward=2, landmark=2),
+    }
+
+    cs = CurriculumScheduler(values_list=curriculum.values(), episodes=episodes,
+                             set_fn=mambrl.real_env.set_curriculum, step_list=curriculum.keys(),
+                             get_curriculum_fn=mambrl.real_env.get_curriculum)
+
+    guided_learning = {
+        100: 0.8,
+        200: 0.7,
+        400: 0.6,
+        600: 0.4,
+        800: 0.2,
+        900: 0.0,
+        1200: 0.4,
+        1400: 0.2,
+        1600: 0.1,
+        1700: 0.0,
+    }
+
+    gls = GuidedLearningScheduler(values_list=guided_learning.values(), step_list=curriculum.keys(),
+                                  episodes=episodes, set_fn=mambrl.agent.set_guided_learning_prob)
+
+    schedulers = [cs, gls]
+
+    return schedulers
 
 
 if __name__ == "__main__":
