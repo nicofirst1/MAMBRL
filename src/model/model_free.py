@@ -206,7 +206,7 @@ class ResNetBase(NNBase):
         return dict(
             value=self.classifier,
             hidden_layer=self.hidden_layer,
-            conv_0=self.conv_0
+            features=self.features
         )
 
     def forward(self, inputs):
