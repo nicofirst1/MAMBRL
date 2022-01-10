@@ -201,17 +201,12 @@ class CollectLandmarkScenario(BaseScenario):
 
         def dist_reward():
             min_dist = 99999
-            has_collided = False
             for landmark in world.landmarks:
                 dist = get_distance(agent, landmark)
                 min_dist = min(min_dist, dist)
-                if not has_collided and is_collision(agent, landmark):
-                    # positive reward, and add collision
-                    self.visited_landmarks.append(landmark.name)
-                    has_collided = True
 
             rew = world.max_size * 2 - min_dist
-            rew = min_max_norm(rew, 0, world.max_size * 2)
+            #rew = min_max_norm(rew, 0, world.max_size * 2)
             return rew
 
         def collision_reward():
@@ -226,19 +221,22 @@ class CollectLandmarkScenario(BaseScenario):
 
             return rew
 
+        rew = 0
+        upper_bound = self.landmark_reward
+        lower_bound = 0
         if self.reward_curriculum["current"] == 0:
             rew = dist_reward()
-            rew += collision_reward()
+            upper_bound += 1
             rew = min_max_norm(rew, 0, self.landmark_reward + 1)
 
         elif self.reward_curriculum["current"] == 1:
-            rew = collision_reward()
+            pass
 
         elif self.reward_curriculum["current"] == 2:
 
             rew = self.step_reward
-            rew += collision_reward()
-            rew = min_max_norm(rew, self.step_reward, self.landmark_reward)
+            lower_bound = self.step_reward
+
 
 
         else:
@@ -246,7 +244,10 @@ class CollectLandmarkScenario(BaseScenario):
                 f"Value '{self.reward_curriculum['current']}' has not been implemented for reward mode"
             )
 
-        assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
+        rew += collision_reward()
+        #rew = min_max_norm(rew, lower_bound, upper_bound)
+
+        #assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
 
         return rew
 
