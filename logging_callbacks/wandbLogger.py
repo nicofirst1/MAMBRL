@@ -106,7 +106,7 @@ class PPOWandb(WandbLogger):
         self.action_meaning = action_meaning
         self.epoch = 0
 
-        self.log_behavior_step = 5
+        self.log_behavior_step = 10
         self.log_heatmap_step = 100
 
         # Grad cam

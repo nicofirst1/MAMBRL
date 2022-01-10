@@ -25,7 +25,7 @@ class StepScheduler:
                 self.set_fn(**value)
             else:
                 self.set_fn(value)
-        return value
+            return value
 
 
 class CurriculumScheduler(StepScheduler):
@@ -36,9 +36,9 @@ class CurriculumScheduler(StepScheduler):
         self.get_curriculum_fn = get_curriculum_fn
 
     def update_step(self, step):
-        super(CurriculumScheduler, self).update_step(step)
-
-        print_current_curriculum(self.get_curriculum_fn())
+        value = super(CurriculumScheduler, self).update_step(step)
+        if value is not None:
+            print_current_curriculum(self.get_curriculum_fn())
 
 
 class GuidedLearningScheduler(StepScheduler):
@@ -46,4 +46,5 @@ class GuidedLearningScheduler(StepScheduler):
     def update_step(self, step):
         value = super(GuidedLearningScheduler, self).update_step(step)
 
-        print(f"Guided learning prob set to :{value}")
+        if value is not None:
+            print(f"\nGuided learning prob set to :{value}")

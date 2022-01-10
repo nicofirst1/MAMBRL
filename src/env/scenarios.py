@@ -35,7 +35,7 @@ class BoundedWorld(World):
         super(BoundedWorld, self).__init__()
 
         self.max_size = max_size
-        max_size -= 0.2
+        max_size -= 0.1
 
         b1 = Border((-max_size, -max_size), (max_size, -max_size))
         b2 = Border((-max_size, -max_size), (-max_size, max_size))
@@ -188,7 +188,7 @@ class CollectLandmarkScenario(BaseScenario):
                 )
 
         collide = True
-        eta = 0.1
+        eta = 0.2
         # set random initial states
         for agent in world.agents:
             agent.color = np.array([0, 0, 1])

@@ -224,8 +224,9 @@ def init_schedulers(mambrl: MAMBRL, episodes):
         1300: dict(reward=2, landmark=2),
     }
 
-    cs = CurriculumScheduler(values_list=curriculum.values(), episodes=episodes,
-                             set_fn=mambrl.real_env.set_curriculum, step_list=curriculum.keys(),
+    cs = CurriculumScheduler(values_list=list(curriculum.values()), episodes=episodes,
+                             set_fn=mambrl.real_env.set_curriculum,
+                             step_list=list(curriculum.keys()),
                              get_curriculum_fn=mambrl.real_env.get_curriculum)
 
     guided_learning = {
@@ -241,8 +242,9 @@ def init_schedulers(mambrl: MAMBRL, episodes):
         1700: 0.0,
     }
 
-    gls = GuidedLearningScheduler(values_list=guided_learning.values(), step_list=guided_learning.keys(),
-                                  episodes=episodes, set_fn=mambrl.agent.set_guided_learning_prob)
+    gls = GuidedLearningScheduler(values_list=list(guided_learning.values()),episodes=episodes,
+                                  step_list=list(guided_learning.keys()),
+                                  set_fn=mambrl.agent.set_guided_learning_prob)
 
     schedulers = [cs, gls]
 
