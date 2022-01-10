@@ -169,13 +169,6 @@ class CollectLandmarkScenario(BaseScenario):
         self.num_landmarks = len(self.landmarks)
         self.visited_landmarks = []
 
-        # set random initial states
-        for agent in world.agents:
-            agent.color = np.array([0, 0, 1])
-            agent.state.p_pos = self.np_random.uniform(-1, +1, world.dim_p)
-            agent.state.p_vel = np.zeros(world.dim_p)
-            agent.state.c = np.zeros(world.dim_c)
-
         # set landmarks randomly in the world
         for land_id, landmark in self.landmarks.items():
             if landmark not in world.landmarks:
@@ -192,6 +185,22 @@ class CollectLandmarkScenario(BaseScenario):
                     f"Value '{self.landmark_curriculum['current']}' has not been implemented for landmark reset"
                 )
 
+        collide = True
+        eta = 0.1
+        # set random initial states
+        for agent in world.agents:
+            agent.color = np.array([0, 0, 1])
+            while collide:
+                agent.state.p_pos = self.np_random.uniform(
+                    -world.max_size + eta,
+                    world.max_size - eta,
+                    world.dim_p)
+
+                collide = any([is_collision(agent, land) for land in self.landmarks.values()])
+
+            agent.state.p_vel = np.zeros(world.dim_p)
+            agent.state.c = np.zeros(world.dim_c)
+
     # return all agents that are not adversaries
     @staticmethod
     def get_agents(world):
@@ -206,7 +215,7 @@ class CollectLandmarkScenario(BaseScenario):
                 min_dist = min(min_dist, dist)
 
             rew = world.max_size * 2 - min_dist
-            #rew = min_max_norm(rew, 0, world.max_size * 2)
+            # rew = min_max_norm(rew, 0, world.max_size * 2)
             return rew
 
         def collision_reward():
@@ -245,9 +254,9 @@ class CollectLandmarkScenario(BaseScenario):
             )
 
         rew += collision_reward()
-        #rew = min_max_norm(rew, lower_bound, upper_bound)
+        # rew = min_max_norm(rew, lower_bound, upper_bound)
 
-        #assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
+        # assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
 
         return rew
 
