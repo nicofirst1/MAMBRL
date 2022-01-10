@@ -78,7 +78,7 @@ class RolloutStorage(object):
         done = False
 
         if minibatch_frames >= total_samples:
-            minibatch_frames = total_samples-1
+            minibatch_frames = total_samples
 
         for start_ind in range(0, total_samples, minibatch_frames):
             next_states_minibatch = []
@@ -91,7 +91,7 @@ class RolloutStorage(object):
             states_minibatch = []
 
             for offset in range(minibatch_frames):
-                if start_ind + minibatch_frames >= total_samples:
+                if start_ind + minibatch_frames > total_samples:
                     # skip last batch if not divisible
                     done = True
                     continue
