@@ -241,7 +241,7 @@ def init_schedulers(mambrl: MAMBRL, episodes):
         1700: 0.0,
     }
 
-    gls = GuidedLearningScheduler(values_list=guided_learning.values(), step_list=curriculum.keys(),
+    gls = GuidedLearningScheduler(values_list=guided_learning.values(), step_list=guided_learning.keys(),
                                   episodes=episodes, set_fn=mambrl.agent.set_guided_learning_prob)
 
     schedulers = [cs, gls]

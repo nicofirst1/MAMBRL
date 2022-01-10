@@ -109,19 +109,22 @@ def test_landmark_curriculum():
             print(f"End of episode {ep}\n\n\n")
 
 
-def test_reward_curriculum():
+def test_reward_curriculum(env_=None):
     action_dict = {}
 
-    for land in range(3):
+    if env_ is None:
+        env_=env
+
+    for rew_cur in range(3):
 
         for ep in range(3):
 
-            env.set_curriculum(reward=land)
+            env_.set_curriculum(reward=rew_cur)
 
-            print_current_curriculum(env.get_curriculum())
+            print_current_curriculum(env_.get_curriculum())
 
-            obs = env.reset()
-            done = {_: False for _ in env.agents}
+            obs = env_.reset()
+            done = {_: False for _ in env_.agents}
             done["__all__"] = False
 
             for step in range(env_configs['horizon']):
@@ -130,7 +133,7 @@ def test_reward_curriculum():
                     print("GAME OVER!")
                     break
 
-                for agent in env.agents:
+                for agent in env_.agents:
                     if done[agent]:
                         action_dict[agent] = None
 
@@ -138,11 +141,36 @@ def test_reward_curriculum():
                         action_dict[agent] = random.randint(0, 4)
                         # action_dict[agent] = 4
 
-                obs, reward, done, info = env.step(action_dict)
+                obs, reward, done, info = env_.step(action_dict)
 
                 time.sleep(0.1)
 
             print(f"End of episode {ep}\n\n\n")
+
+def test_rew_norm():
+
+    env_configs= params.get_env_configs()
+    env_configs['scenario_kwargs']['normalize_rewards']=False
+
+    env = EnvWrapper(
+        env=get_env(env_configs),
+        frame_shape=params.frame_shape,
+        num_stacked_frames=1,
+        device=params.device,
+    )
+
+    test_reward_curriculum(env_=env)
+
+    env_configs['scenario_kwargs']['normalize_rewards'] = True
+
+    env = EnvWrapper(
+        env=get_env(env_configs),
+        frame_shape=params.frame_shape,
+        num_stacked_frames=1,
+        device=params.device,
+    )
+
+    test_reward_curriculum(env_=env)
 
 
 def test_dones():

@@ -58,6 +58,7 @@ class CollectLandmarkScenario(BaseScenario):
             max_size: int,
             step_reward: int,
             landmark_reward: int,
+            normalize_rewards: bool,
             np_random,
     ):
         """
@@ -75,6 +76,7 @@ class CollectLandmarkScenario(BaseScenario):
         self.step_reward = step_reward
         self.landmark_reward = landmark_reward
         self.np_random = np_random
+        self.normalize_rewards = normalize_rewards
 
         self.landmarks = {}
         self.visited_landmarks = []
@@ -215,7 +217,7 @@ class CollectLandmarkScenario(BaseScenario):
                 min_dist = min(min_dist, dist)
 
             rew = world.max_size * 2 - min_dist
-            # rew = min_max_norm(rew, 0, world.max_size * 2)
+
             return rew
 
         def collision_reward():
@@ -236,7 +238,9 @@ class CollectLandmarkScenario(BaseScenario):
         if self.reward_curriculum["current"] == 0:
             rew = dist_reward()
             upper_bound += 1
-            rew = min_max_norm(rew, 0, self.landmark_reward + 1)
+
+            if self.normalize_rewards:
+                rew = min_max_norm(rew, 0, world.max_size * 2)
 
         elif self.reward_curriculum["current"] == 1:
             pass
@@ -254,9 +258,10 @@ class CollectLandmarkScenario(BaseScenario):
             )
 
         rew += collision_reward()
-        # rew = min_max_norm(rew, lower_bound, upper_bound)
+        if self.normalize_rewards:
+            rew = min_max_norm(rew, lower_bound, upper_bound)
 
-        # assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
+            assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
 
         return rew
 

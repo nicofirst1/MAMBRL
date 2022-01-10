@@ -78,6 +78,8 @@ class Params:
     full_rollout = False
     gray_scale = False
     num_actions = 5
+    normalize_reward=True
+    world_max_size=3
 
     #### EVALUATION ####
     log_step = 500
@@ -182,7 +184,8 @@ class Params:
                 landmark_reward=self.landmark_reward,
                 num_agents=self.agents,
                 num_landmarks=self.landmarks,
-                max_size=3,
+                max_size=self.world_max_size,
+                normalize_rewards=self.normalize_reward
             ),
         )
 
