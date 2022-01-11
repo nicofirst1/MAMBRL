@@ -20,16 +20,18 @@ class Policy(nn.Module):
                 raise NotImplementedError
 
         self.base = base(obs_shape, **base_kwargs)
-        init_ = lambda m: init(
-            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
-        )
 
-        self.actions_layer = init_(nn.Linear(self.base.output_size, action_space))
+        self.actions_layer = nn.Sequential(
+            nn.Linear(self.base.output_size, 64),
+            nn.Tanh(),
+            nn.Linear(64, 64),
+            nn.Tanh(),
+            nn.Linear(64, action_space), )
 
     def get_modules(self):
 
-        modules=self.base.get_modules()
-        modules['action_layer']= self.actions_layer
+        modules = self.base.get_modules()
+        modules['action_layer'] = self.actions_layer
 
         return modules
 
@@ -102,6 +104,7 @@ class NNBase(nn.Module):
 
     def get_modules(self):
         return {}
+
 
 class CNNBase(NNBase):
     def __init__(self, input_shape, hidden_size=512):
@@ -197,8 +200,12 @@ class ResNetBase(NNBase):
         self.hidden_layer = nn.Sequential(nn.Linear(128, hidden_size),
                                           nn.ReLU())
 
-
-        self.classifier = nn.Linear(hidden_size, 1)
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_size, 64),
+            nn.Tanh(),
+            nn.Linear(64, 64),
+            nn.Tanh(),
+            nn.Linear(64, 1))
 
         self.train()
 

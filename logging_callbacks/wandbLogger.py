@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 from torch import nn
 
 from logging_callbacks.callbacks import WandbLogger
-from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image, save_gradient_images
+from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
 
 
 class EnvModelWandb(WandbLogger):
@@ -114,7 +114,6 @@ class PPOWandb(WandbLogger):
 
     def on_batch_end(self, logs: Dict[str, Any], batch_id: int, rollout):
 
-
         logs["epoch"] = batch_id
 
         if batch_id % self.log_behavior_step == 0:
@@ -157,7 +156,7 @@ class PPOWandb(WandbLogger):
 
                 logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
 
-                #save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
+                # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
         self.log_to_wandb(logs, commit=True)
 
@@ -177,8 +176,8 @@ def write_rewards(states, rewards):
     draws = [ImageDraw.Draw(img) for img in states]
     font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", 10)
 
-    if rewards.size==1:
-        rewards= np.expand_dims(rewards, 0)
+    if rewards.size == 1:
+        rewards = np.expand_dims(rewards, 0)
 
     for idx in range(rewards.size):
         rew = rewards[idx]
@@ -190,3 +189,32 @@ def write_rewards(states, rewards):
     states = np.asarray(states)
     states = states.transpose((0, 3, 1, 2))
     return states
+
+
+def preprocess_logs(learn_output, mamrbl):
+    value_loss, action_loss, entropy, rollout, logs = learn_output
+
+    # merge logs with agent id
+    new_logs = {}
+    for agent, values in logs.items():
+        new_key = f"agents/{agent}"
+
+        for k, v in values.items():
+            new_logs[f"{new_key}_{k}"] = np.asarray(v).mean()
+
+    logs = new_logs
+
+    general_logs = {
+        "loss/value_loss": value_loss,
+        "loss/action_loss": action_loss,
+        "loss/entropy_loss": entropy,
+        "loss/total": value_loss + action_loss + entropy,
+        "curriculum/guided_learning": mamrbl.ppo_wrapper.guided_learning_prob,
+        "curriculum/reward": mamrbl.real_env.get_curriculum()[0][0],
+        "curriculum/landmark": mamrbl.real_env.get_curriculum()[1][0],
+        "curriculum/lr": mamrbl.ppo_wrapper.get_learning_rate(),
+    }
+
+    logs.update(general_logs)
+
+    return logs, rollout

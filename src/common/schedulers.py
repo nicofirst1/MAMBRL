@@ -1,3 +1,7 @@
+from typing import Dict
+
+import torch
+
 from src.common import print_current_curriculum
 
 
@@ -48,3 +52,14 @@ class GuidedLearningScheduler(StepScheduler):
 
         if value is not None:
             print(f"\nGuided learning prob set to :{value}")
+
+
+class LearningRateScheduler:
+
+    def __init__(self, base_scheduler: torch.optim.lr_scheduler, optimizer_dict: Dict[str, torch.optim.Optimizer],
+                 scheduler_kwargs):
+        self.schedulers = [base_scheduler(optim, **scheduler_kwargs) for optim in optimizer_dict.values()]
+
+    def update_step(self, step):
+        for sc in self.schedulers:
+            sc.step()

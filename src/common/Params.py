@@ -45,14 +45,14 @@ class Params:
     target_loss_clipping = 0.03
 
     ### Optimizer
-    lr = 1e-4
+    lr = 1e-2
     eps = 1e-5
     alpha = 0.99
-    max_grad_norm = 5
+    max_grad_norm = 0.5
 
     ### Algo parameters
     gamma = 0.97
-    ppo_clip_param = 0.1
+    ppo_clip_param = 0.2
 
     ### Loss
     value_loss_coef = 0.5

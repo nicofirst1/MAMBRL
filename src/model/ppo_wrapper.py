@@ -36,7 +36,7 @@ class PpoWrapper:
             self.env.agents
         }
 
-        self.agent = PPO(
+        self.ppo_agent = PPO(
             actor_critic_dict=self.actor_critic_dict,
             clip_param=config.ppo_clip_param,
             num_minibatch=self.num_minibatch,
@@ -48,11 +48,19 @@ class PpoWrapper:
             use_clipped_value_loss=config.clip_value_loss
         )
 
+    def get_learning_rate(self):
+
+        lrs = []
+        for k, optim in self.ppo_agent.optimizers.items():
+            param_group = optim.param_groups[0]
+            lrs.append(param_group['lr'])
+
+        return sum(lrs) / len(lrs)
 
     def set_guided_learning_prob(self, value):
-        self.guided_learning_prob=value
+        self.guided_learning_prob = value
 
-    def learn(self, episodes, full_log_prob=False,):
+    def learn(self, episodes, full_log_prob=False, ):
 
         rollout = RolloutStorage(
             num_steps=self.num_steps,
@@ -75,7 +83,6 @@ class PpoWrapper:
 
         ) for ag in self.actor_critic_dict.keys()}
 
-
         for episode in range(episodes):
             # init dicts and reset env
             action_dict = {agent_id: False for agent_id in self.env.agents}
@@ -94,8 +101,8 @@ class PpoWrapper:
                     # perform guided learning with scheduler
                     if self.guided_learning_prob > random.uniform(0, 1):
                         action, action_log_prob = self.env.optimal_action(agent_id)
-                        guided_learning[agent_id]=True
-                        value=-1
+                        guided_learning[agent_id] = True
+                        value = -1
 
                     else:
                         with torch.no_grad():
@@ -118,8 +125,7 @@ class PpoWrapper:
                 # if guided then use actual reward as predicted value
                 for agent_id, b in guided_learning.items():
                     if b:
-                        values_dict[agent_id]=rewards[agent_id]
-
+                        values_dict[agent_id] = rewards[agent_id]
 
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
 
@@ -157,11 +163,10 @@ class PpoWrapper:
 
             rollout.compute_returns(next_value, True, self.gamma, 0.95)
             with torch.enable_grad():
-                value_loss, action_loss, entropy = self.agent.update(rollout, logs)
+                value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
             rollout.steps = 0
 
         return value_loss, action_loss, entropy, rollout, logs
 
     def set_env(self, env):
         self.env = env
-
