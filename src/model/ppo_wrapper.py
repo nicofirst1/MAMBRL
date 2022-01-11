@@ -2,14 +2,14 @@ import random
 
 import torch
 
-from src.common import mas_dict2tensor
-from .model_free import Policy, ResNetBase, CNNBase
+from src.common import mas_dict2tensor, Params
+from .model_free import Policy
 from .ppo import PPO
 from .rollout_storage import RolloutStorage
 
 
 class PpoWrapper:
-    def __init__(self, env, config):
+    def __init__(self, env, config: Params):
 
         self.env = env
         self.obs_shape = env.obs_shape
@@ -24,15 +24,11 @@ class PpoWrapper:
 
         self.guided_learning_prob = config.guided_learning_prob
 
-        if config.base == "resnet":
-            base = ResNetBase
-        elif config.base == "cnn":
-            base = CNNBase
-        else:
-            base = None
+        policy_configs = config.get_policy_configs()
+        self.base_hidden_size = config.base_hidden_size
 
         self.actor_critic_dict = {
-            agent_id: Policy(self.obs_shape, self.action_space, base=base).to(self.device) for agent_id in
+            agent_id: Policy(self.obs_shape, self.action_space, **policy_configs).to(self.device) for agent_id in
             self.env.agents
         }
 
@@ -69,7 +65,8 @@ class PpoWrapper:
             num_steps=self.num_steps,
             obs_shape=self.obs_shape,
             num_actions=self.action_space,
-            num_agents=self.num_agents
+            num_agents=self.num_agents,
+            recurrent_hidden_state_size=self.base_hidden_size
         )
         rollout.to(self.device)
 
@@ -91,9 +88,12 @@ class PpoWrapper:
             action_dict = {agent_id: False for agent_id in self.env.agents}
             values_dict = {agent_id: False for agent_id in self.env.agents}
             action_log_dict = {agent_id: False for agent_id in self.env.agents}
+            recurrent_dict = {agent_id: False for agent_id in self.env.agents}
 
             observation = self.env.reset()
             rollout.states[0] = observation.unsqueeze(dim=0)
+
+            self.ppo_agent.eval()
 
             for step in range(self.num_steps):
                 obs = observation.to(self.device).unsqueeze(dim=0)
@@ -105,17 +105,27 @@ class PpoWrapper:
                     if self.guided_learning_prob > random.uniform(0, 1):
                         action, action_log_prob = self.env.optimal_action(agent_id)
                         guided_learning[agent_id] = True
-                        value = -1
+                        value, _, recurrent_hidden_states=self.actor_critic_dict[
+                            agent_id].base(
+                            inputs=obs,
+                            rnn_hxs=rollout.recurrent_hidden_states[step],
+                            masks=rollout.masks[step]
+                        )
 
                     else:
                         with torch.no_grad():
-                            value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
-                                obs, full_log_prob=full_log_prob
+                            value, action, action_log_prob, recurrent_hidden_states = self.actor_critic_dict[
+                                agent_id].act(
+                                obs, full_log_prob=full_log_prob,
+                                recurrent_hidden_states=rollout.recurrent_hidden_states[step],
+                                masks=rollout.masks[step]
                             )
 
                     # get action with softmax and multimodal (stochastic)
                     action_dict[agent_id] = int(action)
                     values_dict[agent_id] = float(value)
+                    recurrent_dict[agent_id] = recurrent_hidden_states.squeeze()
+
                     if not full_log_prob:
                         action_log_dict[agent_id] = float(action_log_prob)
                     else:
@@ -139,6 +149,7 @@ class PpoWrapper:
                 action_log_probs = mas_dict2tensor(
                     action_log_dict, float if not full_log_prob else list
                 )
+                recurrent_hidden_states = mas_dict2tensor(recurrent_dict, list)
 
                 rollout.insert(
                     step=step,
@@ -148,6 +159,7 @@ class PpoWrapper:
                     reward=rewards,
                     mask=masks,
                     action_log_probs=action_log_probs,
+                    recurrent_hidden_states=recurrent_hidden_states
                 )
 
                 # update observation
@@ -160,12 +172,16 @@ class PpoWrapper:
             with torch.no_grad():
                 next_value = (
                     self.actor_critic_dict["agent_0"]
-                        .get_value(rollout.states[-1].unsqueeze(0))
-                        .detach()
+                        .get_value(
+                        inputs=rollout.states[-1].unsqueeze(0),
+                        masks=rollout.masks[-1],
+                        recurrent_hidden_states=rollout.recurrent_hidden_states[-1]
+                    ).detach()
                 )
 
             rollout.compute_returns(next_value, True, self.gamma, 0.95)
             with torch.enable_grad():
+                self.ppo_agent.train()
                 value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
             rollout.steps = 0
 

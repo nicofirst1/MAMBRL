@@ -2,7 +2,7 @@ import torch
 
 
 class RolloutStorage(object):
-    def __init__(self, num_steps, obs_shape, num_agents, num_actions):
+    def __init__(self, num_steps, obs_shape, num_agents, num_actions, recurrent_hidden_state_size):
         self.steps = 0
         self.num_channels = obs_shape[0]
 
@@ -14,6 +14,8 @@ class RolloutStorage(object):
         self.values = torch.zeros(num_steps + 1, num_agents, 1)
         self.returns = torch.zeros(num_steps + 1, num_agents, 1)
         self.action_log_probs = torch.zeros(num_steps, num_agents, num_actions)
+        self.recurrent_hidden_states = torch.zeros(
+            num_steps + 1, num_agents, recurrent_hidden_state_size)
 
     def to(self, device):
         self.states = self.states.to(device)
@@ -23,20 +25,23 @@ class RolloutStorage(object):
         self.action_log_probs = self.action_log_probs.to(device)
         self.values = self.values.to(device)
         self.returns = self.returns.to(device)
+        self.recurrent_hidden_states = self.recurrent_hidden_states.to(device)
 
-    def insert(self, step, state, action, values, reward, mask, action_log_probs):
+    def insert(self, step, state, action, values, reward, mask, action_log_probs, recurrent_hidden_states):
         self.states[self.steps + 1].copy_(state)
         self.actions[self.steps].copy_(action)
         self.values[self.steps].copy_(values)
         self.rewards[self.steps].copy_(reward)
         self.masks[self.steps + 1].copy_(mask)
         self.action_log_probs[step].copy_(action_log_probs)
+        self.recurrent_hidden_states[self.steps + 1].copy_(recurrent_hidden_states)
 
         self.steps += 1
 
     def after_update(self):
         self.states[0].copy_(self.states[-1])
         self.masks[0].copy_(self.masks[-1])
+        self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
 
     def compute_returns(self, next_value, use_gae, gamma, gae_lambda):
         if use_gae:
@@ -44,9 +49,9 @@ class RolloutStorage(object):
             gae = 0
             for step in reversed(range(self.rewards.size(0))):
                 delta = (
-                    self.rewards[step]
-                    + gamma * self.values[step + 1] * self.masks[step + 1]
-                    - self.values[step]
+                        self.rewards[step]
+                        + gamma * self.values[step + 1] * self.masks[step + 1]
+                        - self.values[step]
                 )
                 gae = delta + gamma * gae_lambda * self.masks[step + 1] * gae
                 self.returns[step] = gae + self.values[step]
@@ -54,8 +59,8 @@ class RolloutStorage(object):
             self.returns[-1] = next_value
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = (
-                    self.returns[step + 1] * gamma * self.masks[step + 1]
-                    + self.rewards[step]
+                        self.returns[step + 1] * gamma * self.masks[step + 1]
+                        + self.rewards[step]
                 )
 
     def recurrent_generator(self, advantages, minibatch_frames):
@@ -72,7 +77,7 @@ class RolloutStorage(object):
             adv_targ_minibatch: torch.Tensor[minibatch_size, num_agents]
             next_states_minibatch: torch.Tensor[minibatch_size, num_channels, width, height]
         """
-        #total_samples = self.rewards.size(0)
+        # total_samples = self.rewards.size(0)
         total_samples = self.steps
         perm = torch.randperm(total_samples)
         done = False
@@ -89,6 +94,7 @@ class RolloutStorage(object):
             old_action_log_probs_minibatch = []
             adv_targ_minibatch = []
             states_minibatch = []
+            recurrent_hidden_states_minibatch = []
 
             for offset in range(minibatch_frames):
                 if start_ind + minibatch_frames > total_samples:
@@ -105,6 +111,8 @@ class RolloutStorage(object):
                 masks_minibatch.append(self.masks[ind].unsqueeze(0))
                 old_action_log_probs_minibatch.append(self.action_log_probs[ind].unsqueeze(0))
                 adv_targ_minibatch.append(advantages[ind].unsqueeze(0))
+                recurrent_hidden_states_minibatch.append(
+                    self.recurrent_hidden_states[ind])
 
             if done:
                 break
@@ -120,5 +128,9 @@ class RolloutStorage(object):
                 old_action_log_probs_minibatch, dim=0
             )
             adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
+            recurrent_hidden_states_minibatch = torch.stack(
+                recurrent_hidden_states_minibatch, 0)
 
-            yield states_minibatch, actions_minibatch, values_minibatch, return_minibatch, masks_minibatch, old_action_log_probs_minibatch, adv_targ_minibatch, next_states_minibatch
+            yield states_minibatch, actions_minibatch, values_minibatch, return_minibatch, \
+                  masks_minibatch, old_action_log_probs_minibatch, adv_targ_minibatch, \
+                  next_states_minibatch, recurrent_hidden_states_minibatch

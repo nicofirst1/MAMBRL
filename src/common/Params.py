@@ -3,7 +3,9 @@ import inspect
 import multiprocessing
 import os
 import uuid
+
 import torch
+
 
 class Params:
     unique_id = str(uuid.uuid1())[:8]
@@ -21,12 +23,14 @@ class Params:
     debug = False
     use_wandb = True
     device = torch.device("cuda")
-    frame_shape = [3, 256, 256]
+    frame_shape = [3, 128, 128]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     param_sharing = False
-    visible = False
-    guided_learning_prob=0.95
+    guided_learning_prob = 0.0
+    epochs = 1000
+    minibatch = 25
+    batch_size = 3
 
     ### ENV model
     stack_internal_states = False
@@ -46,40 +50,43 @@ class Params:
 
     ### Optimizer
     lr = 1e-2
-    eps = 1e-5
+    eps = 1e-4
     alpha = 0.99
     max_grad_norm = 0.5
 
     ### Algo parameters
-    gamma = 0.97
+    gamma = 0.99
+
     ppo_clip_param = 0.2
 
     ### Loss
     value_loss_coef = 0.5
-    entropy_coef = 0.01
+    entropy_coef = 0.05
+    clip_value_loss = True
+
+    ### PPO AGENT
+    recurrent_base = True
     base = "resnet"  # [ cnn , resnet ]
-    clip_value_loss = False
+    base_hidden_size = 64
 
     #### ENVIRONMENT ####
     agents = 1
-    landmarks = 2
+    landmarks = 1
     step_reward = -1
-    landmark_reward = 1
-    epochs = 1000
-    minibatch = 32
+    landmark_reward = 100
     episodes = 3
-    horizon = 128
+    horizon = 50
     env_name = "collab_nav"
     obs_type = "image"  # or "states"
     num_frames = 4
     rollout_len = 1
-    batch_size = 3
     num_steps = horizon // num_frames
     full_rollout = False
     gray_scale = False
     num_actions = 5
-    normalize_reward=True
-    world_max_size=3
+    normalize_reward = True
+    world_max_size = 3
+    visible = False
 
     #### EVALUATION ####
     log_step = 500
@@ -99,11 +106,8 @@ class Params:
 
     def __init__(self):
 
-
         self.__initialize_dirs()
         self.__parse_args()
-
-
 
         if self.gray_scale:
             self.frame_shape[0] = 1
@@ -186,6 +190,18 @@ class Params:
                 num_landmarks=self.landmarks,
                 max_size=self.world_max_size,
                 normalize_rewards=self.normalize_reward
+            ),
+        )
+
+        return env_config
+
+    def get_policy_configs(self):
+        env_config = dict(
+            base=self.base,
+            hidden_size=self.base_hidden_size,
+            base_kwargs=dict(
+                recurrent=self.recurrent_base,
+                hidden_size=self.base_hidden_size
             ),
         )
 

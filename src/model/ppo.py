@@ -35,6 +35,14 @@ class PPO:
             for agent_id in self.actor_critic_dict.keys()
         }
 
+    def train(self):
+        for model in self.actor_critic_dict.values():
+            model.train()
+
+    def eval(self):
+        for model in self.actor_critic_dict.values():
+            model.eval()
+
     def update(self, rollout, logs):
         advantages = rollout.returns[:-1] - rollout.values[:-1]
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
@@ -53,7 +61,7 @@ class PPO:
 
         for sample in data_generator:
             states_batch, actions_batch, values_batch, return_batch, \
-            masks_batch, old_action_logs_probs_batch, adv_targ, _, = sample
+            masks_batch, old_action_logs_probs_batch, adv_targ, _, recurrent_hidden_states = sample
 
             for agent_id in self.actor_critic_dict.keys():
                 agent_index = int(agent_id[-1])  ## fixme: per il momento fatto così per l'indice
@@ -63,9 +71,16 @@ class PPO:
                 agent_returns = return_batch[:, agent_index]
                 old_log_probs = old_action_logs_probs_batch[:, agent_index, :]
                 agent_adv_targ = adv_targ[:, agent_index]
+                agent_recurrent = recurrent_hidden_states[:, agent_index]
+                agent_maks = masks_batch[:, agent_index]
 
-                values, curr_log_porbs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(states_batch,
-                                                                                                       agent_actions)
+                values, curr_log_porbs, entropy, _ = self.actor_critic_dict[agent_id]\
+                    .evaluate_actions(
+                    inputs=states_batch,
+                    action=agent_actions,
+                    masks=agent_maks,
+                    recurrent_hidden_states=agent_recurrent
+                )
 
                 ratio = torch.exp(curr_log_porbs - old_log_probs)
                 surr1 = ratio * agent_adv_targ

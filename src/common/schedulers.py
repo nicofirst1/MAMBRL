@@ -1,5 +1,7 @@
+import math
 from typing import Dict
 
+import numpy as np
 import torch
 
 from src.common import print_current_curriculum
@@ -45,14 +47,6 @@ class CurriculumScheduler(StepScheduler):
             print_current_curriculum(self.get_curriculum_fn())
 
 
-class GuidedLearningScheduler(StepScheduler):
-
-    def update_step(self, step):
-        value = super(GuidedLearningScheduler, self).update_step(step)
-
-        if value is not None:
-            print(f"\nGuided learning prob set to :{value}")
-
 
 class LearningRateScheduler:
 
@@ -65,6 +59,22 @@ class LearningRateScheduler:
             sc.step()
 
 
+def exponential_decay(start_val, episodes, gamma=0.99):
+    gamma = 1 - gamma
+    values = []
+
+    prev = start_val
+
+    for idx in range(0, episodes):
+        val = prev * pow(math.e, - gamma * idx)
+        prev = val
+        values.append(
+            val
+        )
+
+    return values
 
 
+def linear_decay(start_val, episodes):
+    return list(np.linspace(start_val, 0, episodes))
 

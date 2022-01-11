@@ -4,7 +4,8 @@ from tqdm import trange
 
 from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import Params
-from src.common.schedulers import CurriculumScheduler, GuidedLearningScheduler, LearningRateScheduler, StepScheduler
+from src.common.schedulers import CurriculumScheduler, LearningRateScheduler, StepScheduler, \
+    exponential_decay, linear_decay
 
 params = Params()
 
@@ -144,7 +145,7 @@ class MAMBRL:
     def train_model_free_curriculum(self):
         self.ppo_wrapper.set_env(self.real_env)
 
-        episodes = 5000
+        episodes = 3000
 
         schedulers = init_schedulers(self, episodes, use_curriculum=False, use_guided_learning=False)
 
@@ -227,25 +228,25 @@ def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_g
             1700: 0.0,
         }
 
-        gls = GuidedLearningScheduler(values_list=list(guided_learning.values()), episodes=episodes,
-                                      step_list=list(guided_learning.keys()),
+        ep=int(episodes*0.8)
+        guided_learning=linear_decay(start_val=1, episodes=ep)
+
+        gls = StepScheduler(values_list=guided_learning, episodes=ep,
                                       set_fn=mambrl.ppo_wrapper.set_guided_learning_prob)
         schedulers.append(gls)
 
     if use_learning_rate:
-        kwargs = dict(gamma=0.999)
+        kwargs = dict(gamma=0.997)
         lrs = LearningRateScheduler(base_scheduler=ExponentialLR,
                                     optimizer_dict=mambrl.ppo_wrapper.ppo_agent.optimizers,
                                     scheduler_kwargs=kwargs)
         schedulers.append(lrs)
 
     if use_entropy_reg:
-        entropy = list(range(5000, 0, -2))
-        entropy = [1 / (10*x) for x in entropy]
-        entropy = list(reversed(entropy))
+        values = exponential_decay(Params().entropy_coef, episodes, gamma=0.999)
 
         es = StepScheduler(
-            values_list=entropy, episodes=episodes,
+            values_list=values, episodes=episodes,
             set_fn=mambrl.ppo_wrapper.set_entropy_coeff
         )
 
