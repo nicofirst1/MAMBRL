@@ -57,17 +57,17 @@ class Params:
     value_loss_coef = 0.5
     entropy_coef = 0.01
     base = "resnet"  # [ cnn , resnet ]
-    clip_value_loss = True
+    clip_value_loss = False
 
     #### ENVIRONMENT ####
     agents = 1
-    landmarks = 2
+    landmarks = 1
     step_reward = -1
     landmark_reward = 50
     epochs = 1000
     minibatch = 32
     episodes = 3
-    horizon = 128
+    horizon = 256
     env_name = "collab_nav"
     obs_type = "image"  # or "states"
     num_frames = 4

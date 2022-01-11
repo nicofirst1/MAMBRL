@@ -173,6 +173,11 @@ class MAMBRL:
         }
 
         for step in trange(episodes, desc="Training model free"):
+            if step in curriculum.keys():
+                self.real_env.set_curriculum(**curriculum[step])
+                self.real_env.get_curriculum()
+                print_current_curriculum(self.real_env.get_curriculum())
+
             value_loss, action_loss, entropy, rollout = self.agent.learn(
                 episodes=self.config.episodes, full_log_prob=True, entropy_coef=1/(step+1)
             )
@@ -184,10 +189,7 @@ class MAMBRL:
                     entropy=[entropy],
                 )
                 self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
-            if step in curriculum.keys():
-                self.real_env.set_curriculum(**curriculum[step])
-                self.real_env.get_curriculum()
-                print_current_curriculum(self.real_env.get_curriculum())
+
 
     def user_game(self):
         moves = {"w": 4, "a": 1, "s": 3, "d": 2}

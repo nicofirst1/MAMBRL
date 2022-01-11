@@ -128,7 +128,7 @@ class PPO:
     def set_env(self, env):
         self.env = env
 
-    def act(self, obs, agent_id, full_log_prob=False):
+    def act(self, obs, agent_id, full_log_prob=True):
         return self.actor_critic_dict[agent_id].act(
-            obs, deterministic=True, full_log_prob=True
+            obs, deterministic=True, full_log_prob=full_log_prob
         )
