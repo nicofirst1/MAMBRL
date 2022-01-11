@@ -1,8 +1,8 @@
 import torch
 
 from typing import Tuple
-from env.envs import CollectLandmarkEnv
-from model.utils import one_hot_encode
+from .envs import CollectLandmarkEnv
+from src.common.utils import one_hot_encode
 
 
 class EnvWrapper:
@@ -63,6 +63,9 @@ class EnvWrapper:
         #             break
 
         return self.stacked_frames, rewards, done, infos
+
+    def optimal_action(self, agent):
+        return self.env.optimal_action(agent)
 
     def add_interaction(self, actions, rewards, new_obs, done):
         current_obs = self.stacked_frames.squeeze().byte().cpu()

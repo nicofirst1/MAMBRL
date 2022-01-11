@@ -1,11 +1,14 @@
+import random
+
 import torch
 
-from model import RolloutStorage, ppo
-from model.model_free import Policy, ResNetBase, CNNBase
-from model.utils import mas_dict2tensor
+from src.common import mas_dict2tensor
+from .model_free import Policy, ResNetBase, CNNBase
+from .ppo import PPO
+from .rollout_storage import RolloutStorage
 
 
-class PPO:
+class PpoWrapper:
     def __init__(self, env, config):
 
         self.env = env
@@ -19,6 +22,8 @@ class PPO:
         self.num_steps = config.horizon
         self.num_minibatch = config.minibatch
 
+        self.guided_learning_prob = config.guided_learning_prob
+
         if config.base == "resnet":
             base = ResNetBase
         elif config.base == "cnn":
@@ -30,7 +35,7 @@ class PPO:
             agent_id: Policy(self.obs_shape, self.action_space, base=base).to(self.device) for agent_id in self.env.agents
         }
 
-        self.agent = ppo.PPO(
+        self.ppo_agent = PPO(
             actor_critic_dict=self.actor_critic_dict,
             clip_param=config.ppo_clip_param,
             num_minibatch=self.num_minibatch,
@@ -42,7 +47,22 @@ class PPO:
             use_clipped_value_loss=config.clip_value_loss
         )
 
-    def learn(self, episodes, full_log_prob=False, entropy_coef=None):
+    def get_learning_rate(self):
+
+        lrs = []
+        for k, optim in self.ppo_agent.optimizers.items():
+            param_group = optim.param_groups[0]
+            lrs.append(param_group['lr'])
+
+        return sum(lrs) / len(lrs)
+
+    def set_guided_learning_prob(self, value):
+        self.guided_learning_prob = value
+
+    def set_entropy_coeff(self, value):
+        self.ppo_agent.entropy_coef = value
+
+    def learn(self, episodes, full_log_prob=False, ):
 
         rollout = RolloutStorage(
             num_steps=self.num_steps,
@@ -52,8 +72,18 @@ class PPO:
         )
         rollout.to(self.device)
 
-        if entropy_coef is not None:
-            self.agent.entropy_coef = entropy_coef
+        logs = {ag: dict(
+            ratio=[],
+            surr1=[],
+            surr2=[],
+            returns=[],
+            adv_targ=[],
+            perc_surr1=[],
+            perc_surr2=[],
+            curr_log_porbs=[],
+            old_log_probs=[]
+
+        ) for ag in self.actor_critic_dict.keys()}
 
         for episode in range(episodes):
             # init dicts and reset env
@@ -65,13 +95,22 @@ class PPO:
             rollout.states[0] = observation.unsqueeze(dim=0)
 
             for step in range(self.num_steps):
-                normalize_obs = torch.nn.functional.normalize(observation.to(self.device).unsqueeze(dim=0))
-                #normalize_obs = (observation.float() / 255).to(self.device).unsqueeze(dim=0)
+                obs = observation.to(self.device).unsqueeze(dim=0)
+                guided_learning = {agent_id: False for agent_id in self.env.agents}
+
                 for agent_id in self.env.agents:
-                    with torch.no_grad():
-                        value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
-                            normalize_obs, full_log_prob=full_log_prob
-                        )
+
+                    # perform guided learning with scheduler
+                    if self.guided_learning_prob > random.uniform(0, 1):
+                        action, action_log_prob = self.env.optimal_action(agent_id)
+                        guided_learning[agent_id] = True
+                        value = -1
+
+                    else:
+                        with torch.no_grad():
+                            value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
+                                obs, full_log_prob=full_log_prob
+                            )
 
                     # get action with softmax and multimodal (stochastic)
                     action_dict[agent_id] = int(action)
@@ -85,9 +124,14 @@ class PPO:
                 ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
                 new_observation, rewards, done, infos = self.env.step(action_dict)
 
+                # if guided then use actual reward as predicted value
+                for agent_id, b in guided_learning.items():
+                    if b:
+                        values_dict[agent_id] = rewards[agent_id]
+
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
 
-                #masks = 1 - mas_dict2tensor(done, int)
+                # masks = 1 - mas_dict2tensor(done, int)
                 rewards = mas_dict2tensor(rewards, float)
                 actions = mas_dict2tensor(action_dict, int)
                 values = mas_dict2tensor(values_dict, float)
@@ -120,15 +164,11 @@ class PPO:
                 )
 
             rollout.compute_returns(next_value, True, self.gamma, 0.95)
-            value_loss, action_loss, entropy = self.agent.update(rollout)
+            with torch.enable_grad():
+                value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
             rollout.steps = 0
 
-        return value_loss, action_loss, entropy, rollout
+        return value_loss, action_loss, entropy, rollout, logs
 
     def set_env(self, env):
         self.env = env
-
-    def act(self, obs, agent_id, full_log_prob=True):
-        return self.actor_critic_dict[agent_id].act(
-            obs, deterministic=True, full_log_prob=full_log_prob
-        )

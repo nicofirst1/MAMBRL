@@ -1,24 +1,24 @@
-import torch
 import itertools
-import numpy as np
-
 from typing import Dict, Tuple
-from ray.rllib.utils.images import rgb2gray
 
-from env.scenarios import CollectLandmarkScenario
+import numpy as np
+import torch
+
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
+from .scenarios import CollectLandmarkScenario
+from ..common.utils import rgb2gray, get_distance
 
 
 class CollectLandmarkEnv(SimpleEnv):
     def __init__(
-        self,
-        scenario_kwargs: Dict,
-        horizon,
-        continuous_actions: bool,
-        gray_scale=False,
-        frame_shape=None,
-        visible=False,
+            self,
+            scenario_kwargs: Dict,
+            horizon,
+            continuous_actions: bool,
+            gray_scale=False,
+            frame_shape=None,
+            visible=False,
     ):
         """
         This class has to manage the interaction between the agents in an environment.
@@ -90,14 +90,13 @@ class CollectLandmarkEnv(SimpleEnv):
                 observation = observation.unsqueeze(dim=0)
 
             if self.gray_scale:
-                #fixme: add rgb2gray func
                 observation = rgb2gray(observation)
                 observation = np.expand_dims(observation, axis=0)
 
         return observation
 
     def step(
-        self, actions: Dict[str, int]
+            self, actions: Dict[str, int]
     ) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
         """
         Takes a step in the environment.
@@ -140,6 +139,70 @@ class CollectLandmarkEnv(SimpleEnv):
 
         observation = self.observe()
         return observation, self.rewards, self.dones, {}
+
+    def optimal_action(self, agent):
+        """
+        Perform an optimal action for an agent
+        :param agent:
+        :return:
+            rew : the reward associated with the action
+            action: the optimal action
+            probs : a fake logprob_action
+        """
+
+        agent_id = self.agents.index(agent)
+        agent = self.world.agents[agent_id]
+
+        landmarks = self.world.landmarks
+
+        mind_dist = 9999
+        min_idx = -1
+        for idx, land in enumerate(landmarks):
+            dist = get_distance(agent, land)
+
+            if dist < mind_dist:
+                mind_dist = dist
+                min_idx = idx
+
+        #############################
+        # Estimate optimal action
+        #############################
+        closest_land = landmarks[min_idx]
+
+        agent_pos = agent.state.p_pos
+        land_pos = closest_land.state.p_pos
+
+        relative_pos = agent_pos - land_pos
+        farthest_axis = np.argmax(abs(relative_pos))
+
+        # x axis
+        if farthest_axis == 0:
+            if relative_pos[farthest_axis] > 0:
+                # move right
+                action = 1
+            else:
+                # move left
+                action = 2
+
+        # y axis
+        else:
+            if relative_pos[farthest_axis] > 0:
+                # move up
+                action = 3
+
+            else:
+                # move right
+                action = 4
+
+        #############################
+        # Build fake log probs
+        #############################
+
+        probs = torch.zeros((1, 5))
+        probs[0, action] = 1
+        probs = torch.log_softmax(probs, dim=1)
+
+        return action, probs
 
 
 def get_env(kwargs: Dict) -> CollectLandmarkEnv:

@@ -21,11 +21,12 @@ class Params:
     debug = False
     use_wandb = True
     device = torch.device("cuda")
-    frame_shape = [3, 96, 96]
+    frame_shape = [3, 256, 256]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     param_sharing = False
     visible = False
+    guided_learning_prob=0.95
 
     ### ENV model
     stack_internal_states = False
@@ -44,14 +45,14 @@ class Params:
     target_loss_clipping = 0.03
 
     ### Optimizer
-    lr = 1e-4
+    lr = 1e-2
     eps = 1e-5
     alpha = 0.99
-    max_grad_norm = 5
+    max_grad_norm = 0.5
 
     ### Algo parameters
-    gamma = 0.99
-    ppo_clip_param = 0.1
+    gamma = 0.97
+    ppo_clip_param = 0.2
 
     ### Loss
     value_loss_coef = 0.5
@@ -63,7 +64,7 @@ class Params:
     agents = 1
     landmarks = 1
     step_reward = -1
-    landmark_reward = 50
+    landmark_reward = 1
     epochs = 1000
     minibatch = 32
     episodes = 3
@@ -77,6 +78,8 @@ class Params:
     full_rollout = False
     gray_scale = False
     num_actions = 5
+    normalize_reward=True
+    world_max_size=3
 
     #### EVALUATION ####
     log_step = 500
@@ -95,18 +98,16 @@ class Params:
     action_meanings = {0: "stop", 1: "left", 2: "right", 3: "up", 4: "down"}
 
     def __init__(self):
-        if self.debug:
-            self.device = torch.device("cpu")
-            self.num_workers = 1
-            self.num_gpus = 0
-            torch.autograd.set_detect_anomaly(True)
+
+
+        self.__initialize_dirs()
+        self.__parse_args()
+
+
 
         if self.gray_scale:
             self.frame_shape[0] = 1
-
         self.obs_shape = (self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
-        self.__initialize_dirs()
-        self.__parse_args()
 
     def __initialize_dirs(self):
         """
@@ -183,7 +184,8 @@ class Params:
                 landmark_reward=self.landmark_reward,
                 num_agents=self.agents,
                 num_landmarks=self.landmarks,
-                max_size=3,
+                max_size=self.world_max_size,
+                normalize_rewards=self.normalize_reward
             ),
         )
 

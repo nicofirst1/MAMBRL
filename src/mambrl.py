@@ -1,7 +1,9 @@
 import torch
 from tqdm import trange
 
+from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import Params
+from src.common.schedulers import CurriculumScheduler, GuidedLearningScheduler, LearningRateScheduler, StepScheduler
 
 params = Params()
 
@@ -10,13 +12,9 @@ if not params.visible:
 
     pyglet.options['shadow_window'] = False
 
-from common.utils import print_current_curriculum
-from env.env_wrapper import EnvWrapper
-from model.env_model_trainer import EnvModelTrainer
-from model.policies import MultimodalMAS
-from model.ppo_wrapper import PPO
-from src.env import get_env
-from src.model.env_model import NextFramePredictor
+from model import EnvModelTrainer, MultimodalMAS, PpoWrapper, NextFramePredictor
+
+from src.env import get_env, EnvWrapper
 
 
 class MAMBRL:
@@ -42,50 +40,33 @@ class MAMBRL:
 
         ## fixme: anche qua bisogna capire se ne serve uno o uno per ogni agente
         self.simulated_env = None
-        #self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
+        # self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
 
-        self.agent = PPO(env=self.real_env, config=config)
+        self.ppo_wrapper = PpoWrapper(env=self.real_env, config=config)
 
         if self.config.use_wandb:
             from pytorchCnnVisualizations.src import CamExtractor, ScoreCam
 
-            model = self.agent.actor_critic_dict["agent_0"].base
+            model = self.ppo_wrapper.actor_critic_dict["agent_0"].base
             if config.base == "resnet":
 
-                extractor = CamExtractor(model, target_layer=7)
-                score_cam7 = ScoreCam(model, extractor)
+                cams = []
+                for idx, layer in enumerate(list(model.features)):
+                    extractor = CamExtractor(model, target_layer=idx)
+                    name = type(layer).__name__
+                    score_cam = ScoreCam(model, extractor, name=name)
+                    cams.append(score_cam)
 
-                extractor = CamExtractor(model, target_layer=6)
-                score_cam6 = ScoreCam(model, extractor)
-                extractor = CamExtractor(model, target_layer=5)
-                score_cam5 = ScoreCam(model, extractor)
 
-                extractor = CamExtractor(model, target_layer=4)
-                score_cam4 = ScoreCam(model, extractor)
-                extractor = CamExtractor(model, target_layer=3)
-                score_cam3 = ScoreCam(model, extractor)
-
-                extractor = CamExtractor(model, target_layer=2)
-                score_cam2 = ScoreCam(model, extractor)
-                extractor = CamExtractor(model, target_layer=1)
-                score_cam1 = ScoreCam(model, extractor)
-
-                extractor = CamExtractor(model, target_layer=0)
-                score_cam0 = ScoreCam(model, extractor)
-
-                cams = [score_cam7, score_cam6, score_cam5, score_cam4, score_cam3, score_cam2, score_cam1, score_cam0]
 
             elif config.base == "cnn":
-                extractor = CamExtractor(model, target_layer=0)
-                score_cam0 = ScoreCam(model, extractor)
+                cams = []
+                for idx, layer in enumerate(list(model.modules())):
+                    extractor = CamExtractor(model, target_layer=idx)
+                    name = type(layer).__name__
+                    score_cam = ScoreCam(model, extractor, name=name)
+                    cams.append(score_cam)
 
-                extractor = CamExtractor(model, target_layer=2)
-                score_cam2 = ScoreCam(model, extractor)
-
-                extractor = CamExtractor(model, target_layer=4)
-                score_cam4 = ScoreCam(model, extractor)
-
-                cams = [score_cam0, score_cam2, score_cam4]
 
             else:
                 cams = []
@@ -97,7 +78,7 @@ class MAMBRL:
                 val_log_step=5,
                 project="model_free",
                 opts={},
-                models={},
+                models=self.ppo_wrapper.actor_critic_dict["agent_0"].get_modules(),
                 horizon=params.horizon,
                 mode="disabled" if params.debug else "online",
                 action_meaning=self.real_env.env.action_meaning_dict,
@@ -105,8 +86,8 @@ class MAMBRL:
             )
 
     def collect_trajectories(self):
-        self.agent.set_env(self.real_env)
-        agent = MultimodalMAS(self.agent)
+        self.ppo_wrapper.set_env(self.real_env)
+        agent = MultimodalMAS(self.ppo_wrapper)
 
         ## fixme: qui impostasto sempre con doppio ciclo, ma l'altro codice usa un ciclo solo!
         for _ in trange(self.config.episodes, desc="Collecting trajectories.."):
@@ -126,16 +107,16 @@ class MAMBRL:
                 observation, _, _, _ = self.real_env.step(action_dict)
 
     def train_agent_sim_env(self, epoch):
-        self.agent.set_env(self.simulated_env)
+        self.ppo_wrapper.set_env(self.simulated_env)
 
         for _ in trange(1000, desc="Training agent in simulated environment"):
             self.simulated_env.frames = self.simulated_env.get_initial_frame()
-            losses = self.agent.learn(episodes=self.config.episodes)
+            losses = self.ppo_wrapper.learn(episodes=self.config.episodes)
 
     def train(self):
         for epoch in trange(self.config.epochs, desc="Epoch"):
             self.collect_trajectories()
-            #self.trainer.train(epoch, self.real_env)
+            # self.trainer.train(epoch, self.real_env)
             self.train_agent_sim_env(epoch)
 
     def train_env_model(self):
@@ -144,10 +125,10 @@ class MAMBRL:
             self.trainer.train(step, self.real_env)
 
     def train_model_free(self):
-        self.agent.set_env(self.real_env)
+        self.ppo_wrapper.set_env(self.real_env)
 
         for step in trange(1000, desc="Training model free"):
-            value_loss, action_loss, entropy, rollout = self.agent.learn(
+            value_loss, action_loss, entropy, rollout = self.ppo_wrapper.learn(
                 episodes=self.config.episodes, full_log_prob=True
             )
 
@@ -160,36 +141,23 @@ class MAMBRL:
                 self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
 
     def train_model_free_curriculum(self):
-        self.agent.set_env(self.real_env)
+        self.ppo_wrapper.set_env(self.real_env)
 
-        episodes = 1200
+        episodes = 5000
 
-        curriculum = {
-            400: dict(reward=0, landmark=1),
-            600: dict(reward=1, landmark=0),
-            800: dict(reward=1, landmark=1),
-            1000: dict(reward=1, landmark=2),
-            1200: dict(reward=2, landmark=2),
-        }
+        schedulers = init_schedulers(self, episodes, use_curriculum=False, use_guided_learning=False)
 
         for step in trange(episodes, desc="Training model free"):
-            if step in curriculum.keys():
-                self.real_env.set_curriculum(**curriculum[step])
-                self.real_env.get_curriculum()
-                print_current_curriculum(self.real_env.get_curriculum())
-
-            value_loss, action_loss, entropy, rollout = self.agent.learn(
-                episodes=self.config.episodes, full_log_prob=True, entropy_coef=1/(step+1)
+            out = self.ppo_wrapper.learn(
+                episodes=self.config.episodes, full_log_prob=True,
             )
 
-            if self.config.use_wandb:
-                losses = dict(
-                    value_loss=[value_loss],
-                    action_loss=[action_loss],
-                    entropy=[entropy],
-                )
-                self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
+            for s in schedulers:
+                s.update_step(step)
 
+            if self.config.use_wandb:
+                logs, rollout = preprocess_logs(out, self)
+                self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
 
     def user_game(self):
         moves = {"w": 4, "a": 1, "s": 3, "d": 2}
@@ -222,6 +190,67 @@ class MAMBRL:
                         game_reward = 0
                         self.real_env.reset()
                         break
+
+
+def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_guided_learning: bool = True,
+                    use_learning_rate: bool = True, use_entropy_reg: bool = True):
+    schedulers = []
+
+    if use_curriculum:
+        curriculum = {
+            400: dict(reward=0, landmark=1),
+            600: dict(reward=1, landmark=0),
+            800: dict(reward=1, landmark=1),
+            900: dict(reward=0, landmark=2),
+            1100: dict(reward=1, landmark=2),
+            1300: dict(reward=2, landmark=2),
+        }
+
+        cs = CurriculumScheduler(values_list=list(curriculum.values()), episodes=episodes,
+                                 set_fn=mambrl.real_env.set_curriculum,
+                                 step_list=list(curriculum.keys()),
+                                 get_curriculum_fn=mambrl.real_env.get_curriculum)
+        schedulers.append(cs)
+
+    if use_guided_learning:
+        guided_learning = {
+            100: 0.8,
+            200: 0.7,
+            400: 0.6,
+            600: 0.4,
+            800: 0.2,
+            900: 0.0,
+            1200: 0.4,
+            1400: 0.2,
+            1600: 0.1,
+            1700: 0.0,
+        }
+
+        gls = GuidedLearningScheduler(values_list=list(guided_learning.values()), episodes=episodes,
+                                      step_list=list(guided_learning.keys()),
+                                      set_fn=mambrl.ppo_wrapper.set_guided_learning_prob)
+        schedulers.append(gls)
+
+    if use_learning_rate:
+        kwargs = dict(gamma=0.999)
+        lrs = LearningRateScheduler(base_scheduler=ExponentialLR,
+                                    optimizer_dict=mambrl.ppo_wrapper.ppo_agent.optimizers,
+                                    scheduler_kwargs=kwargs)
+        schedulers.append(lrs)
+
+    if use_entropy_reg:
+        entropy = list(range(5000, 0, -2))
+        entropy = [1 / (10*x) for x in entropy]
+        entropy = list(reversed(entropy))
+
+        es = StepScheduler(
+            values_list=entropy, episodes=episodes,
+            set_fn=mambrl.ppo_wrapper.set_entropy_coeff
+        )
+
+        schedulers.append(es)
+
+    return schedulers
 
 
 if __name__ == "__main__":

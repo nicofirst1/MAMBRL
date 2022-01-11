@@ -5,7 +5,7 @@ from PettingZoo.pettingzoo.mpe._mpe_utils.core import Entity
 
 
 def colorFader(
-    c1, c2, mix=0
+        c1, c2, mix=0
 ):  # fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
     return mpl.colors.to_rgb(mpl.colors.to_hex((1 - mix) * c1 + mix * c2))
 
@@ -27,7 +27,7 @@ class TimerLandmark(Entity):
         self.np_random = np_random
 
     def get_random_pos(self, world):
-        eps = 0.5
+        eps = 0.8
 
         return self.np_random.uniform(
             -world.max_size + eps, world.max_size - eps, world.dim_p
@@ -36,7 +36,7 @@ class TimerLandmark(Entity):
     def get_random_size(self):
         eps = 0.5
 
-        return self.np_random.uniform(1 + eps, 1 - eps, 1)
+        return self.np_random.uniform(1, 1 - eps, 1)
 
     def reset(self, world, size=None, position=None):
         self.color = np.array([0, 1.0, 0])

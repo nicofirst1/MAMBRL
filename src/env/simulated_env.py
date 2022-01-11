@@ -1,6 +1,6 @@
 import torch
 
-from model.utils import mas_dict2tensor
+from src.common import mas_dict2tensor
 
 
 ## fixme: questa classe è da sistemare

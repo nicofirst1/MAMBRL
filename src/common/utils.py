@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 
 def print_current_curriculum(curriculum):
@@ -26,3 +27,59 @@ def rgb2gray(image: np.ndarray):
 
     grayscale_image = np.dot(image[..., :3], rgb_weights)
     return grayscale_image
+
+
+def one_hot_encode(action, n, dtype=torch.uint8):
+    if not isinstance(action, torch.Tensor):
+        action = torch.tensor(action)
+
+    res = action.long().view((-1, 1))
+    res = (
+        torch.zeros((len(res), n))
+            .to(res.device)
+            .scatter(1, res, 1)
+            .type(dtype)
+            .to(res.device)
+    )
+    res = res.view((*action.shape, n))
+
+    return res
+
+
+def mas_dict2tensor(agent_dict, type=None) -> torch.Tensor:
+    """
+    sort agent dict and convert to tensor of type
+
+    Params
+    ------
+        agent_dict:
+        type:
+    """
+
+    tensor = sorted(agent_dict.items())
+    if type is not None:
+        tensor = [type(elem[1]) for elem in tensor]
+    else:
+        tensor = [elem[1] for elem in tensor]
+
+    return torch.as_tensor(tensor)
+
+
+def init(module, weight_init, bias_init, gain=1):
+    weight_init(module.weight.data, gain=gain)
+    bias_init(module.bias.data)
+    return module
+
+
+def is_collision(entity1, entity2):
+    delta_pos = entity1.state.p_pos - entity2.state.p_pos
+    dist = np.sqrt(np.sum(np.square(delta_pos)))
+    dist_min = entity1.size + entity2.size
+    return True if dist < dist_min else False
+
+
+def get_distance(entity1, entity2):
+    delta_pos = entity1.state.p_pos - entity2.state.p_pos
+    dist = np.sqrt(np.sum(np.square(delta_pos)))
+
+    return dist
