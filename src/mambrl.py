@@ -4,7 +4,7 @@ from tqdm import trange
 
 from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import Params
-from src.common.schedulers import CurriculumScheduler, GuidedLearningScheduler, LearningRateScheduler
+from src.common.schedulers import CurriculumScheduler, GuidedLearningScheduler, LearningRateScheduler, StepScheduler
 
 params = Params()
 
@@ -144,7 +144,7 @@ class MAMBRL:
     def train_model_free_curriculum(self):
         self.ppo_wrapper.set_env(self.real_env)
 
-        episodes = 300000
+        episodes = 5000
 
         schedulers = init_schedulers(self, episodes, use_curriculum=False, use_guided_learning=False)
 
@@ -194,7 +194,7 @@ class MAMBRL:
 
 
 def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_guided_learning: bool = True,
-                    use_learning_rate: bool = True):
+                    use_learning_rate: bool = True, use_entropy_reg: bool = True):
     schedulers = []
 
     if use_curriculum:
@@ -233,11 +233,23 @@ def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_g
         schedulers.append(gls)
 
     if use_learning_rate:
-        kwargs = dict(gamma=0.99)
+        kwargs = dict(gamma=0.999)
         lrs = LearningRateScheduler(base_scheduler=ExponentialLR,
                                     optimizer_dict=mambrl.ppo_wrapper.ppo_agent.optimizers,
                                     scheduler_kwargs=kwargs)
         schedulers.append(lrs)
+
+    if use_entropy_reg:
+        entropy = list(range(5000, 0, -2))
+        entropy = [1 / (10*x) for x in entropy]
+        entropy = list(reversed(entropy))
+
+        es = StepScheduler(
+            values_list=entropy, episodes=episodes,
+            set_fn=mambrl.ppo_wrapper.set_entropy_coeff
+        )
+
+        schedulers.append(es)
 
     return schedulers
 

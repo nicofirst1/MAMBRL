@@ -60,6 +60,9 @@ class PpoWrapper:
     def set_guided_learning_prob(self, value):
         self.guided_learning_prob = value
 
+    def set_entropy_coeff(self, value):
+        self.ppo_agent.entropy_coef = value
+
     def learn(self, episodes, full_log_prob=False, ):
 
         rollout = RolloutStorage(

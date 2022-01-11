@@ -208,11 +208,12 @@ def preprocess_logs(learn_output, mamrbl):
         "loss/value_loss": value_loss,
         "loss/action_loss": action_loss,
         "loss/entropy_loss": entropy,
-        "loss/total": value_loss + action_loss + entropy,
+        "loss/total": value_loss + action_loss - entropy,
         "curriculum/guided_learning": mamrbl.ppo_wrapper.guided_learning_prob,
         "curriculum/reward": mamrbl.real_env.get_curriculum()[0][0],
         "curriculum/landmark": mamrbl.real_env.get_curriculum()[1][0],
         "curriculum/lr": mamrbl.ppo_wrapper.get_learning_rate(),
+        "curriculum/entropy_coef": mamrbl.ppo_wrapper.ppo_agent.entropy_coef,
     }
 
     logs.update(general_logs)

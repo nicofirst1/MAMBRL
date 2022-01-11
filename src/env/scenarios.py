@@ -240,6 +240,8 @@ class CollectLandmarkScenario(BaseScenario):
             upper_bound += 1
 
             if self.normalize_rewards:
+                if rew<0:
+                    print(rew)
                 rew = min_max_norm(rew, 0, world.max_size * 2)
 
         elif self.reward_curriculum["current"] == 1:
@@ -261,7 +263,8 @@ class CollectLandmarkScenario(BaseScenario):
         if self.normalize_rewards:
             rew = min_max_norm(rew, lower_bound, upper_bound)
 
-            assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
+            #fixme
+            #assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
 
         return rew
 
