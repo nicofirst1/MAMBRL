@@ -37,7 +37,7 @@ class PPO:
 
     def update(self, rollout, logs):
         advantages = rollout.returns[:-1] - rollout.values[:-1]
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
 
         value_losses = torch.zeros(len(self.actor_critic_dict))
         action_losses = torch.zeros(len(self.actor_critic_dict))
@@ -61,18 +61,21 @@ class PPO:
                 agent_actions = actions_batch[:, agent_index]
                 agent_values = values_batch[:, agent_index]
                 agent_returns = return_batch[:, agent_index]
-                agent_action_log_probs = old_action_logs_probs_batch[:, agent_index, :]
+                old_log_probs = old_action_logs_probs_batch[:, agent_index, :]
                 agent_adv_targ = adv_targ[:, agent_index]
 
-                values, actions_log_probs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(states_batch,
+                values, curr_log_porbs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(states_batch,
                                                                                                        agent_actions)
 
-                ratio = torch.exp(actions_log_probs - agent_action_log_probs)
+                ratio = torch.exp(curr_log_porbs - old_log_probs)
                 surr1 = ratio * agent_adv_targ
                 surr2 = (
                         torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param)
                         * agent_adv_targ
                 )
+
+                logs[agent_id]["curr_log_porbs"].append(log_fn(curr_log_porbs))
+                logs[agent_id]["old_log_probs"].append(log_fn(old_log_probs))
 
                 action_loss = torch.min(surr1, surr2)
 

@@ -29,16 +29,3 @@ class FixedCategorical:
 
         return action_log_probs
 
-
-class Categorical(nn.Module):
-    def __init__(self, num_inputs, num_outputs):
-        super(Categorical, self).__init__()
-
-        init_ = lambda m: init(
-            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
-        )
-
-        self.linear = init_(nn.Linear(num_inputs, num_outputs))
-
-    def forward(self, x):
-        return self.linear(x)

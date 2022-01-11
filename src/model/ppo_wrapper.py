@@ -70,6 +70,9 @@ class PpoWrapper:
             adv_targ=[],
             perc_surr1=[],
             perc_surr2=[],
+            curr_log_porbs=[],
+            old_log_probs=[]
+
         ) for ag in self.actor_critic_dict.keys()}
 
 
@@ -162,7 +165,3 @@ class PpoWrapper:
     def set_env(self, env):
         self.env = env
 
-    def act(self, obs, agent_id, full_log_prob=False):
-        return self.actor_critic_dict[agent_id].act(
-            obs, deterministic=True, full_log_prob=True
-        )
