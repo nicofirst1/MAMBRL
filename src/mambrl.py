@@ -1,9 +1,12 @@
 import torch
+from torch.optim.lr_scheduler import ExponentialLR
 from tqdm import trange
 
 from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import Params
 from src.common.schedulers import CurriculumScheduler, GuidedLearningScheduler, LearningRateScheduler, StepScheduler
+from model import EnvModelTrainer, MultimodalMAS, PpoWrapper, NextFramePredictor
+from src.env import get_env, EnvWrapper
 
 params = Params()
 
@@ -11,10 +14,6 @@ if not params.visible:
     import pyglet
 
     pyglet.options['shadow_window'] = False
-
-from model import EnvModelTrainer, MultimodalMAS, PpoWrapper, NextFramePredictor
-
-from src.env import get_env, EnvWrapper
 
 
 class MAMBRL:
@@ -33,10 +32,12 @@ class MAMBRL:
         self.action_space = self.real_env.action_space
 
         ## fixme: per ora c'è solo un env_model, bisogna capire come gestire il multi agent
-        self.env_model = NextFramePredictor(config)
-        self.env_model = self.env_model.to(self.config.device)
+        self.env_model = None
+        #self.env_model = NextFramePredictor(config)
+        #self.env_model = self.env_model.to(self.config.device)
 
-        self.trainer = EnvModelTrainer(self.env_model, config)
+        self.trainer = None
+        #self.trainer = EnvModelTrainer(self.env_model, config)
 
         ## fixme: anche qua bisogna capire se ne serve uno o uno per ogni agente
         self.simulated_env = None
@@ -54,20 +55,15 @@ class MAMBRL:
                 for idx, layer in enumerate(list(model.features)):
                     extractor = CamExtractor(model, target_layer=idx)
                     name = type(layer).__name__
-                    score_cam = ScoreCam(model, extractor, name=name)
+                    score_cam = ScoreCam(model, extractor)
                     cams.append(score_cam)
-
-
-
             elif config.base == "cnn":
                 cams = []
                 for idx, layer in enumerate(list(model.modules())):
                     extractor = CamExtractor(model, target_layer=idx)
                     name = type(layer).__name__
-                    score_cam = ScoreCam(model, extractor, name=name)
+                    score_cam = ScoreCam(model, extractor)
                     cams.append(score_cam)
-
-
             else:
                 cams = []
 
@@ -129,7 +125,7 @@ class MAMBRL:
 
         for step in trange(1000, desc="Training model free"):
             value_loss, action_loss, entropy, rollout = self.ppo_wrapper.learn(
-                episodes=self.config.episodes, full_log_prob=True
+                episodes=self.config.episodes
             )
 
             if self.config.use_wandb:
@@ -145,11 +141,13 @@ class MAMBRL:
 
         episodes = 5000
 
-        schedulers = init_schedulers(self, episodes, use_curriculum=False, use_guided_learning=False)
+        schedulers = init_schedulers(self, episodes,
+            use_curriculum=False, use_guided_learning=False, use_learning_rate=False, use_entropy_reg=False
+        )
 
         for step in trange(episodes, desc="Training model free"):
             out = self.ppo_wrapper.learn(
-                episodes=self.config.episodes, full_log_prob=True,
+                episodes=self.config.episodes,
             )
 
             for s in schedulers:

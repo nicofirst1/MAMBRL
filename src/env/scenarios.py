@@ -209,62 +209,36 @@ class CollectLandmarkScenario(BaseScenario):
         return [agent for agent in world.agents]
 
     def reward(self, agent, world):
-
         def dist_reward():
             min_dist = 99999
             for landmark in world.landmarks:
                 dist = get_distance(agent, landmark)
                 min_dist = min(min_dist, dist)
 
-            rew = world.max_size * 2 - min_dist
+            return world.max_size * 2 - min_dist
 
-            return rew
-
-        def collision_reward():
-            rew = 0
-            has_collided = False
-            for landmark in world.landmarks:
-                if not has_collided and is_collision(agent, landmark):
-                    # positive reward, and add collision
-                    rew += self.landmark_reward
-                    self.visited_landmarks.append(landmark.name)
-                    has_collided = True
-
-            return rew
-
-        rew = 0
-        upper_bound = self.landmark_reward
         lower_bound = 0
+        upper_bound = self.landmark_reward
+
         if self.reward_curriculum["current"] == 0:
             rew = dist_reward()
-            upper_bound += 1
-
-            if self.normalize_rewards:
-                if rew<0:
-                    print(rew)
-                rew = min_max_norm(rew, 0, world.max_size * 2)
-
-        elif self.reward_curriculum["current"] == 1:
-            pass
-
         elif self.reward_curriculum["current"] == 2:
-
             rew = self.step_reward
             lower_bound = self.step_reward
-
-
-
         else:
             raise ValueError(
                 f"Value '{self.reward_curriculum['current']}' has not been implemented for reward mode"
             )
 
-        rew += collision_reward()
+        for landmark in world.landmarks:
+            if is_collision(agent, landmark):
+                # positive reward, and add collision
+                rew = self.landmark_reward
+                self.visited_landmarks.append(landmark.name)
+                break
+
         if self.normalize_rewards:
             rew = min_max_norm(rew, lower_bound, upper_bound)
-
-            #fixme
-            #assert 0 <= rew <= 1, f"Reward is not normalized, '{rew}' not in [0,1]"
 
         return rew
 

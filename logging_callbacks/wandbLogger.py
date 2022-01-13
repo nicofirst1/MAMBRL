@@ -119,11 +119,13 @@ class PPOWandb(WandbLogger):
         if batch_id % self.log_behavior_step == 0:
             done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
 
-            if len(done_idx) > 1:
-                done_idx = done_idx[0]
+            if len(done_idx) == 0:
+                done_idx = rollout.rewards.size(0)
+            elif len(done_idx) > 1:
+                done_idx = done_idx[1] if done_idx[0] == 0 else done_idx[1]
 
             states = (
-                rollout.states[:done_idx][:, -3:, :, :].cpu().numpy().astype(np.uint8)
+                rollout.states[:done_idx].squeeze(dim=1)[:, -3:, :, :].cpu().numpy().astype(np.uint8)
             )
 
             actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
@@ -137,24 +139,24 @@ class PPOWandb(WandbLogger):
             logs["mean_reward"] = rewards.mean()
             logs["episode_lenght"] = done_idx
 
-        if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
-
-            # map heatmap on image
-            idx = random.choice(range(done_idx))
-            img = rollout.states[idx]
-            reprs = []
-            for c in self.cams:
-                cam = c.generate_cam(img.clone().unsqueeze(dim=0))
-                reprs.append((c.name, cam))
-            img = img[-3:]
-            img = np.uint8(img.cpu().data.numpy())
-            img = img.transpose(2, 1, 0)
-            img = Image.fromarray(img).convert("RGB")
-
-            for name, rep in reprs:
-                heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
-
-                logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
+        # if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
+        #
+        #     # map heatmap on image
+        #     idx = random.choice(range(done_idx))
+        #     img = rollout.states[idx]
+        #     reprs = []
+        #     for c in self.cams:
+        #         cam = c.generate_cam(img.clone().unsqueeze(dim=0))
+        #         reprs.append((c.name, cam))
+        #     img = img[-3:]
+        #     img = np.uint8(img.cpu().data.numpy())
+        #     img = img.transpose(2, 1, 0)
+        #     img = Image.fromarray(img).convert("RGB")
+        #
+        #     for name, rep in reprs:
+        #         heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
+        #
+        #         logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
 
                 # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
@@ -182,7 +184,7 @@ def write_rewards(states, rewards):
     for idx in range(rewards.size):
         rew = rewards[idx]
         draw = draws[idx]
-        draw.rectangle(((0, 00), (160, 10)), fill="black")
+        draw.rectangle(((0, 0), (160, 10)), fill="black")
         draw.text((0, 0), f"Rew {rew}", font=font, fill=(255, 255, 255))
 
     states = [np.asarray(state) for state in states]

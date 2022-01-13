@@ -1,3 +1,4 @@
+import math
 import random
 
 import torch
@@ -32,7 +33,12 @@ class PpoWrapper:
             base = None
 
         self.actor_critic_dict = {
-            agent_id: Policy(self.obs_shape, self.action_space, base=base).to(self.device) for agent_id in self.env.agents
+            agent_id: Policy(
+                self.obs_shape,
+                self.action_space,
+                base=base,
+                base_kwargs={'recurrent': config.recurrent}
+            ).to(self.device) for agent_id in self.env.agents
         }
 
         self.ppo_agent = PPO(
@@ -48,7 +54,6 @@ class PpoWrapper:
         )
 
     def get_learning_rate(self):
-
         lrs = []
         for k, optim in self.ppo_agent.optimizers.items():
             param_group = optim.param_groups[0]
@@ -62,13 +67,14 @@ class PpoWrapper:
     def set_entropy_coeff(self, value):
         self.ppo_agent.entropy_coef = value
 
-    def learn(self, episodes, full_log_prob=False, ):
+    def learn(self, episodes):
+        [model.train() for model in self.actor_critic_dict.values()]
 
         rollout = RolloutStorage(
             num_steps=self.num_steps,
             obs_shape=self.obs_shape,
-            num_actions=self.action_space,
-            num_agents=self.num_agents
+            num_agents=self.num_agents,
+            recurrent_hs_size=self.actor_critic_dict["agent_0"].recurrent_hidden_state_size
         )
         rollout.to(self.device)
 
@@ -82,7 +88,6 @@ class PpoWrapper:
             perc_surr2=[],
             curr_log_porbs=[],
             old_log_probs=[]
-
         ) for ag in self.actor_critic_dict.keys()}
 
         for episode in range(episodes):
@@ -90,6 +95,7 @@ class PpoWrapper:
             action_dict = {agent_id: False for agent_id in self.env.agents}
             values_dict = {agent_id: False for agent_id in self.env.agents}
             action_log_dict = {agent_id: False for agent_id in self.env.agents}
+            recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
 
             observation = self.env.reset()
             rollout.states[0] = observation.unsqueeze(dim=0)
@@ -99,26 +105,24 @@ class PpoWrapper:
                 guided_learning = {agent_id: False for agent_id in self.env.agents}
 
                 for agent_id in self.env.agents:
+                    agent_index = int(agent_id[-1])
 
                     # perform guided learning with scheduler
                     if self.guided_learning_prob > random.uniform(0, 1):
                         action, action_log_prob = self.env.optimal_action(agent_id)
                         guided_learning[agent_id] = True
                         value = -1
-
                     else:
                         with torch.no_grad():
-                            value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
-                                obs, full_log_prob=full_log_prob
+                            value, action, action_log_prob, recurrent_hs = self.actor_critic_dict[agent_id].act(
+                                obs, rollout.recurrent_hs[step, agent_index], rollout.masks[step]
                             )
 
                     # get action with softmax and multimodal (stochastic)
                     action_dict[agent_id] = int(action)
                     values_dict[agent_id] = float(value)
-                    if not full_log_prob:
-                        action_log_dict[agent_id] = float(action_log_prob)
-                    else:
-                        action_log_dict[agent_id] = action_log_prob[0]
+                    action_log_dict[agent_id] = float(action_log_prob)
+                    recurrent_hs_dict[agent_id] = recurrent_hs[0]
 
                 # Obser reward and next obs
                 ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
@@ -130,43 +134,39 @@ class PpoWrapper:
                         values_dict[agent_id] = rewards[agent_id]
 
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
-
-                # masks = 1 - mas_dict2tensor(done, int)
                 rewards = mas_dict2tensor(rewards, float)
                 actions = mas_dict2tensor(action_dict, int)
                 values = mas_dict2tensor(values_dict, float)
-                action_log_probs = mas_dict2tensor(
-                    action_log_dict, float if not full_log_prob else list
-                )
-
-                rollout.insert(
-                    step=step,
-                    state=observation,
-                    action=actions,
-                    values=values,
-                    reward=rewards,
-                    mask=masks,
-                    action_log_probs=action_log_probs,
-                )
+                recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
+                action_log_probs = mas_dict2tensor(action_log_dict, float)
 
                 # update observation
                 observation = new_observation
+
+                rollout.insert(
+                    state=observation,
+                    recurrent_hs=recurrent_hs,
+                    action=actions,
+                    action_log_probs=action_log_probs,
+                    value_preds=values,
+                    reward=rewards,
+                    mask=masks
+                )
 
                 if done["__all__"]:
                     break
 
             ## fixme: qui bisogna capire il get_value a cosa serve e come farlo per multi agent
             with torch.no_grad():
-                next_value = (
-                    self.actor_critic_dict["agent_0"]
-                        .get_value(rollout.states[-1].unsqueeze(0))
-                        .detach()
-                )
+                next_value = self.actor_critic_dict["agent_0"].get_value(
+                        rollout.states[rollout.step], rollout.recurrent_hs[rollout.step, 0],
+                        rollout.masks[rollout.step]).detach()
 
             rollout.compute_returns(next_value, True, self.gamma, 0.95)
-            with torch.enable_grad():
-                value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
-            rollout.steps = 0
+
+            #with torch.enable_grad():
+            value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
+            rollout.after_update()
 
         return value_loss, action_loss, entropy, rollout, logs
 

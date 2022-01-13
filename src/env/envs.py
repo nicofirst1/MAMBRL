@@ -116,10 +116,10 @@ class CollectLandmarkEnv(SimpleEnv):
             self.agent_selection = agent_id
             super(CollectLandmarkEnv, self).step(action)
 
-        self.steps += 1
+        #self.steps += 1
         self.dones["__all__"] = False
-        if self.steps >= self.max_cycles:
-            self.dones["__all__"] = True
+        #if self.steps >= self.max_cycles:
+        #    self.dones["__all__"] = True
 
         # update landmarks status
         visited_landmarks = set(itertools.chain(self.scenario.visited_landmarks))

@@ -43,8 +43,6 @@ class PPO:
         action_losses = torch.zeros(len(self.actor_critic_dict))
         entropies = torch.zeros(len(self.actor_critic_dict))
 
-
-
         log_fn=lambda tensor: float(tensor.mean())
 
         data_generator = rollout.recurrent_generator(
@@ -52,22 +50,24 @@ class PPO:
         )
 
         for sample in data_generator:
-            states_batch, actions_batch, values_batch, return_batch, \
-            masks_batch, old_action_logs_probs_batch, adv_targ, _, = sample
+            states_batch, recurrent_hs_batch, actions_batch, old_logs_probs_batch, \
+            values_batch, return_batch, masks_batch, adv_targ = sample
 
             for agent_id in self.actor_critic_dict.keys():
                 agent_index = int(agent_id[-1])  ## fixme: per il momento fatto così per l'indice
 
+                agent_recurrent_hs = recurrent_hs_batch[:, agent_index]
+                agent_log_probs = old_logs_probs_batch[:, agent_index, :]
                 agent_actions = actions_batch[:, agent_index]
                 agent_values = values_batch[:, agent_index]
                 agent_returns = return_batch[:, agent_index]
-                old_log_probs = old_action_logs_probs_batch[:, agent_index, :]
                 agent_adv_targ = adv_targ[:, agent_index]
 
-                values, curr_log_porbs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(states_batch,
-                                                                                                       agent_actions)
+                values, curr_log_porbs, entropy, _ = self.actor_critic_dict[agent_id].evaluate_actions(
+                    states_batch, agent_recurrent_hs, masks_batch, agent_actions
+                )
 
-                ratio = torch.exp(curr_log_porbs - old_log_probs)
+                ratio = torch.exp(curr_log_porbs - agent_log_probs)
                 surr1 = ratio * agent_adv_targ
                 surr2 = (
                         torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param)
@@ -75,7 +75,7 @@ class PPO:
                 )
 
                 logs[agent_id]["curr_log_porbs"].append(log_fn(curr_log_porbs))
-                logs[agent_id]["old_log_probs"].append(log_fn(old_log_probs))
+                logs[agent_id]["old_log_probs"].append(log_fn(agent_log_probs))
 
                 action_loss = torch.min(surr1, surr2)
 
@@ -122,8 +122,7 @@ class PPO:
                 action_losses[agent_index] += action_loss.item()
                 entropies[agent_index] += entropy.item()
 
-
-        num_updates = max(rollout.steps / self.num_minibatch, 1)
+        num_updates = max(rollout.step / self.num_minibatch, 1)
 
         value_losses /= num_updates
         action_losses /= num_updates
