@@ -3,7 +3,9 @@ import inspect
 import multiprocessing
 import os
 import uuid
+
 import torch
+
 
 class Params:
     unique_id = str(uuid.uuid1())[:8]
@@ -25,8 +27,10 @@ class Params:
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     param_sharing = False
-    visible = False
-    guided_learning_prob=0.
+    guided_learning_prob = 0.0
+    epochs = 1000
+    minibatch = 25
+    batch_size = 3
 
     ### ENV model
     stack_internal_states = False
@@ -43,6 +47,9 @@ class Params:
     latent_use_max_probability = 0.8
     residual_dropout = 0.5
     target_loss_clipping = 0.03
+    scheduled_sampling_decay_steps=0.99
+    input_noise=0.1
+    use_stochastic_model=True
 
     ### Optimizer
     lr = 2.5e-4
@@ -69,18 +76,18 @@ class Params:
     epochs = 1000
     minibatch = 32
     episodes = 3
-    horizon = 128
+    horizon = 50
     env_name = "collab_nav"
     obs_type = "image"  # or "states"
     num_frames = 4
     rollout_len = 1
-    batch_size = 3
     num_steps = horizon // num_frames
     full_rollout = False
     gray_scale = False
     num_actions = 5
-    normalize_reward=True
-    world_max_size=3
+    normalize_reward = True
+    world_max_size = 3
+    visible = False
 
     #### EVALUATION ####
     log_step = 500
@@ -184,6 +191,18 @@ class Params:
                 num_landmarks=self.landmarks,
                 max_size=self.world_max_size,
                 normalize_rewards=self.normalize_reward
+            ),
+        )
+
+        return env_config
+
+    def get_policy_configs(self):
+        env_config = dict(
+            base=self.base,
+            hidden_size=self.base_hidden_size,
+            base_kwargs=dict(
+                recurrent=self.recurrent_base,
+                hidden_size=self.base_hidden_size
             ),
         )
 

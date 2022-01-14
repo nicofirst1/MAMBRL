@@ -108,6 +108,8 @@ class RolloutStorage(object):
             masks_minibatch = torch.cat(masks_minibatch, dim=0)
             log_probs_minibatch = torch.cat(log_probs_minibatch, dim=0)
             adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
+            recurrent_hidden_states_minibatch = torch.stack(
+                recurrent_hidden_states_minibatch, 0)
 
             yield states_minibatch, recurrent_hs_minibatch, actions_minibatch, log_probs_minibatch, \
                   value_preds_minibatch, return_minibatch, masks_minibatch, adv_targ_minibatch

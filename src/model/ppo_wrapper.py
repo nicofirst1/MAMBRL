@@ -3,14 +3,14 @@ import random
 
 import torch
 
-from src.common import mas_dict2tensor
-from .model_free import Policy, ResNetBase, CNNBase
+from src.common import mas_dict2tensor, Params
+from .model_free import Policy
 from .ppo import PPO
 from .rollout_storage import RolloutStorage
 
 
 class PpoWrapper:
-    def __init__(self, env, config):
+    def __init__(self, env, config: Params):
 
         self.env = env
         self.obs_shape = env.obs_shape
@@ -25,12 +25,8 @@ class PpoWrapper:
 
         self.guided_learning_prob = config.guided_learning_prob
 
-        if config.base == "resnet":
-            base = ResNetBase
-        elif config.base == "cnn":
-            base = CNNBase
-        else:
-            base = None
+        policy_configs = config.get_policy_configs()
+        self.base_hidden_size = config.base_hidden_size
 
         self.actor_critic_dict = {
             agent_id: Policy(

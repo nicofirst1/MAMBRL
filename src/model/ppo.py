@@ -35,6 +35,14 @@ class PPO:
             for agent_id in self.actor_critic_dict.keys()
         }
 
+    def train(self):
+        for model in self.actor_critic_dict.values():
+            model.train()
+
+    def eval(self):
+        for model in self.actor_critic_dict.values():
+            model.eval()
+
     def update(self, rollout, logs):
         advantages = rollout.returns[:-1] - rollout.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
@@ -62,6 +70,8 @@ class PPO:
                 agent_values = values_batch[:, agent_index]
                 agent_returns = return_batch[:, agent_index]
                 agent_adv_targ = adv_targ[:, agent_index]
+                agent_recurrent = recurrent_hidden_states[:, agent_index]
+                agent_maks = masks_batch[:, agent_index]
 
                 values, curr_log_porbs, entropy, _ = self.actor_critic_dict[agent_id].evaluate_actions(
                     states_batch, agent_recurrent_hs, masks_batch, agent_actions
