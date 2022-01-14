@@ -3,6 +3,7 @@ import os
 import torch
 import torch.nn as nn
 from torch import optim
+from torch.cuda import empty_cache
 from torch.nn.utils import clip_grad_norm_
 from tqdm import trange
 
@@ -84,7 +85,7 @@ class EnvModelTrainer:
             return state
 
         self.model.train()
-        reward_criterion = nn.CrossEntropyLoss()
+        reward_criterion = nn.MSELoss()
 
         iterator = trange(
             0, steps, rollout_len, desc="Training world model", unit_scale=rollout_len
@@ -154,7 +155,7 @@ class EnvModelTrainer:
                         frames[k] = torch.cat((frames[k, c:], frame), dim=0)
 
                 loss_reconstruct = nn.CrossEntropyLoss(reduction="none")(
-                    frames_pred, new_states
+                    frames_pred, new_states.long()
                 )
                 clip = torch.tensor(self.config.target_loss_clipping).to(
                     self.config.device
@@ -201,6 +202,7 @@ class EnvModelTrainer:
 
             if self.logger is not None:
                 self.logger.on_batch_end(metrics, 0, j)
-
-            if self.config.save_models:
-                torch.save(self.model.state_dict(), os.path.join("models", "model.pt"))
+                
+        empty_cache()
+        if self.config.save_models:
+            torch.save(self.model.state_dict(), os.path.join("models", "model.pt"))

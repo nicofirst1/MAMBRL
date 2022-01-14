@@ -23,20 +23,20 @@ class Params:
     debug = False
     use_wandb = True
     device = torch.device("cuda")
-    frame_shape = [3, 128, 128]
+    frame_shape = [3, 127, 128]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     param_sharing = False
     guided_learning_prob = 0.0
     epochs = 1000
     minibatch = 25
-    batch_size = 3
+    batch_size = 4
 
     ### ENV model
-    stack_internal_states = False
+    stack_internal_states = True
     recurrent_state_size = 64
     hidden_size = 96
-    compress_steps = 2
+    compress_steps = 5
     filter_double_steps = 3
     hidden_layers = 2
     bottleneck_bits = 128
@@ -47,9 +47,10 @@ class Params:
     latent_use_max_probability = 0.8
     residual_dropout = 0.5
     target_loss_clipping = 0.03
-    scheduled_sampling_decay_steps=0.99
-    input_noise=0.1
+    scheduled_sampling_decay_steps=22250
+    input_noise=0.05
     use_stochastic_model=True
+    clip_grad_norm=1.0
 
     ### Optimizer
     lr = 2.5e-4

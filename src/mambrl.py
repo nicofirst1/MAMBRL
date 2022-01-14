@@ -8,6 +8,7 @@ from src.common import Params
 from src.common.schedulers import CurriculumScheduler, LearningRateScheduler, StepScheduler, \
     linear_decay, exponential_decay
 from src.env import get_env, EnvWrapper
+from src.model import EnvModelTrainer, NextFramePredictor
 from src.model.policies import RandomAction
 
 params = Params()
@@ -34,12 +35,10 @@ class MAMBRL:
         self.action_space = self.real_env.action_space
 
         ## fixme: per ora c'è solo un env_model, bisogna capire come gestire il multi agent
-        self.env_model = None
-        # self.env_model = NextFramePredictor(config)
-        # self.env_model = self.env_model.to(self.config.device)
+        self.env_model = NextFramePredictor(config)
+        self.env_model = self.env_model.to(self.config.device)
 
-        self.trainer = None
-        # self.trainer = EnvModelTrainer(self.env_model, config)
+        self.trainer = EnvModelTrainer(self.env_model, config)
 
         ## fixme: anche qua bisogna capire se ne serve uno o uno per ogni agente
         self.simulated_env = None
@@ -252,4 +251,4 @@ def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_g
 if __name__ == "__main__":
     params = Params()
     mambrl = MAMBRL(params)
-    mambrl.train_model_free()
+    mambrl.train_env_model()

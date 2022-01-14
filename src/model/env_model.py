@@ -23,7 +23,7 @@ class RewardEstimator(nn.Module):
         self.config = config
 
         self.dense1 = nn.Linear(input_size, 128)
-        self.dense2 = nn.Linear(128, 3)
+        self.dense2 = nn.Linear(128, 1)
 
     def forward(self, x):
         x = self.dense1(x)
@@ -326,7 +326,7 @@ class NextFramePredictor(Container):
         self.action_injectors = nn.ModuleList(self.action_injectors)
 
         self.logits = nn.Conv2d(
-            self.config.hidden_size, 256 * self.config.obs_shape[0], 1
+            self.config.hidden_size, 256 * self.config.frame_shape[0], 1
         )
 
         # Sub-models
@@ -415,6 +415,6 @@ class NextFramePredictor(Container):
         reward_pred = self.reward_estimator(torch.cat((x_mid, x_fin), dim=1))
 
         x = self.logits(x)
-        x = x.view((-1, 256, *self.config.obs_shape))
+        x = x.view((-1, 256, *self.config.frame_shape))
 
         return x, reward_pred, value_pred

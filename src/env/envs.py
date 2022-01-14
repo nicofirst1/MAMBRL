@@ -85,7 +85,7 @@ class CollectLandmarkEnv(SimpleEnv):
 
             # move channel on second dimension if present, else add 1
             if len(observation.shape) == 3:
-                observation = observation.permute(2, 0, 1)
+                observation = observation.permute(2, 1, 0)
             else:
                 observation = observation.unsqueeze(dim=0)
 
@@ -138,7 +138,8 @@ class CollectLandmarkEnv(SimpleEnv):
             self.dones["__all__"] = True
 
         if self.dones["__all__"]:
-          self.dones={k:True for k in self.dones.keys()}
+            self.dones = {k: True for k in self.dones.keys()}
+            self.rewards = {k: 0 for k in self.agents}
 
         observation = self.observe()
         return observation, self.rewards, self.dones, {}
