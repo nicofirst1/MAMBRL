@@ -24,11 +24,11 @@ class MAMBRL:
         self.config = config
         self.logger = None
 
+
+        wrapper_configs=self.config.get_env_wrapper_configs()
         self.real_env = EnvWrapper(
             env=get_env(self.config.get_env_configs()),
-            frame_shape=self.config.frame_shape,
-            num_stacked_frames=self.config.num_frames,
-            device=self.config.device,
+            **wrapper_configs,
         )
 
         self.obs_shape = self.real_env.obs_shape
@@ -85,7 +85,7 @@ class MAMBRL:
             # init dicts and reset env
             action_dict = {agent_id: False for agent_id in self.real_env.agents}
             done = {agent_id: False for agent_id in self.real_env.env.agents}
-
+            done["__all__"]=False
             observation = self.real_env.reset()
 
             for step in range(self.config.horizon):
@@ -98,6 +98,9 @@ class MAMBRL:
 
                     if done[agent_id]:
                         action_dict[agent_id] = None
+
+                if done["__all__"]:
+                    break
 
                 observation, _, done, _ = self.real_env.step(action_dict)
 

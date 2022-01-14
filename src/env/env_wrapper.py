@@ -7,12 +7,12 @@ from src.common.utils import one_hot_encode
 
 class EnvWrapper:
     def __init__(
-        self, env: CollectLandmarkEnv, frame_shape, num_stacked_frames, device
+        self, env: CollectLandmarkEnv, frame_shape, num_stacked_frames, device, gamma
     ):
 
         self.env = env
         self.buffer = []
-
+        self.gamma=gamma
         self.initial_frame = None
         self.channel_size = frame_shape[0]
         self.stacked_frames = torch.zeros(
@@ -51,14 +51,13 @@ class EnvWrapper:
 
         if done["__all__"]:
             value = torch.tensor(0.).to(self.device)
-            self.buffer[0][5] = value
-            index = 0
-            while True:
-                ## fixme: nell'add_interaction c'è il +1 e qua -1.. da capire se serve più avanti quel +1
+            self.buffer[-1][5] = value
+            index = len(self.buffer) - 2
+            while reversed(range(len(self.buffer) - 1)):
                 # value = (self.buffer[index][2] - 1).to(self.device) + 0.998 * value
-                value = self.buffer[index][2] + 0.998 * value
+                value = self.buffer[index][2] + self.gamma * value
                 self.buffer[index][5] = value
-                index += 1
+                index -= 1
 
                 if self.buffer[index][4] == 1:
                     break

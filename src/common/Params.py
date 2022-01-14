@@ -211,3 +211,12 @@ class Params:
         )
 
         return env_config
+
+    def get_env_wrapper_configs(self):
+
+        return dict(
+            frame_shape=self.frame_shape,
+            num_stacked_frames=self.num_frames,
+            device=self.device,
+            gamma=self.gamma,
+        )

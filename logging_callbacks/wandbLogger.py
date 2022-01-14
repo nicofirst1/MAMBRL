@@ -15,8 +15,7 @@ class EnvModelWandb(WandbLogger):
             self,
             train_log_step: int,
             val_log_step: int,
-            out_dir: str,
-            model_config,
+            models,
             **kwargs,
     ):
         """
@@ -31,15 +30,15 @@ class EnvModelWandb(WandbLogger):
 
         super(EnvModelWandb, self).__init__(**kwargs)
 
+        wandb.watch(models, log_freq=1000, log_graph=True,  log="all")
+
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
-        self.model_config = model_config
-        self.out_dir = out_dir
 
         self.epoch = 0
 
     def on_batch_end(
-            self, logs: Dict[str, Any], loss: float, batch_id: int, is_training: bool = True
+            self, logs: Dict[str, Any],  batch_id: int, is_training: bool = True
     ):
 
         flag = "training" if is_training else "validation"
@@ -49,19 +48,30 @@ class EnvModelWandb(WandbLogger):
         if not is_training:
             log_step = self.val_log_step
 
+
+        if batch_id% log_step!=0:
+            return
+
         image_log_step = log_step * 10
 
         wandb_log = {
-            f"{flag}_loss": loss,
-            f"{flag}_reward_loss": logs["reward_loss"],
-            f"{flag}_image_loss": logs["image_loss"],
-            f"{flag}_epoch": self.epoch,
+            f"loss/total": logs["loss_reward"] + logs["loss_reconstruct"]+ logs["loss_value"],
+            f"loss/reward": logs["loss_reward"],
+            f"loss/reconstruct": logs["loss_reconstruct"],
+            f"loss/value": logs["loss_value"],
+            f"epoch": self.epoch,
         }
+
+        if "loss_lstm" in logs:
+            wandb_log["loss/lstm"]=logs['loss_lstm']
 
         # image logging_callbacks
         if batch_id % image_log_step == 0:
+            imagined_state=logs["imagined_state"]
+            imagined_state=(imagined_state - imagined_state.min()) / (imagined_state.max() - imagined_state.min())
+            imagined_state*=255
             img_log = {
-                f"{flag}_imagined_state": wandb.Image(logs["imagined_state"]),
+                f"{flag}_imagined_state": wandb.Image(imagined_state),
                 f"{flag}_actual_state": wandb.Image(logs["actual_state"]),
             }
 
@@ -117,12 +127,17 @@ class PPOWandb(WandbLogger):
         logs["epoch"] = batch_id
 
         if batch_id % self.log_behavior_step == 0:
+            done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
+
+            if len(done_idx) > 1:
+                done_idx = done_idx[0]
+
             states = (
-                rollout.states.squeeze(dim=1)[:, -3:, :, :].cpu().numpy().astype(np.uint8)
+                rollout.states[:done_idx][:, -3:, :, :].cpu().numpy().astype(np.uint8)
             )
 
-            actions = rollout.actions.squeeze().cpu().numpy()
-            rewards = rollout.rewards.squeeze().cpu().numpy()
+            actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
+            rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
 
             states = write_rewards(states, rewards)
 
@@ -130,32 +145,33 @@ class PPOWandb(WandbLogger):
             logs["hist/actions"] = actions
             logs["hist/rewards"] = rewards
             logs["mean_reward"] = rewards.mean()
-            #logs["episode_lenght"] = 128
+            logs["episode_lenght"] = done_idx
 
-        # if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
-        #
-        #     # map heatmap on image
-        #     idx = random.choice(range(done_idx))
-        #     img = rollout.states[idx]
-        #     reprs = []
-        #     for c in self.cams:
-        #         cam = c.generate_cam(img.clone().unsqueeze(dim=0))
-        #         reprs.append((c.name, cam))
-        #     img = img[-3:]
-        #     img = np.uint8(img.cpu().data.numpy())
-        #     img = img.transpose(2, 1, 0)
-        #     img = Image.fromarray(img).convert("RGB")
-        #
-        #     for name, rep in reprs:
-        #         heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
-        #
-        #         logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
+        if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
+
+            # map heatmap on image
+            idx = random.choice(range(done_idx))
+            img = rollout.states[idx]
+            reprs = []
+            for c in self.cams:
+                cam = c.generate_cam(img.clone().unsqueeze(dim=0))
+                reprs.append((c.name, cam))
+            img = img[-3:]
+            img = np.uint8(img.cpu().data.numpy())
+            img = img.transpose(2, 1, 0)
+            img = Image.fromarray(img).convert("RGB")
+
+            for name, rep in reprs:
+                heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
+
+                logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
 
                 # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
         self.log_to_wandb(logs, commit=True)
 
-    def on_epoch_end(self, loss: float, logs: Dict[str, Any], model_path: str):
+
+def on_epoch_end(self, loss: float, logs: Dict[str, Any], model_path: str):
         self.epoch += 1
 
 

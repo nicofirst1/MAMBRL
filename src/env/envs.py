@@ -139,7 +139,7 @@ class CollectLandmarkEnv(SimpleEnv):
 
         if self.dones["__all__"]:
             self.dones = {k: True for k in self.dones.keys()}
-            self.rewards = {k: 0 for k in self.agents}
+
 
         observation = self.observe()
         return observation, self.rewards, self.dones, {}

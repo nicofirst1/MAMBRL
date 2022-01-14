@@ -9,7 +9,7 @@ from src.common import Params
 class WandbLogger:
     def __init__(
         self,
-        opts: Union[argparse.ArgumentParser, Dict, str, None] = None,
+        opts: Union[argparse.ArgumentParser, Dict, str, None] = {},
         project: Optional[str] = None,
         run_id: Optional[str] = None,
         **kwargs,

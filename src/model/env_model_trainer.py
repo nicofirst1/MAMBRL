@@ -7,9 +7,12 @@ from torch.cuda import empty_cache
 from torch.nn.utils import clip_grad_norm_
 from tqdm import trange
 
+from src.common import Params
+from src.model import NextFramePredictor
+
 
 class EnvModelTrainer:
-    def __init__(self, model, config):
+    def __init__(self, model: NextFramePredictor, config : Params):
         self.model = model
         self.config = config
 
@@ -20,18 +23,15 @@ class EnvModelTrainer:
             alpha=self.config.alpha,
         )
 
-        self.logger = None
-        # if self.config.use_wandb:
-        #   from logging_callbacks import EnvModelWandb
-        #   self.logger = EnvModelWandb(
-        #       train_log_step=5,
-        #       val_log_step=5,
-        #       project="env_model",
-        #       opts={},
-        #       models={},
-        #       horizon=self.config.horizon,
-        #       #mode="offline"
-        #   )
+        if self.config.use_wandb:
+          from logging_callbacks import EnvModelWandb
+          self.logger = EnvModelWandb(
+              train_log_step=20,
+              val_log_step=50,
+              project="env_model",
+              models=model,
+              mode="disabled" if self.config.debug else "online"
+          )
 
     def train(self, epoch, env, steps=15000):
         if epoch == 0:
@@ -109,7 +109,7 @@ class EnvModelTrainer:
             frames = frames.to(self.config.device)
 
             for j in range(self.config.batch_size):
-                frames[i] = env.buffer[indices[j]][0].clone()
+                frames[j] = env.buffer[indices[j]][0].clone()
 
             frames = preprocess_state(frames)
 
@@ -195,14 +195,17 @@ class EnvModelTrainer:
                 "loss_reconstruct": float(losses[1]),
                 "loss_value": float(losses[2]),
                 "loss_reward": float(losses[3]),
+                "imagined_state": frames_pred[0][-1].detach().cpu(),
+                "actual_state":new_states[0].detach().cpu()
+
             }
 
             if self.config.use_stochastic_model:
                 metrics.update({"loss_lstm": float(losses[4])})
 
             if self.logger is not None:
-                self.logger.on_batch_end(metrics, 0, j)
-                
+                self.logger.on_batch_end(metrics, i, True)
+
         empty_cache()
         if self.config.save_models:
             torch.save(self.model.state_dict(), os.path.join("models", "model.pt"))
