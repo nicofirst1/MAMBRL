@@ -21,12 +21,12 @@ class Params:
     debug = False
     use_wandb = True
     device = torch.device("cuda")
-    frame_shape = [3, 256, 256]
+    frame_shape = [3, 128, 128]
     num_workers = multiprocessing.cpu_count() - 1
     num_gpus = torch.cuda.device_count()
     param_sharing = False
     visible = False
-    guided_learning_prob=0.95
+    guided_learning_prob=0.
 
     ### ENV model
     stack_internal_states = False
@@ -45,30 +45,31 @@ class Params:
     target_loss_clipping = 0.03
 
     ### Optimizer
-    lr = 1e-2
+    lr = 2.5e-4
     eps = 1e-5
     alpha = 0.99
     max_grad_norm = 0.5
 
     ### Algo parameters
-    gamma = 0.97
-    ppo_clip_param = 0.2
+    gamma = 0.99
+    clip_value_loss = True
+    ppo_clip_param = 0.1
 
     ### Loss
     value_loss_coef = 0.5
     entropy_coef = 0.01
-    base = "resnet"  # [ cnn , resnet ]
-    clip_value_loss = False
+    base = "cnn"  # [ cnn , resnet ]
+    recurrent = True
 
     #### ENVIRONMENT ####
     agents = 1
     landmarks = 1
     step_reward = -1
-    landmark_reward = 1
+    landmark_reward = 50
     epochs = 1000
     minibatch = 32
     episodes = 3
-    horizon = 256
+    horizon = 128
     env_name = "collab_nav"
     obs_type = "image"  # or "states"
     num_frames = 4
@@ -98,15 +99,12 @@ class Params:
     action_meanings = {0: "stop", 1: "left", 2: "right", 3: "up", 4: "down"}
 
     def __init__(self):
-
-
         self.__initialize_dirs()
         self.__parse_args()
 
-
-
         if self.gray_scale:
             self.frame_shape[0] = 1
+
         self.obs_shape = (self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
 
     def __initialize_dirs(self):

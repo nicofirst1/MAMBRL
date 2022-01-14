@@ -37,16 +37,16 @@ class RolloutStorage(object):
         self.step += 1
 
     def after_update(self):
-        #self.states[0].copy_(self.states[self.step])
-        #self.recurrent_hs[0].copy_(self.recurrent_hs[self.step])
-        #self.masks[0].copy_(self.masks[self.step])
+        self.states[0].copy_(self.states[self.step])
+        self.recurrent_hs[0].copy_(self.recurrent_hs[self.step])
+        self.masks[0].copy_(self.masks[self.step])
         self.step = 0
 
     def compute_returns(self, next_value, use_gae, gamma, gae_lambda):
         if use_gae:
-            self.value_preds[self.step] = next_value
+            self.value_preds[-1] = next_value
             gae = 0
-            for step in reversed(range(self.step)):
+            for step in reversed(range(self.rewards.size(0))):
                 delta = (self.rewards[step] + gamma * self.value_preds[step + 1]
                          * self.masks[step + 1] - self.value_preds[step])
 
@@ -74,10 +74,6 @@ class RolloutStorage(object):
         """
         total_samples = self.step
         perm = torch.randperm(total_samples)
-        done = False
-
-        if minibatch_frames > total_samples:
-            minibatch_frames = total_samples
 
         for start_ind in range(0, total_samples, minibatch_frames):
             states_minibatch = []
@@ -89,12 +85,10 @@ class RolloutStorage(object):
             masks_minibatch = []
             adv_targ_minibatch = []
 
-            for offset in range(minibatch_frames):
-                if start_ind + minibatch_frames > total_samples:
-                    # skip last batch if not divisible
-                    done = True
-                    continue
+            if start_ind + minibatch_frames > total_samples:
+                minibatch_frames = total_samples - start_ind
 
+            for offset in range(minibatch_frames):
                 ind = perm[start_ind + offset]
                 states_minibatch.append(self.states[ind])
                 recurrent_hs_minibatch.append(self.recurrent_hs[ind])
@@ -104,9 +98,6 @@ class RolloutStorage(object):
                 return_minibatch.append(self.returns[ind])
                 masks_minibatch.append(self.masks[ind])
                 adv_targ_minibatch.append(advantages[ind])
-
-            if done:
-                break
 
             # cat on firt dimension
             states_minibatch = torch.cat(states_minibatch, dim=0)

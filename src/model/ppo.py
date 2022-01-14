@@ -36,7 +36,7 @@ class PPO:
         }
 
     def update(self, rollout, logs):
-        advantages = rollout.returns[:-1] - rollout.values[:-1]
+        advantages = rollout.returns[:-1] - rollout.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
 
         value_losses = torch.zeros(len(self.actor_critic_dict))

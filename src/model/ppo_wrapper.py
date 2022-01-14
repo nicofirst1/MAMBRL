@@ -90,83 +90,81 @@ class PpoWrapper:
             old_log_probs=[]
         ) for ag in self.actor_critic_dict.keys()}
 
-        for episode in range(episodes):
-            # init dicts and reset env
-            action_dict = {agent_id: False for agent_id in self.env.agents}
-            values_dict = {agent_id: False for agent_id in self.env.agents}
-            action_log_dict = {agent_id: False for agent_id in self.env.agents}
-            recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
+        # init dicts and reset env
+        action_dict = {agent_id: False for agent_id in self.env.agents}
+        values_dict = {agent_id: False for agent_id in self.env.agents}
+        action_log_dict = {agent_id: False for agent_id in self.env.agents}
+        recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
 
-            observation = self.env.reset()
-            rollout.states[0] = observation.unsqueeze(dim=0)
+        observation = self.env.reset()
+        rollout.states[0] = observation.unsqueeze(dim=0)
 
-            for step in range(self.num_steps):
-                obs = observation.to(self.device).unsqueeze(dim=0)
-                guided_learning = {agent_id: False for agent_id in self.env.agents}
+        for step in range(self.num_steps):
+            obs = observation.to(self.device).unsqueeze(dim=0)
+            guided_learning = {agent_id: False for agent_id in self.env.agents}
 
-                for agent_id in self.env.agents:
-                    agent_index = int(agent_id[-1])
+            for agent_id in self.env.agents:
+                agent_index = int(agent_id[-1])
 
-                    # perform guided learning with scheduler
-                    if self.guided_learning_prob > random.uniform(0, 1):
-                        action, action_log_prob = self.env.optimal_action(agent_id)
-                        guided_learning[agent_id] = True
-                        value = -1
-                    else:
-                        with torch.no_grad():
-                            value, action, action_log_prob, recurrent_hs = self.actor_critic_dict[agent_id].act(
-                                obs, rollout.recurrent_hs[step, agent_index], rollout.masks[step]
-                            )
+                # perform guided learning with scheduler
+                if self.guided_learning_prob > random.uniform(0, 1):
+                    action, action_log_prob = self.env.optimal_action(agent_id)
+                    guided_learning[agent_id] = True
+                    value = -1
+                else:
+                    with torch.no_grad():
+                        value, action, action_log_prob, recurrent_hs = self.actor_critic_dict[agent_id].act(
+                            obs, rollout.recurrent_hs[step, agent_index], rollout.masks[step]
+                        )
 
-                    # get action with softmax and multimodal (stochastic)
-                    action_dict[agent_id] = int(action)
-                    values_dict[agent_id] = float(value)
-                    action_log_dict[agent_id] = float(action_log_prob)
-                    recurrent_hs_dict[agent_id] = recurrent_hs[0]
+                # get action with softmax and multimodal (stochastic)
+                action_dict[agent_id] = int(action)
+                values_dict[agent_id] = float(value)
+                action_log_dict[agent_id] = float(action_log_prob)
+                recurrent_hs_dict[agent_id] = recurrent_hs[0]
 
-                # Obser reward and next obs
-                ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
-                new_observation, rewards, done, infos = self.env.step(action_dict)
+            # Obser reward and next obs
+            ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
+            new_observation, rewards, done, infos = self.env.step(action_dict)
 
-                # if guided then use actual reward as predicted value
-                for agent_id, b in guided_learning.items():
-                    if b:
-                        values_dict[agent_id] = rewards[agent_id]
+            # if guided then use actual reward as predicted value
+            for agent_id, b in guided_learning.items():
+                if b:
+                    values_dict[agent_id] = rewards[agent_id]
 
-                masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
-                rewards = mas_dict2tensor(rewards, float)
-                actions = mas_dict2tensor(action_dict, int)
-                values = mas_dict2tensor(values_dict, float)
-                recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
-                action_log_probs = mas_dict2tensor(action_log_dict, float)
+            masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
+            rewards = mas_dict2tensor(rewards, float)
+            actions = mas_dict2tensor(action_dict, int)
+            values = mas_dict2tensor(values_dict, float)
+            recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
+            action_log_probs = mas_dict2tensor(action_log_dict, float)
 
-                # update observation
-                observation = new_observation
+            # update observation
+            observation = new_observation
 
-                rollout.insert(
-                    state=observation,
-                    recurrent_hs=recurrent_hs,
-                    action=actions,
-                    action_log_probs=action_log_probs,
-                    value_preds=values,
-                    reward=rewards,
-                    mask=masks
-                )
+            rollout.insert(
+                state=observation,
+                recurrent_hs=recurrent_hs,
+                action=actions,
+                action_log_probs=action_log_probs,
+                value_preds=values,
+                reward=rewards,
+                mask=masks
+            )
 
-                if done["__all__"]:
-                    break
+            if done["__all__"]:
+                observation = self.env.reset()
 
-            ## fixme: qui bisogna capire il get_value a cosa serve e come farlo per multi agent
-            with torch.no_grad():
-                next_value = self.actor_critic_dict["agent_0"].get_value(
-                        rollout.states[rollout.step], rollout.recurrent_hs[rollout.step, 0],
-                        rollout.masks[rollout.step]).detach()
+        ## fixme: qui bisogna come farlo per multi agent
+        with torch.no_grad():
+            next_value = self.actor_critic_dict["agent_0"].get_value(
+                rollout.states[-1], rollout.recurrent_hs[-1, 0], rollout.masks[-1]).detach()
 
-            rollout.compute_returns(next_value, True, self.gamma, 0.95)
+        rollout.compute_returns(next_value, True, self.gamma, 0.95)
 
-            #with torch.enable_grad():
-            value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
-            rollout.after_update()
+        #with torch.enable_grad():
+        value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
+        rollout.after_update()
 
         return value_loss, action_loss, entropy, rollout, logs
 

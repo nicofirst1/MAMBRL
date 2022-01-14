@@ -117,19 +117,12 @@ class PPOWandb(WandbLogger):
         logs["epoch"] = batch_id
 
         if batch_id % self.log_behavior_step == 0:
-            done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
-
-            if len(done_idx) == 0:
-                done_idx = rollout.rewards.size(0)
-            elif len(done_idx) > 1:
-                done_idx = done_idx[1] if done_idx[0] == 0 else done_idx[1]
-
             states = (
-                rollout.states[:done_idx].squeeze(dim=1)[:, -3:, :, :].cpu().numpy().astype(np.uint8)
+                rollout.states.squeeze(dim=1)[:, -3:, :, :].cpu().numpy().astype(np.uint8)
             )
 
-            actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
-            rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
+            actions = rollout.actions.squeeze().cpu().numpy()
+            rewards = rollout.rewards.squeeze().cpu().numpy()
 
             states = write_rewards(states, rewards)
 
@@ -137,7 +130,7 @@ class PPOWandb(WandbLogger):
             logs["hist/actions"] = actions
             logs["hist/rewards"] = rewards
             logs["mean_reward"] = rewards.mean()
-            logs["episode_lenght"] = done_idx
+            #logs["episode_lenght"] = 128
 
         # if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
         #
