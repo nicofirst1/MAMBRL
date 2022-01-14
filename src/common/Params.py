@@ -57,24 +57,25 @@ class Params:
     alpha = 0.99
     max_grad_norm = 0.5
 
-    ### Algo parameters
+    ### PPO Algo
     gamma = 0.99
     clip_value_loss = True
     ppo_clip_param = 0.1
-
-    ### Loss
     value_loss_coef = 0.5
     entropy_coef = 0.01
-    base = "cnn"  # [ cnn , resnet ]
+
+    #PPO Agent
+    base = "resnet"  # [ cnn , resnet ]
     recurrent = True
+    base_hidden_size=64
+
+
 
     #### ENVIRONMENT ####
     agents = 1
     landmarks = 1
     step_reward = -1
     landmark_reward = 50
-    epochs = 1000
-    minibatch = 32
     episodes = 3
     horizon = 50
     env_name = "collab_nav"
@@ -198,10 +199,12 @@ class Params:
 
     def get_policy_configs(self):
         env_config = dict(
+            obs_shape=self.obs_shape,
+            action_space=self.num_actions,
             base=self.base,
             hidden_size=self.base_hidden_size,
             base_kwargs=dict(
-                recurrent=self.recurrent_base,
+                recurrent=self.recurrent,
                 hidden_size=self.base_hidden_size
             ),
         )

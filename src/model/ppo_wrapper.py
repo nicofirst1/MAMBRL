@@ -29,12 +29,7 @@ class PpoWrapper:
         self.base_hidden_size = config.base_hidden_size
 
         self.actor_critic_dict = {
-            agent_id: Policy(
-                self.obs_shape,
-                self.action_space,
-                base=base,
-                base_kwargs={'recurrent': config.recurrent}
-            ).to(self.device) for agent_id in self.env.agents
+            agent_id: Policy(**policy_configs).to(self.device) for agent_id in self.env.agents
         }
 
         self.ppo_agent = PPO(
@@ -110,7 +105,7 @@ class PpoWrapper:
                 else:
                     with torch.no_grad():
                         value, action, action_log_prob, recurrent_hs = self.actor_critic_dict[agent_id].act(
-                            obs, rollout.recurrent_hs[step, agent_index], rollout.masks[step]
+                            obs, rollout.recurrent_hs[step, agent_index], rollout.masks[step, agent_index]
                         )
 
                 # get action with softmax and multimodal (stochastic)
@@ -154,7 +149,7 @@ class PpoWrapper:
         ## fixme: qui bisogna come farlo per multi agent
         with torch.no_grad():
             next_value = self.actor_critic_dict["agent_0"].get_value(
-                rollout.states[-1], rollout.recurrent_hs[-1, 0], rollout.masks[-1]).detach()
+                rollout.states[-1], rollout.recurrent_hs[-1, 0], rollout.masks[-1,0]).detach()
 
         rollout.compute_returns(next_value, True, self.gamma, 0.95)
 

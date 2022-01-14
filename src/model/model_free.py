@@ -191,7 +191,8 @@ class NNBase(nn.Module):
 
     def _forward_gru(self, x, hxs, masks):
         if x.size(0) == hxs.size(0):
-            x, hxs = self.gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
+            hxs*= masks.unsqueeze(1)
+            x, hxs = self.gru(x.unsqueeze(0), (hxs).unsqueeze(0))
             x = x.squeeze(0)
             hxs = hxs.squeeze(0)
         else:
@@ -249,7 +250,7 @@ class NNBase(nn.Module):
 
 class CNNBase(NNBase):
     def __init__(self, input_shape, recurrent=False, hidden_size=512):
-        super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
+        super(CNNBase, self).__init__(recurrent=recurrent, hidden_size=hidden_size, recurrent_input_size=hidden_size)
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x:
             nn.init.constant_(x, 0), nn.init.calculate_gain("relu"))
@@ -260,7 +261,7 @@ class CNNBase(NNBase):
         middle_shape = (middle_shape[0] // 2 - 1, middle_shape[1] // 2 - 1)
         middle_shape = (middle_shape[0] - 2, middle_shape[1] - 2)
 
-        self.main = nn.Sequential(
+        self.features = nn.Sequential(
             init_(nn.Conv2d(num_inputs, 32, 8, stride=4)), nn.ReLU(),
             init_(nn.Conv2d(32, 64, 4, stride=2)), nn.ReLU(),
             init_(nn.Conv2d(64, 32, 3, stride=1)), nn.ReLU(), Flatten(),
@@ -270,22 +271,22 @@ class CNNBase(NNBase):
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0)
         )
 
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+        self.critic = init_(nn.Linear(hidden_size, 1))
         self.train()
 
     def get_modules(self):
         return dict(
-            value=self.critic_linear,
-            features=self.main
+            value=self.critic,
+            features=self.features
         )
 
     def forward(self, inputs, rnn_hxs, masks):
-        x = self.main(inputs / 255.0)
+        x = self.features(inputs / 255.0)
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        return self.critic_linear(x), x, rnn_hxs
+        return self.critic(x), x, rnn_hxs
 
 
 class ResNetBase(NNBase):

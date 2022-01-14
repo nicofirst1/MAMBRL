@@ -3,10 +3,12 @@ from torch.optim.lr_scheduler import ExponentialLR
 from tqdm import trange
 
 from logging_callbacks.wandbLogger import preprocess_logs
+from model import PpoWrapper
 from src.common import Params
-from src.common.schedulers import CurriculumScheduler, GuidedLearningScheduler, LearningRateScheduler, StepScheduler
-from model import EnvModelTrainer, MultimodalMAS, PpoWrapper, NextFramePredictor
+from src.common.schedulers import CurriculumScheduler, LearningRateScheduler, StepScheduler, \
+    linear_decay, exponential_decay
 from src.env import get_env, EnvWrapper
+from src.model.policies import RandomAction
 
 params = Params()
 
@@ -33,11 +35,11 @@ class MAMBRL:
 
         ## fixme: per ora c'è solo un env_model, bisogna capire come gestire il multi agent
         self.env_model = None
-        #self.env_model = NextFramePredictor(config)
-        #self.env_model = self.env_model.to(self.config.device)
+        # self.env_model = NextFramePredictor(config)
+        # self.env_model = self.env_model.to(self.config.device)
 
         self.trainer = None
-        #self.trainer = EnvModelTrainer(self.env_model, config)
+        # self.trainer = EnvModelTrainer(self.env_model, config)
 
         ## fixme: anche qua bisogna capire se ne serve uno o uno per ogni agente
         self.simulated_env = None
@@ -49,23 +51,17 @@ class MAMBRL:
             from pytorchCnnVisualizations.src import CamExtractor, ScoreCam
 
             model = self.ppo_wrapper.actor_critic_dict["agent_0"].base
+            cams = []
+
             if config.base == "resnet":
 
-                cams = []
                 for idx, layer in enumerate(list(model.features)):
                     extractor = CamExtractor(model, target_layer=idx)
                     name = type(layer).__name__
-                    score_cam = ScoreCam(model, extractor)
+                    score_cam = ScoreCam(model, extractor, name)
                     cams.append(score_cam)
             elif config.base == "cnn":
-                cams = []
-                for idx, layer in enumerate(list(model.modules())):
-                    extractor = CamExtractor(model, target_layer=idx)
-                    name = type(layer).__name__
-                    score_cam = ScoreCam(model, extractor)
-                    cams.append(score_cam)
-            else:
-                cams = []
+                pass
 
             from logging_callbacks import PPOWandb
 
@@ -98,11 +94,11 @@ class MAMBRL:
 
                 for agent_id in self.real_env.agents:
                     with torch.no_grad():
-                        action, _, _ = agent.act(agent_id, observation, full_log_prob=True )
+                        action, _, _ = agent.act(agent_id, observation, full_log_prob=True)
                         action_dict[agent_id] = action
 
                     if done[agent_id]:
-                        action_dict[agent_id]=None
+                        action_dict[agent_id] = None
 
                 observation, _, done, _ = self.real_env.step(action_dict)
 
@@ -128,17 +124,14 @@ class MAMBRL:
         self.ppo_wrapper.set_env(self.real_env)
 
         for step in trange(1000, desc="Training model free"):
-            value_loss, action_loss, entropy, rollout = self.ppo_wrapper.learn(
+            out = self.ppo_wrapper.learn(
                 episodes=self.config.episodes
             )
 
             if self.config.use_wandb:
-                losses = dict(
-                    value_loss=[value_loss],
-                    action_loss=[action_loss],
-                    entropy=[entropy],
-                )
-                self.logger.on_batch_end(logs=losses, batch_id=step, rollout=rollout)
+                logs, rollout = preprocess_logs(out, self)
+
+                self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
 
     def train_model_free_curriculum(self):
         self.ppo_wrapper.set_env(self.real_env)
@@ -146,8 +139,9 @@ class MAMBRL:
         episodes = 3000
 
         schedulers = init_schedulers(self, episodes,
-            use_curriculum=False, use_guided_learning=False, use_learning_rate=False, use_entropy_reg=False
-        )
+                                     use_curriculum=False, use_guided_learning=False, use_learning_rate=False,
+                                     use_entropy_reg=False
+                                     )
 
         for step in trange(episodes, desc="Training model free"):
             out = self.ppo_wrapper.learn(
@@ -228,11 +222,11 @@ def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_g
             1700: 0.0,
         }
 
-        ep=int(episodes*0.8)
-        guided_learning=linear_decay(start_val=1, episodes=ep)
+        ep = int(episodes * 0.8)
+        guided_learning = linear_decay(start_val=1, episodes=ep)
 
         gls = StepScheduler(values_list=guided_learning, episodes=ep,
-                                      set_fn=mambrl.ppo_wrapper.set_guided_learning_prob)
+                            set_fn=mambrl.ppo_wrapper.set_guided_learning_prob)
         schedulers.append(gls)
 
     if use_learning_rate:
@@ -258,4 +252,4 @@ def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_g
 if __name__ == "__main__":
     params = Params()
     mambrl = MAMBRL(params)
-    mambrl.train_env_model()
+    mambrl.train_model_free()
