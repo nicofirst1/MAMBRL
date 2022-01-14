@@ -137,6 +137,9 @@ class CollectLandmarkEnv(SimpleEnv):
         if self.scenario.num_landmarks <= 0:
             self.dones["__all__"] = True
 
+        if self.dones["__all__"]:
+          self.dones={k:True for k in self.dones.keys()}
+
         observation = self.observe()
         return observation, self.rewards, self.dones, {}
 

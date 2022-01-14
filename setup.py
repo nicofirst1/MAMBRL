@@ -1,7 +1,6 @@
 from setuptools import setup, find_packages
 
 requirements = """
-ray==1.6.0
 env==0.1.0
 rich==10.12.0
 wandb==0.12.7

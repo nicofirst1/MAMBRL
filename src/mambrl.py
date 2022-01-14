@@ -6,6 +6,7 @@ from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import Params
 from src.common.schedulers import CurriculumScheduler, LearningRateScheduler, StepScheduler, \
     exponential_decay, linear_decay
+from src.model.policies import RandomAction
 
 params = Params()
 
@@ -89,12 +90,13 @@ class MAMBRL:
 
     def collect_trajectories(self):
         self.ppo_wrapper.set_env(self.real_env)
-        agent = MultimodalMAS(self.ppo_wrapper)
+        agent = RandomAction(self.config.num_actions, self.config.device)
 
         ## fixme: qui impostasto sempre con doppio ciclo, ma l'altro codice usa un ciclo solo!
         for _ in trange(self.config.episodes, desc="Collecting trajectories.."):
             # init dicts and reset env
             action_dict = {agent_id: False for agent_id in self.real_env.agents}
+            done = {agent_id: False for agent_id in self.real_env.env.agents}
 
             observation = self.real_env.reset()
 
@@ -103,10 +105,13 @@ class MAMBRL:
 
                 for agent_id in self.real_env.agents:
                     with torch.no_grad():
-                        action, _, _ = agent.act(agent_id, observation)
+                        action, _, _ = agent.act(agent_id, observation, full_log_prob=True )
                         action_dict[agent_id] = action
 
-                observation, _, _, _ = self.real_env.step(action_dict)
+                    if done[agent_id]:
+                        action_dict[agent_id]=None
+
+                observation, _, done, _ = self.real_env.step(action_dict)
 
     def train_agent_sim_env(self, epoch):
         self.ppo_wrapper.set_env(self.simulated_env)
@@ -258,4 +263,4 @@ def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_g
 if __name__ == "__main__":
     params = Params()
     mambrl = MAMBRL(params)
-    mambrl.train_model_free_curriculum()
+    mambrl.train_env_model()

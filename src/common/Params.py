@@ -47,6 +47,9 @@ class Params:
     latent_use_max_probability = 0.8
     residual_dropout = 0.5
     target_loss_clipping = 0.03
+    scheduled_sampling_decay_steps=0.99
+    input_noise=0.1
+    use_stochastic_model=True
 
     ### Optimizer
     lr = 1e-2

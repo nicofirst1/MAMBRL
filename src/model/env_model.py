@@ -144,7 +144,7 @@ class StochasticModel(nn.Module):
     def __init__(self, config, layer_shape, n_action):
         super().__init__()
         self.config = config
-        channels = self.config.obs_shape[0] * (self.config.num_frames + 1)
+        channels = self.config.frame_shape[0] * (self.config.num_frames + 1)
         filters = [128, 512]
         self.lstm_loss = None
         self.get_lstm_loss()
@@ -241,7 +241,7 @@ class NextFramePredictor(Container):
 
         # Internal states
 
-        channels = self.config.obs_shape[0] * self.config.num_frames
+        channels = self.config.obs_shape[0]
         if self.config.stack_internal_states:
             channels += self.config.recurrent_state_size
 
@@ -366,13 +366,6 @@ class NextFramePredictor(Container):
 
     def forward(self, x, action, target=None, epsilon=0):
         x_start = torch.stack([standardize_frame(frame) for frame in x])
-
-        batch_size = action.shape[0]
-        expanded_actions = torch.zeros((batch_size, self.config.num_actions))
-        for b in range(batch_size):
-            expanded_actions[b][int(action[b])] = 1
-
-        action = expanded_actions.to(action.device)
 
         ## fixme: qui qualcosa non quadra con le dimensioni, quindi per ora è disabilitato
         if self.config.stack_internal_states:
