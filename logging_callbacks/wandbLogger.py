@@ -1,7 +1,9 @@
+import os
 import random
 from typing import Any, Dict, Optional
 
 import numpy as np
+import torch
 import wandb
 from PIL import Image, ImageDraw, ImageFont
 from torch import nn
@@ -59,6 +61,7 @@ class EnvModelWandb(WandbLogger):
             f"loss/reward": logs["loss_reward"],
             f"loss/reconstruct": logs["loss_reconstruct"],
             f"loss/value": logs["loss_value"],
+            f"curriculum/value": logs["epsilon"],
             f"epoch": self.epoch,
         }
 
@@ -68,11 +71,22 @@ class EnvModelWandb(WandbLogger):
         # image logging_callbacks
         if batch_id % image_log_step == 0:
             imagined_state=logs["imagined_state"]
+            actual_state = logs["actual_state"]
+
+            imagined_state = torch.stack(imagined_state)
+            actual_state = torch.stack(actual_state)
+
+            #bring imageine state in range 0 255
             imagined_state=(imagined_state - imagined_state.min()) / (imagined_state.max() - imagined_state.min())
             imagined_state*=255
+
+            diff=abs(imagined_state-actual_state)
+
+            fps=5
             img_log = {
-                f"{flag}_imagined_state": wandb.Image(imagined_state),
-                f"{flag}_actual_state": wandb.Image(logs["actual_state"]),
+                f"imagined_state": wandb.Video(imagined_state, fps=fps, format="gif"),
+                f"actual_state": wandb.Video(actual_state, fps=fps, format="gif"),
+                f"diff": wandb.Video(diff, fps=fps, format="gif"),
             }
 
             wandb_log.update(img_log)

@@ -47,10 +47,12 @@ class Params:
     latent_use_max_probability = 0.8
     residual_dropout = 0.5
     target_loss_clipping = 0.03
-    scheduled_sampling_decay_steps=22250
+    scheduled_sampling_decay_steps=3000
     input_noise=0.05
     use_stochastic_model=True
     clip_grad_norm=1.0
+    rollout_len = 10
+    save_models=True
 
     ### Optimizer
     lr = 2.5e-4
@@ -82,7 +84,6 @@ class Params:
     env_name = "collab_nav"
     obs_type = "image"  # or "states"
     num_frames = 4
-    rollout_len = 1
     num_steps = horizon // num_frames
     full_rollout = False
     gray_scale = False

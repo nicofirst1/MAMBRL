@@ -111,7 +111,8 @@ def bit_to_int(x_bit, num_bits):
 
 def int_to_bit(x_int, num_bits):
     x_l = x_int.unsqueeze(-1).int()
-    x_labels = [torch.remainder(x_l // 2 ** i, 2) for i in range(num_bits)]
+    x_l = torch.div(x_l, 2, rounding_mode="floor")
+    x_labels = [torch.remainder(x_l ** i, 2) for i in range(num_bits)]
     res = torch.cat(x_labels, -1)
     return res.float().to(x_int.device)
 
@@ -170,8 +171,3 @@ def sample_with_temperature(logits, temperature):
     choices = torch.multinomial(reshaped_logits, 1)
     choices = choices.view((logits.shape[: len(logits.shape) - 1]))
     return choices
-
-
-
-
-

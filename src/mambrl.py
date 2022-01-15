@@ -1,4 +1,5 @@
 import torch
+from rich.progress import track
 from torch.optim.lr_scheduler import ExponentialLR
 from tqdm import trange
 
@@ -9,7 +10,7 @@ from src.common.schedulers import CurriculumScheduler, LearningRateScheduler, St
     linear_decay, exponential_decay
 from src.env import get_env, EnvWrapper
 from src.model import EnvModelTrainer, NextFramePredictor
-from src.model.policies import RandomAction
+from src.model.policies import OptimalAction
 
 params = Params()
 
@@ -24,8 +25,7 @@ class MAMBRL:
         self.config = config
         self.logger = None
 
-
-        wrapper_configs=self.config.get_env_wrapper_configs()
+        wrapper_configs = self.config.get_env_wrapper_configs()
         self.real_env = EnvWrapper(
             env=get_env(self.config.get_env_configs()),
             **wrapper_configs,
@@ -78,14 +78,13 @@ class MAMBRL:
 
     def collect_trajectories(self):
         self.ppo_wrapper.set_env(self.real_env)
-        agent = RandomAction(self.config.num_actions, self.config.device)
-
+        agent = OptimalAction(self.real_env, self.config.num_actions, self.config.device)
         ## fixme: qui impostasto sempre con doppio ciclo, ma l'altro codice usa un ciclo solo!
-        for _ in trange(self.config.episodes, desc="Collecting trajectories.."):
+        for _ in track(range(self.config.episodes), description="Collecting trajectories..", total=self.config.episodes):
             # init dicts and reset env
             action_dict = {agent_id: False for agent_id in self.real_env.agents}
             done = {agent_id: False for agent_id in self.real_env.env.agents}
-            done["__all__"]=False
+            done["__all__"] = False
             observation = self.real_env.reset()
 
             for step in range(self.config.horizon):
@@ -98,11 +97,12 @@ class MAMBRL:
 
                     if done[agent_id]:
                         action_dict[agent_id] = None
-
-                if done["__all__"]:
-                    break
+                    if done["__all__"]:
+                        break
 
                 observation, _, done, _ = self.real_env.step(action_dict)
+                if done["__all__"]:
+                    break
 
     def train_agent_sim_env(self, epoch):
         self.ppo_wrapper.set_env(self.simulated_env)
@@ -118,76 +118,80 @@ class MAMBRL:
             self.train_agent_sim_env(epoch)
 
     def train_env_model(self):
-        for step in trange(1000, desc="Training env model"):
+        epochs= 3000
+        for step in trange(epochs, desc="Training env model"):
             self.collect_trajectories()
             self.trainer.train(step, self.real_env)
 
-    def train_model_free(self):
-        self.ppo_wrapper.set_env(self.real_env)
 
-        for step in trange(1000, desc="Training model free"):
-            out = self.ppo_wrapper.learn(
-                episodes=self.config.episodes
-            )
+def train_model_free(self):
+    self.ppo_wrapper.set_env(self.real_env)
 
-            if self.config.use_wandb:
-                logs, rollout = preprocess_logs(out, self)
+    for step in trange(1000, desc="Training model free"):
+        out = self.ppo_wrapper.learn(
+            episodes=self.config.episodes
+        )
 
-                self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
+        if self.config.use_wandb:
+            logs, rollout = preprocess_logs(out, self)
 
-    def train_model_free_curriculum(self):
-        self.ppo_wrapper.set_env(self.real_env)
+            self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
 
-        episodes = 3000
 
-        schedulers = init_schedulers(self, episodes,
-                                     use_curriculum=False, use_guided_learning=False, use_learning_rate=False,
-                                     use_entropy_reg=False
-                                     )
+def train_model_free_curriculum(self):
+    self.ppo_wrapper.set_env(self.real_env)
 
-        for step in trange(episodes, desc="Training model free"):
-            out = self.ppo_wrapper.learn(
-                episodes=self.config.episodes,
-            )
+    episodes = 3000
 
-            for s in schedulers:
-                s.update_step(step)
+    schedulers = init_schedulers(self, episodes,
+                                 use_curriculum=False, use_guided_learning=False, use_learning_rate=False,
+                                 use_entropy_reg=False
+                                 )
 
-            if self.config.use_wandb:
-                logs, rollout = preprocess_logs(out, self)
-                self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
+    for step in trange(episodes, desc="Training model free"):
+        out = self.ppo_wrapper.learn(
+            episodes=self.config.episodes,
+        )
 
-    def user_game(self):
-        moves = {"w": 4, "a": 1, "s": 3, "d": 2}
+        for s in schedulers:
+            s.update_step(step)
 
-        game_reward = 0
-        finish_game = False
+        if self.config.use_wandb:
+            logs, rollout = preprocess_logs(out, self)
+            self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
 
-        self.real_env.reset()
-        while finish_game is False:
-            user_input = str(input())
 
-            try:
-                user_move = moves[user_input]
-            except KeyError:
-                continue
+def user_game(self):
+    moves = {"w": 4, "a": 1, "s": 3, "d": 2}
 
-            _, reward, done, _ = self.real_env.step({"agent_0": user_move})
-            game_reward += reward["agent_0"]
+    game_reward = 0
+    finish_game = False
 
-            if done:
-                while True:
-                    print("Finee! Total reward: ", game_reward)
-                    exit_input = input(
-                        "Gioco terminato! Iniziare un'altra partita? (y/n)"
-                    )
-                    if exit_input == "n":
-                        finish_game = True
-                        break
-                    elif exit_input == "y":
-                        game_reward = 0
-                        self.real_env.reset()
-                        break
+    self.real_env.reset()
+    while finish_game is False:
+        user_input = str(input())
+
+        try:
+            user_move = moves[user_input]
+        except KeyError:
+            continue
+
+        _, reward, done, _ = self.real_env.step({"agent_0": user_move})
+        game_reward += reward["agent_0"]
+
+        if done:
+            while True:
+                print("Finee! Total reward: ", game_reward)
+                exit_input = input(
+                    "Gioco terminato! Iniziare un'altra partita? (y/n)"
+                )
+                if exit_input == "n":
+                    finish_game = True
+                    break
+                elif exit_input == "y":
+                    game_reward = 0
+                    self.real_env.reset()
+                    break
 
 
 def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_guided_learning: bool = True,

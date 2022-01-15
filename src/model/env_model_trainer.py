@@ -2,6 +2,7 @@ import os
 
 import torch
 import torch.nn as nn
+from rich.progress import track
 from torch import optim
 from torch.cuda import empty_cache
 from torch.nn.utils import clip_grad_norm_
@@ -34,6 +35,10 @@ class EnvModelTrainer:
           )
 
     def train(self, epoch, env, steps=15000):
+
+        if self.logger is not None:
+            self.logger.epoch+=1
+
         if epoch == 0:
             steps *= 3
 
@@ -91,16 +96,14 @@ class EnvModelTrainer:
             0, steps, rollout_len, desc="Training world model", unit_scale=rollout_len
         )
         for i in iterator:
-            if epoch == 0:
-                decay_steps = self.config.scheduled_sampling_decay_steps
-                inv_base = torch.exp(torch.log(torch.tensor(0.01)) / (decay_steps // 4))
-                epsilon = inv_base ** max(decay_steps // 4 - i, 0)
-                progress = min(i / decay_steps, 1)
-                progress = progress * (1 - 0.01) + 0.01
-                epsilon *= progress
-                epsilon = 1 - epsilon
-            else:
-                epsilon = 0
+
+            decay_steps = self.config.scheduled_sampling_decay_steps
+            inv_base = torch.exp(torch.log(torch.tensor(0.01)) / (decay_steps // 4))
+            epsilon = inv_base ** max(decay_steps // 4 - i, 0)
+            progress = min(i / decay_steps, 1)
+            progress = progress * (1 - 0.01) + 0.01
+            epsilon *= progress
+            epsilon = 1 - epsilon
 
             indices = get_indices()
             frames = torch.zeros(
@@ -119,6 +122,9 @@ class EnvModelTrainer:
             if self.config.stack_internal_states:
                 self.model.init_internal_states(self.config.batch_size)
 
+
+            actual_states=[]
+            predicted_frames=[]
             for j in range(rollout_len):
                 actions = torch.zeros((self.config.batch_size, *action_shape)).to(
                     self.config.device
@@ -139,10 +145,15 @@ class EnvModelTrainer:
                     new_states[k] = env.buffer[indices[k] + j][3]
                     values[k] = env.buffer[indices[k] + j][5]
 
+
                 new_states_input = new_states.float() / 255
                 frames_pred, reward_pred, values_pred = self.model(
                     frames, actions, new_states_input, epsilon
                 )
+
+                actual_states.append(new_states[0].detach().cpu())
+                #todo: why argmax?
+                predicted_frames.append(torch.argmax(frames_pred[0], dim=0).detach().cpu())
 
                 if j < rollout_len - 1:
                     for k in range(self.config.batch_size):
@@ -150,6 +161,8 @@ class EnvModelTrainer:
                             frame = new_states[k]
                         else:
                             frame = torch.argmax(frames_pred[k], dim=0)
+
+
 
                         frame = preprocess_state(frame)
                         frames[k] = torch.cat((frames[k, c:], frame), dim=0)
@@ -165,6 +178,7 @@ class EnvModelTrainer:
                     loss_reconstruct.mean() - self.config.target_loss_clipping
                 )
 
+                reward_pred= reward_pred.squeeze()
                 loss_value = nn.MSELoss()(values_pred, values)
                 loss_reward = reward_criterion(reward_pred, rewards)
                 loss = loss_reconstruct + loss_value + loss_reward
@@ -195,8 +209,9 @@ class EnvModelTrainer:
                 "loss_reconstruct": float(losses[1]),
                 "loss_value": float(losses[2]),
                 "loss_reward": float(losses[3]),
-                "imagined_state": frames_pred[0][-1].detach().cpu(),
-                "actual_state":new_states[0].detach().cpu()
+                "imagined_state": predicted_frames,
+                "actual_state": actual_states,
+                "epsilon":epsilon
 
             }
 
@@ -208,4 +223,4 @@ class EnvModelTrainer:
 
         empty_cache()
         if self.config.save_models:
-            torch.save(self.model.state_dict(), os.path.join("models", "model.pt"))
+             torch.save(self.model.state_dict(), os.path.join(self.config.LOG_DIR, "env_model.pt"))
