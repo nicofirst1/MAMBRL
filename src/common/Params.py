@@ -15,7 +15,6 @@ class Params:
     WORKING_DIR = os.path.join(WORKING_DIR, "MAMBRL")
     SRC_DIR = os.path.join(WORKING_DIR, "src")
     LOG_DIR = os.path.join(WORKING_DIR, "log_dir")
-    RAY_DIR = os.path.join(LOG_DIR, "ray_results")
     EVAL_DIR = os.path.join(LOG_DIR, "eval")
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
 
