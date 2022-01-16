@@ -124,74 +124,74 @@ class MAMBRL:
             self.trainer.train(step, self.real_env)
 
 
-def train_model_free(self):
-    self.ppo_wrapper.set_env(self.real_env)
+    def train_model_free(self):
+        self.ppo_wrapper.set_env(self.real_env)
 
-    for step in trange(1000, desc="Training model free"):
-        out = self.ppo_wrapper.learn(
-            episodes=self.config.episodes
-        )
+        for step in trange(1000, desc="Training model free"):
+            out = self.ppo_wrapper.learn(
+                episodes=self.config.episodes
+            )
 
-        if self.config.use_wandb:
-            logs, rollout = preprocess_logs(out, self)
+            if self.config.use_wandb:
+                logs, rollout = preprocess_logs(out, self)
 
-            self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
-
-
-def train_model_free_curriculum(self):
-    self.ppo_wrapper.set_env(self.real_env)
-
-    episodes = 3000
-
-    schedulers = init_schedulers(self, episodes,
-                                 use_curriculum=False, use_guided_learning=False, use_learning_rate=False,
-                                 use_entropy_reg=False
-                                 )
-
-    for step in trange(episodes, desc="Training model free"):
-        out = self.ppo_wrapper.learn(
-            episodes=self.config.episodes,
-        )
-
-        for s in schedulers:
-            s.update_step(step)
-
-        if self.config.use_wandb:
-            logs, rollout = preprocess_logs(out, self)
-            self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
+                self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
 
 
-def user_game(self):
-    moves = {"w": 4, "a": 1, "s": 3, "d": 2}
+    def train_model_free_curriculum(self):
+        self.ppo_wrapper.set_env(self.real_env)
 
-    game_reward = 0
-    finish_game = False
+        episodes = 3000
 
-    self.real_env.reset()
-    while finish_game is False:
-        user_input = str(input())
+        schedulers = init_schedulers(self, episodes,
+                                     use_curriculum=False, use_guided_learning=False, use_learning_rate=False,
+                                     use_entropy_reg=False
+                                     )
 
-        try:
-            user_move = moves[user_input]
-        except KeyError:
-            continue
+        for step in trange(episodes, desc="Training model free"):
+            out = self.ppo_wrapper.learn(
+                episodes=self.config.episodes,
+            )
 
-        _, reward, done, _ = self.real_env.step({"agent_0": user_move})
-        game_reward += reward["agent_0"]
+            for s in schedulers:
+                s.update_step(step)
 
-        if done:
-            while True:
-                print("Finee! Total reward: ", game_reward)
-                exit_input = input(
-                    "Gioco terminato! Iniziare un'altra partita? (y/n)"
-                )
-                if exit_input == "n":
-                    finish_game = True
-                    break
-                elif exit_input == "y":
-                    game_reward = 0
-                    self.real_env.reset()
-                    break
+            if self.config.use_wandb:
+                logs, rollout = preprocess_logs(out, self)
+                self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
+
+
+    def user_game(self):
+        moves = {"w": 4, "a": 1, "s": 3, "d": 2}
+
+        game_reward = 0
+        finish_game = False
+
+        self.real_env.reset()
+        while finish_game is False:
+            user_input = str(input())
+
+            try:
+                user_move = moves[user_input]
+            except KeyError:
+                continue
+
+            _, reward, done, _ = self.real_env.step({"agent_0": user_move})
+            game_reward += reward["agent_0"]
+
+            if done:
+                while True:
+                    print("Finee! Total reward: ", game_reward)
+                    exit_input = input(
+                        "Gioco terminato! Iniziare un'altra partita? (y/n)"
+                    )
+                    if exit_input == "n":
+                        finish_game = True
+                        break
+                    elif exit_input == "y":
+                        game_reward = 0
+                        self.real_env.reset()
+                        break
 
 
 def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_guided_learning: bool = True,
@@ -258,4 +258,4 @@ def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_g
 if __name__ == "__main__":
     params = Params()
     mambrl = MAMBRL(params)
-    mambrl.train_env_model()
+    mambrl.train_model_free_curriculum()
