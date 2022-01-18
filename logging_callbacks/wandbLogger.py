@@ -185,6 +185,7 @@ class PPOWandb(WandbLogger):
         self.log_to_wandb(logs, commit=True)
 
 
+
 def on_epoch_end(self, loss: float, logs: Dict[str, Any], model_path: str):
         self.epoch += 1
 
@@ -244,3 +245,21 @@ def preprocess_logs(learn_output, mamrbl):
     logs.update(general_logs)
 
     return logs, rollout
+
+
+def delete_run(run_to_remove: str):
+    """delete_run method.
+
+    Parameters
+    ----------
+    run_to_remove : str
+        "<entity>/<project>/<run_id>"
+
+    Returns
+    -------
+    None.
+
+    """
+    api = wandb.Api()
+    run = api.run(run_to_remove)
+    run.delete()

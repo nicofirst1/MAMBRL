@@ -9,7 +9,7 @@ from torch.nn.utils import clip_grad_norm_
 from tqdm import trange
 
 from src.common import Params
-from src.model import NextFramePredictor
+from src.model.env_model import NextFramePredictor
 
 
 class EnvModelTrainer:

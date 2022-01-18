@@ -40,3 +40,10 @@ class WandbLogger:
     @staticmethod
     def log_to_wandb(metrics: Dict[str, Any], commit: bool = False, **kwargs):
         wandb.log(metrics, commit=commit, **kwargs)
+
+    def wandb_close(self):
+        """close method.
+
+        it ends the current wandb run
+        """
+        wandb.finish()

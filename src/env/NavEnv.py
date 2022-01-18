@@ -1,4 +1,5 @@
 import itertools
+from copy import copy
 from typing import Dict, Tuple
 
 import numpy as np
@@ -6,11 +7,11 @@ import torch
 
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
-from .scenarios import CollectLandmarkScenario
+from .Scenario import CollectLandmarkScenario
 from ..common.utils import rgb2gray, get_distance
 
 
-class CollectLandmarkEnv(SimpleEnv):
+class NavEnv(SimpleEnv):
     def __init__(
             self,
             scenario_kwargs: Dict,
@@ -61,7 +62,10 @@ class CollectLandmarkEnv(SimpleEnv):
         return self.scenario.get_curriculum()
 
     def reset(self):
-        super(CollectLandmarkEnv, self).reset()
+        super(NavEnv, self).reset()
+        for lndmrk_id in self.scenario.landmarks.values():
+            lndmrk_id.reset_counter()
+
         return self.observe()
 
     @property
@@ -114,12 +118,12 @@ class CollectLandmarkEnv(SimpleEnv):
 
         for agent_id, action in actions.items():
             self.agent_selection = agent_id
-            super(CollectLandmarkEnv, self).step(action)
+            super(NavEnv, self).step(action)
 
         self.steps += 1
         self.dones["__all__"] = False
         if self.steps >= self.max_cycles:
-           self.dones["__all__"] = True
+            self.dones["__all__"] = True
 
         # update landmarks status
         visited_landmarks = set(itertools.chain(self.scenario.visited_landmarks))
@@ -140,9 +144,52 @@ class CollectLandmarkEnv(SimpleEnv):
         if self.dones["__all__"]:
             self.dones = {k: True for k in self.dones.keys()}
 
+        self.infos = {k: self.agents_dict[k].state for k in self.infos.keys()}
 
         observation = self.observe()
-        return observation, self.rewards, self.dones, {}
+        return observation, self.rewards, self.dones, self.infos
+
+    def step_francesco(
+            self, actions: Dict[str, int]
+    ) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
+        """
+                Takes a step in the environment.
+                All the agents act simultaneously and the the observation are collected
+                Args:
+                    actions: dictionary mapping angent name to an action
+
+                Returns: all returns are dict mapping agent string to a value
+                    observation : the observed window as a torch.Tensor
+                    rewards: a reward as an int
+                    dones: if the agent is done or not
+                    infos: additional infos on the agent, such as its position
+
+                """
+
+        for agent_id, action in actions.items():
+            self.agent_selection = agent_id
+            super(NavEnv, self).step(action)
+
+        # update landmarks status
+        visited_landmarks = list(self.scenario.registered_collisions.values())
+        visited_landmarks = set(itertools.chain(*visited_landmarks))
+
+        not_visited = set(self.scenario.landmarks.keys()) - visited_landmarks
+
+        for lndmrk_id in visited_landmarks:
+            self.scenario.landmarks[lndmrk_id].reset_counter()
+        for lndmrk_id in not_visited:
+            self.scenario.landmarks[lndmrk_id].step()
+
+        observation = self.observe()
+        # copy done so __all__ is not appended
+        dones = copy(self.dones)
+        dones["__all__"] = all(dones.values())
+
+        # add agent state to infos
+        self.infos = {k: self.agents_dict[k].state for k in self.infos.keys()}
+
+        return observation, self.rewards, dones, self.infos
 
     def optimal_action(self, agent):
         """
@@ -209,7 +256,7 @@ class CollectLandmarkEnv(SimpleEnv):
         return action, probs
 
 
-def get_env(kwargs: Dict) -> CollectLandmarkEnv:
+def get_env(kwargs: Dict) -> NavEnv:
     """Initialize rawEnv and wrap it in parallel petting zoo."""
-    env = CollectLandmarkEnv(**kwargs)
+    env = NavEnv(**kwargs)
     return env

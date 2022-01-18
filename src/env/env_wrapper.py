@@ -1,13 +1,13 @@
 import torch
 
 from typing import Tuple
-from .envs import CollectLandmarkEnv
+from .NavEnv import NavEnv
 from src.common.utils import one_hot_encode
 
 
 class EnvWrapper:
     def __init__(
-        self, env: CollectLandmarkEnv, frame_shape, num_stacked_frames, device, gamma
+        self, env: NavEnv, frame_shape, num_stacked_frames, device, gamma
     ):
 
         self.env = env

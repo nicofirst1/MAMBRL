@@ -10,28 +10,50 @@ import torch
 class Params:
     unique_id = str(uuid.uuid1())[:8]
 
-    #### DIRECTORIES ####
+    # =============================================================================
+    # DIRECTORIES
+    # =============================================================================
     WORKING_DIR = os.getcwd().split("MAMBRL")[0]
     WORKING_DIR = os.path.join(WORKING_DIR, "MAMBRL")
     SRC_DIR = os.path.join(WORKING_DIR, "src")
     LOG_DIR = os.path.join(WORKING_DIR, "log_dir")
     EVAL_DIR = os.path.join(LOG_DIR, "eval")
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
+    TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
+    MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
+    MODEL_FREE_LOGGER_FILE = os.path.join(
+    MODEL_FREE_LOG_DIR, "model_free_log.log")
 
-    #### TRAINING ####
+    # =============================================================================
+    # TRAINING
+    # =============================================================================
     debug = False
     use_wandb = True
     device = torch.device("cuda")
-    frame_shape = [3, 127, 128]
-    num_workers = multiprocessing.cpu_count() - 1
-    num_gpus = torch.cuda.device_count()
-    param_sharing = False
+    resize = True
+    obs_shape = [3, 32, 32]  # [3, 600, 600]
     guided_learning_prob = 0.0
     epochs = 1000
-    minibatch = 25
+    minibatch = 32  # 64
     batch_size = 4
+    framework = "torch"
 
-    ### ENV model
+    # =============================================================================
+    # MULTIAGENT
+    # =============================================================================
+    param_sharing = False
+
+    # =============================================================================
+    #  OPTIMIZER
+    # =============================================================================
+    lr = 3e-4
+    alpha = 0.99
+    max_grad_norm = 5
+    eps = 1e-5
+
+    # =============================================================================
+    #  ENV MODEL
+    # =============================================================================
     stack_internal_states = True
     recurrent_state_size = 64
     hidden_size = 96
@@ -53,27 +75,63 @@ class Params:
     rollout_len = 10
     save_models=True
 
-    ### Optimizer
-    lr = 2.5e-4
-    eps = 1e-5
-    alpha = 0.99
-    max_grad_norm = 0.5
 
-    ### PPO Algo
-    gamma = 0.99
-    clip_value_loss = True
+    # =============================================================================
+    # ALGO PARAMETERS
+    # =============================================================================
+    gamma = 0.998
     ppo_clip_param = 0.1
-    value_loss_coef = 0.5
-    entropy_coef = 0.01
+    clip_value_loss = True
+    # Clip param for the value function. Note that this is sensitive to the
+    # scale of the rewards. If your expected V is large, increase this.
+    vf_clip_param = 10.0
+    # Loss
+    # Coefficient of the value function loss. IMPORTANT: you must tune this if
+    # you set actor and critic networks share weights (from rllib ppo
+    # implementation)
+    value_loss_coef = 1  # [0.5, 1]
+    entropy_coef = 0.01  # [0.5, 0.1]
 
-    #PPO Agent
+    # =============================================================================
+    # PPO NETWORK PARAMETERS
+    # =============================================================================
+    # if to use the same architecture for the actor-critic
+    share_weights = False
+    # valid options are "actor","critic","actor-critic".
+    # Use "actor-critic" to share layers between actor and critic
+    network_type = "actor-critic"
+    # A single conv layer is a 3-ple (Channel_out, kernel_size, stride)
+    # Conv3D kernel_size and stride can be int or a 3-ple
+    conv_layers = [(64, (2, 3, 3), 1), (64, (1, 3, 3), 1),
+                   (32, 2, 1)]  # ,(32, 3, 2)]
+    # Conv2D kernel_size and stride can be int or a 2-ple
+    # conv_layers = [(64,3,1), (64,3,1), (32, 3, 2)]
+    # fully connected layers to use after the Conv layers.
+    fc_layers = [1024, 512, 124, 64, 32]
+    # use recurrent neural network
+    use_recurrent = False
+    # recurrent_layers
+    use_residual = False
+
     base = "resnet"  # [ cnn , resnet ]
-    recurrent = True
     base_hidden_size=64
 
+    # Config Dict
+    ppo_configs = {
+        "rollout_fragment_length": 50,
+        # PPO parameter
+        "lambda": 0.95,
+        "gamma": 0.998,
+        "clip_param": 0.2,
+        "use_critic": True,
+        "use_gae": True,
+        "grad_clip": 5,
+        "num_sgd_iter": 10,
+    }
 
-
-    #### ENVIRONMENT ####
+    # =============================================================================
+    # ENVIRONMENT
+    # =============================================================================
     agents = 1
     landmarks = 1
     step_reward = -1
@@ -81,22 +139,28 @@ class Params:
     episodes = 3
     horizon = 50
     env_name = "collab_nav"
+    model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
     num_frames = 4
     num_steps = horizon // num_frames
-    full_rollout = False
     gray_scale = False
-    num_actions = 5
     normalize_reward = True
     world_max_size = 3
     visible = False
+    max_landmark_counter = 4
+    landmark_penalty = -0.01  # -0.01   # -1
+    # 0 don't move, 1 left, 2 right,  3 down, 4 top
+    num_actions = 5
+
+    #### ENVIRONMENT ENTITIES ####
+    agent_size = 0.1
+    landmark_size = 0.3
 
     #### EVALUATION ####
     log_step = 500
     checkpoint_freq = 50
     restore = True
     resume_training = False
-    alternating = False
     max_checkpoint_keep = 10
 
     color_index = [  # map index to RGB colors
@@ -112,7 +176,7 @@ class Params:
         self.__parse_args()
 
         if self.gray_scale:
-            self.frame_shape[0] = 1
+            self.obs_shape[0] = 1
 
         self.obs_shape = (self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
 

@@ -52,48 +52,81 @@ class EpsilonGreedy(TrajCollectionPolicy):
 
     def act(
         self, agent_id: str, observation: torch.Tensor
-    ) -> Tuple[int, int, torch.Tensor]:
+    ) -> Tuple[int, float, torch.Tensor, bool]:
+        """act method.
+
+               implementation of the epsilon greedy exploration function
+               Returns
+               -------
+               action: int
+                   index of the action chosen
+               value: float
+                   value of the state
+               log_actions_prob: torch.Tensor
+                   [self.num_actions] log actions prob
+               rand_act: bool
+                   if the action was chosen randomly
+               """
+        # action_logit [1, num_action] value_logit [1,1]
         action_logit, value_logit = self.ac_dict[agent_id](observation)
         action_probs = F.softmax(action_logit, dim=1)
 
         if uniform(0, 1) < self.epsilon:
             action = randint(0, self.num_actions - 1)  # Explore action space
+            rand_act = True
+
         else:
             action = action_probs.max(1)[1]
+            rand_act = False
 
         value = int(value_logit)
         action = int(action)
 
+        # fixme: check if are identical
         log_action_prob = torch.log(action_probs).mean()
+        log_action_prob = F.log_softmax(action_logit, dim=1).squeeze()
 
         if self.epsilon > 0:
             self.epsilon -= self.decrease
 
-        return action, value, log_action_prob
+        return action, value, log_action_prob, rand_act
 
     def increase_temp(self, actions: torch.Tensor):
-        return
         var = actions.float().var()
-        mean = actions.float().mean()
+        # +1 because actions id starts from 0
+        mean = (actions + 1).float().mean()
 
         if not mean - var < self.num_actions / 2 < mean + var:
             if self.epsilon < 1:
-                self.epsilon += 0.01
+                self.epsilon += 0.2
 
 
 class MultimodalMAS(TrajCollectionPolicy):
-    def __init__(self, ac_dict):
-        self.ac_dict = ac_dict
 
-    def act(
-        self, agent_id: str, observation: torch.Tensor
-    ) -> Tuple[int, int, torch.Tensor]:
-        action_logit, value_logit = self.ac_dict[agent_id](observation)
+    def __init__(self, ac_dict, cr_dict=None, share_weights=True):
+        self.share_weights = share_weights
+        if self.share_weights:
+            self.ac_dict = ac_dict
+        else:
+            assert cr_dict is not None, \
+                f"{cr_dict} is invalid. You need to specify a valid model for the critic"
+            self.ac_dict = ac_dict
+            self.cr_dict = cr_dict
+
+    def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, float, torch.Tensor]:
+
+        if self.share_weights:
+            action_logit, value_logit = self.ac_dict[agent_id](observation)
+        else:
+            action_logit = self.ac_dict[agent_id](observation)
+            value_logit = self.cr_dict[agent_id](observation)
+
         action_probs = F.softmax(action_logit, dim=1)
-        action = action_probs.multinomial(1).squeeze()
-        log_action_prob = torch.log(action_probs)
+        action = action_probs.multinomial(1)
 
-        value = int(value_logit)
+        log_actions_prob = F.log_softmax(action_logit, dim=1).squeeze()
+
+        value = float(value_logit)
         action = int(action)
 
-        return action, value, log_action_prob
+        return action, value, log_actions_prob
