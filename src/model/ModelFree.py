@@ -1,11 +1,13 @@
 import math
+from typing import Tuple
 
 import torch
 import torch.nn as nn
 from torchvision.transforms import transforms
 
-from common.distributions import Categorical
 from src.common import FixedCategorical, init
+from src.common.distributions import Categorical
+
 
 class Flatten(nn.Module):
     @staticmethod
@@ -51,12 +53,17 @@ class Policy(nn.Module):
     def __init__(self, obs_shape, action_space, base, hidden_size, base_kwargs):
         super(Policy, self).__init__()
 
+        #todo: base devono diventare feature extractions, ritornano solo features e occasionalemnte rnn
         if base == "resnet":
             base = ResNetBase
         elif base == "cnn":
             base = CNNBase
         else:
             raise NotImplementedError
+
+        #todo: splittare gradienti per gruppo
+
+        #todo: tieni buffer interno per RNN
 
         self.base = base(obs_shape, **base_kwargs)
         self.dist = Categorical(self.base.output_size, action_space)
@@ -73,7 +80,15 @@ class Policy(nn.Module):
         """Size of rnn_hx."""
         return self.base.recurrent_hidden_state_size
 
-    def forward(self, inputs, rnn_hxs, masks):
+    def forward(self, inputs, masks)-> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Perform a forward pass extracting the actor features and returning the values
+        :param input:
+        :return:
+            action_logits: a torch tensor of size [batch_size, num_actions]
+            values: the value from the value layer
+
+        """
         raise NotImplementedError
 
     def act(self, inputs, rnn_hxs, masks, deterministic=False):
@@ -102,6 +117,54 @@ class Policy(nn.Module):
         dist_entropy = dist.entropy().mean()
 
         return value, action_log_probs, dist_entropy, rnn_hxs
+
+    def compute_action_entropy(self, frames: torch.Tensor):
+        """evaluate_actions method.
+
+        compute the actions logit, value and actions probability by passing
+        the actual states (frames) to the ModelFree network. Then computes
+        the entropy of the actions
+        Parameters
+        ----------
+        frames : PyTorch Array
+            a 4 dimensional tensor [batch_size, channels, width, height]
+
+        Returns
+        -------
+        action_logit : Torch.Tensor [batch_size, num_actions]
+            output of the ModelFree network before passing it to the softmax
+        action_log_probs : torch.Tensor [batch_size, num_actions]
+            log_probs of all the actions
+        probs : Torch.Tensor [batch_size, num_actions]
+            probability of actions given by the ModelFree network
+        value : Torch.Tensor [batch_size,1]
+            value of the state given by the ModelFree network
+        entropy : Torch.Tensor [batch_size,1]
+            value of the entropy given by the action with index equal to
+            action_indx.
+        """
+
+        #todo: usala come evaluate actions, elimina categorical
+        assert self.network_type != "critic", \
+            "This network is set as critic, it cannot compute the action entropy"
+        if self.network_type == "actor-critic":
+            action_logit, value = self.forward(frames)
+            action_probs = F.softmax(action_logit, dim=1)
+            action_log_probs = F.log_softmax(action_logit, dim=1)
+            entropy = -(action_probs * action_log_probs).sum(1).mean()
+
+            return action_logit, action_log_probs, action_probs, value, entropy
+
+        elif self.network_type == "actor":
+            action_logit = self.forward(frames)
+            action_probs = F.softmax(action_logit, dim=1)
+            action_log_probs = F.log_softmax(action_logit, dim=1)
+            entropy = -(action_probs * action_log_probs).sum(1).mean()
+
+            return action_logit, action_log_probs, action_probs, entropy
+
+        elif self.network_type == "critic":
+            raise
 
 
 class NNBase(nn.Module):
@@ -134,6 +197,7 @@ class NNBase(nn.Module):
         return self._hidden_size
 
     def _forward_gru(self, x, hxs, masks):
+        #todo: remove gru from base
         if x.size(0) == hxs.size(0):
             x, hxs = self.gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
             x = x.squeeze(0)
@@ -246,6 +310,154 @@ class NNBase(nn.Module):
             hxs = hxs.squeeze(0)
 
         return x, hxs
+
+
+class Conv2DModelFree(NNBase):
+    """Conv2DModelFree class.
+
+    Applies a 2D convolution over a frame
+    """
+    #todo: tieni solo convolution e feature extr
+    def __init__(self, in_shape, num_actions, **kwargs):
+        assert kwargs["num_frames"] == 0, "The parameter num_frames should be zero when using the 2D convolution"
+        fc_layers = kwargs["fc_layers"]
+        network_type = kwargs["network_type"]
+        super(Conv2DModelFree, self).__init__(
+            num_actions, features_out=fc_layers[-1], network_type=network_type)
+        conv_layers = kwargs["conv_layers"]
+        use_residual = kwargs["use_residual"]
+
+        self.name = "Conv2DModelFree"
+        shared_layers = OrderedDict()
+        self.num_actions = num_actions
+        self.in_shape = in_shape
+        self.num_channels = in_shape[0]
+        next_inp = None
+        # =============================================================================
+        # FEATURE EXTRACTOR SUBMODULE
+        # =============================================================================
+        for i, cnn in enumerate(conv_layers):
+            if i == 0:
+                shared_layers[network_type + "_conv_0"] = nn.Conv2d(
+                    self.num_channels, cnn[0], kernel_size=cnn[1], stride=cnn[2])
+                shared_layers[network_type + "_conv_0_activ"] = nn.LeakyReLU()
+            else:
+                shared_layers[network_type + "_conv_" + str(i)] = nn.Conv2d(
+                    next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
+                shared_layers[network_type + "_conv_" +
+                              str(i) + "_activ"] = nn.LeakyReLU()
+            next_inp = cnn[0]
+
+        for layer in shared_layers:
+            if layer == (network_type + "_conv_0"):
+                fake_inp = torch.zeros(
+                    [1, self.num_channels, *self.in_shape[1:]])
+                fake_inp = shared_layers[layer](fake_inp)
+            else:
+                fake_inp = shared_layers[layer](fake_inp)
+        # flatten layer
+        next_inp = fake_inp.view(1, -1).size(1)
+
+        # flatten the output starting from dim=1 by default
+        shared_layers[network_type + "_flatten"] = nn.Flatten()
+        shared_layers[network_type +
+                      "_fc_0"] = nn.Linear(next_inp, fc_layers[0])
+        shared_layers[network_type + "_fc_0_activ"] = nn.LeakyReLU()
+        next_inp = fc_layers[0]
+        self.shared_network = nn.Sequential(shared_layers)
+
+        # =============================================================================
+        # ACTOR AND CRITIC SUBNETS
+        # =============================================================================
+        if self.network_type == "actor-critic":
+            actor_subnet = OrderedDict()
+            critic_subnet = OrderedDict()
+            for i, fc in enumerate(fc_layers[1:]):
+                # Separate submodules for the actor and the critic
+                actor_subnet["actor_fc_" + str(i)] = nn.Linear(next_inp, fc)
+                critic_subnet["critic_fc_" +
+                              str(i)] = nn.Linear(next_inp, fc)
+                actor_subnet["actor_fc_" + str(i) + "_activ"] = nn.Tanh()
+                critic_subnet["critic_fc_" +
+                              str(i) + "_activ"] = nn.Tanh()
+                next_inp = fc
+            actor_subnet["actor_out"] = self.actor
+            critic_subnet["critic_out"] = self.critic
+
+            self.actor_network = nn.Sequential(actor_subnet)
+            self.critic_network = nn.Sequential(critic_subnet)
+
+        elif self.network_type == "actor":
+            actor_subnet = OrderedDict()
+            for i, fc in enumerate(fc_layers[1:]):
+                # Separate submodules for the actor and the critic
+                actor_subnet["actor_fc_" + str(i)] = nn.Linear(next_inp, fc)
+                actor_subnet["actor_fc_" + str(i) + "_activ"] = nn.Tanh()
+                next_inp = fc
+            actor_subnet["actor_out"] = self.actor
+            self.shared_network = nn.Sequential(shared_layers)
+            self.actor_network = nn.Sequential(actor_subnet)
+
+        elif self.network_type == "critic":
+            critic_subnet = OrderedDict()
+            for i, fc in enumerate(fc_layers[1:]):
+                # Separate submodules for the actor and the critic
+                critic_subnet["critic_fc_" +
+                              str(i)] = nn.Linear(next_inp, fc)
+                critic_subnet["critic_fc_" +
+                              str(i) + "_activ"] = nn.Tanh()
+                next_inp = fc
+            critic_subnet["critic_out"] = self.critic
+            self.shared_network = nn.Sequential(shared_layers)
+            self.critic_network = nn.Sequential(critic_subnet)
+
+    def to(self, device):
+        if self.network_type == "actor_critic":
+            self.critic = self.critic.to(device)
+            self.actor = self.actor.to(device)
+        else:
+            self.shared_network = self.shared_network.to(device)
+            if self.network_type == "actor":
+                self.actor_network = self.actor_network.to(device)
+            else:
+                self.critic_network = self.critic_network.to(device)
+
+        return self
+
+    def forward(self, input):
+        """forward method.
+
+        Return the logit and the values of the Conv2DModelFree if the
+        network_type is 'actor_critic'. Otherwise return only the value or
+        only the logit
+        Parameters
+        ----------
+        input : torch.Tensor
+            [batch_size, num_channels, width, height]
+
+        Returns
+        -------
+        logit : torch.Tensor
+            [batch_size, num_actions]
+        value : torch.Tensor
+            [batch_size, value]
+
+        """
+        # last 2 layers shared layers requires a flattened input
+        x = self.shared_network(input)
+
+        if self.network_type == "actor-critic":
+            action_logits = self.actor_network(x)
+            value = self.critic_network(x)
+            return action_logits, value
+
+        elif self.network_type == "actor":
+            action_logits = self.actor_network(x)
+            return action_logits
+
+        elif self.network_type == "critic":
+            value = self.critic_network(x)
+            return value
 
 
 class CNNBase(NNBase):

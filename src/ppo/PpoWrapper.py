@@ -4,9 +4,9 @@ import random
 import torch
 
 from src.common import mas_dict2tensor, Params
-from .model_free import Policy
 from .ppo import PPO
 from .RolloutStorage import RolloutStorage
+from ..model.ModelFree import Policy
 
 
 class PpoWrapper:
@@ -59,7 +59,7 @@ class PpoWrapper:
         self.ppo_agent.entropy_coef = value
 
     def learn(self, episodes):
-        [model.train() for model in self.actor_critic_dict.values()]
+        self.ppo_agent.eval()
 
         rollout = RolloutStorage(
             num_steps=self.num_steps,
@@ -98,6 +98,7 @@ class PpoWrapper:
                 agent_index = int(agent_id[-1])
 
                 # perform guided learning with scheduler
+                #todo: remove optimal end generalize with policy
                 if self.guided_learning_prob > random.uniform(0, 1):
                     action, action_log_prob = self.env.optimal_action(agent_id)
                     guided_learning[agent_id] = True
@@ -153,9 +154,10 @@ class PpoWrapper:
 
         rollout.compute_returns(next_value, True, self.gamma, 0.95)
 
-        #with torch.enable_grad():
-        value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
-        rollout.after_update()
+        self.ppo_agent.train()
+        with torch.enable_grad():
+            value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
+            rollout.after_update()
 
         return value_loss, action_loss, entropy, rollout, logs
 

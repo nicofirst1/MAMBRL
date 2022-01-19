@@ -1,5 +1,5 @@
 from .EnvModel import NextFramePredictor
-from .env_model_trainer import EnvModelTrainer
+from .EnvModelTrainer import EnvModelTrainer
 from .policies import MultimodalMAS
 from .ppo_wrapper import PpoWrapper
 from .rollout_storage import RolloutStorage

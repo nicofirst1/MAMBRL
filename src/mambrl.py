@@ -4,13 +4,13 @@ from torch.optim.lr_scheduler import ExponentialLR
 from tqdm import trange
 
 from logging_callbacks.wandbLogger import preprocess_logs
-from model import PpoWrapper
 from src.common import Params
 from src.common.schedulers import CurriculumScheduler, LearningRateScheduler, StepScheduler, \
     linear_decay, exponential_decay
 from src.env import get_env, EnvWrapper
 from src.model import EnvModelTrainer, NextFramePredictor
-from src.model.policies import OptimalAction
+from src.ppo.PpoWrapper import PpoWrapper
+from src.train.Policies import OptimalAction
 
 params = Params()
 
