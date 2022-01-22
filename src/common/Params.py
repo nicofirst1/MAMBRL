@@ -28,10 +28,10 @@ class Params:
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = True
+    use_wandb = False
     device = torch.device("cuda")
     resize = True
-    obs_shape = [3, 32, 32]  # [3, 600, 600]
+    frame_shape = [3, 96, 96]  # [3, 600, 600]
     guided_learning_prob = 0.0
     epochs = 1000
     minibatch = 32  # 64
@@ -102,8 +102,7 @@ class Params:
     network_type = "actor-critic"
     # A single conv layer is a 3-ple (Channel_out, kernel_size, stride)
     # Conv3D kernel_size and stride can be int or a 3-ple
-    conv_layers = [(64, (2, 3, 3), 1), (64, (1, 3, 3), 1),
-                   (32, 2, 1)]  # ,(32, 3, 2)]
+    conv_layers = [(64, (2, 3, 3), 1), (64, (1, 3, 3), 1), (32, 2, 1)]  # ,(32, 3, 2)]
     # Conv2D kernel_size and stride can be int or a 2-ple
     # conv_layers = [(64,3,1), (64,3,1), (32, 3, 2)]
     # fully connected layers to use after the Conv layers.
@@ -176,7 +175,7 @@ class Params:
         self.__parse_args()
 
         if self.gray_scale:
-            self.obs_shape[0] = 1
+            self.frame_shape[0] = 1
 
         self.obs_shape = (self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
 

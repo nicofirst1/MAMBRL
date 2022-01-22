@@ -1,10 +1,11 @@
-import math
 import random
 
 import torch
+from tqdm import trange
 
+from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import mas_dict2tensor, Params
-from .ppo import PPO
+from .Ppo import PPO
 from .RolloutStorage import RolloutStorage
 from ..model.ModelFree import Policy
 
@@ -44,6 +45,36 @@ class PpoWrapper:
             use_clipped_value_loss=config.clip_value_loss
         )
 
+        self.use_wandb = config.use_wandb
+        if self.use_wandb:
+            from pytorchCnnVisualizations.src import CamExtractor, ScoreCam
+
+            model = self.actor_critic_dict["agent_0"].base
+            cams = []
+
+            if config.base == "resnet":
+                for idx, layer in enumerate(list(model.features)):
+                    extractor = CamExtractor(model, target_layer=idx)
+                    name = type(layer).__name__
+                    score_cam = ScoreCam(model, extractor, name)
+                    cams.append(score_cam)
+            elif config.base == "cnn":
+                pass
+
+            from logging_callbacks import PPOWandb
+
+            self.logger = PPOWandb(
+                train_log_step=5,
+                val_log_step=5,
+                project="model_free",
+                opts={},
+                models=self.actor_critic_dict["agent_0"].get_modules(),
+                horizon=config.horizon,
+                mode="disabled" if config.debug else "online",
+                action_meaning=self.env.env.action_meaning_dict,
+                cams=cams,
+            )
+
     def get_learning_rate(self):
         lrs = []
         for k, optim in self.ppo_agent.optimizers.items():
@@ -59,8 +90,6 @@ class PpoWrapper:
         self.ppo_agent.entropy_coef = value
 
     def learn(self, episodes):
-        self.ppo_agent.eval()
-
         rollout = RolloutStorage(
             num_steps=self.num_steps,
             obs_shape=self.obs_shape,
@@ -69,97 +98,191 @@ class PpoWrapper:
         )
         rollout.to(self.device)
 
-        logs = {ag: dict(
-            ratio=[],
-            surr1=[],
-            surr2=[],
-            returns=[],
-            adv_targ=[],
-            perc_surr1=[],
-            perc_surr2=[],
-            curr_log_porbs=[],
-            old_log_probs=[]
-        ) for ag in self.actor_critic_dict.keys()}
+        schedulers = self.init_schedulers(
+            episodes,
+            use_curriculum=False,
+            use_guided_learning=False,
+            use_learning_rate=False,
+            use_entropy_reg=False
+        )
 
-        # init dicts and reset env
+        # init dicts
         action_dict = {agent_id: False for agent_id in self.env.agents}
         values_dict = {agent_id: False for agent_id in self.env.agents}
         action_log_dict = {agent_id: False for agent_id in self.env.agents}
         recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
 
-        observation = self.env.reset()
-        rollout.states[0] = observation.unsqueeze(dim=0)
+        for episode in trange(episodes, desc="Training model free"):
+            self.ppo_agent.eval()
 
-        for step in range(self.num_steps):
-            obs = observation.to(self.device).unsqueeze(dim=0)
-            guided_learning = {agent_id: False for agent_id in self.env.agents}
+            for s in schedulers:
+                s.update_step(episode)
 
-            for agent_id in self.env.agents:
-                agent_index = int(agent_id[-1])
+            logs = {ag: dict(
+                ratio=[],
+                surr1=[],
+                surr2=[],
+                returns=[],
+                adv_targ=[],
+                perc_surr1=[],
+                perc_surr2=[],
+                curr_log_porbs=[],
+                old_log_probs=[]
+            ) for ag in self.actor_critic_dict.keys()}
 
-                # perform guided learning with scheduler
-                #todo: remove optimal end generalize with policy
-                if self.guided_learning_prob > random.uniform(0, 1):
-                    action, action_log_prob = self.env.optimal_action(agent_id)
-                    guided_learning[agent_id] = True
-                    value = -1
-                else:
-                    with torch.no_grad():
-                        value, action, action_log_prob, recurrent_hs = self.actor_critic_dict[agent_id].act(
-                            obs, rollout.recurrent_hs[step, agent_index], rollout.masks[step, agent_index]
-                        )
+            observation = self.env.reset()
+            rollout.states[0] = observation.unsqueeze(dim=0)
 
-                # get action with softmax and multimodal (stochastic)
-                action_dict[agent_id] = int(action)
-                values_dict[agent_id] = float(value)
-                action_log_dict[agent_id] = float(action_log_prob)
-                recurrent_hs_dict[agent_id] = recurrent_hs[0]
+            for step in range(self.num_steps):
+                obs = observation.to(self.device).unsqueeze(dim=0)
+                guided_learning = {agent_id: False for agent_id in self.env.agents}
 
-            # Obser reward and next obs
-            ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
-            new_observation, rewards, done, infos = self.env.step(action_dict)
+                for agent_id in self.env.agents:
+                    agent_index = int(agent_id[-1])
 
-            # if guided then use actual reward as predicted value
-            for agent_id, b in guided_learning.items():
-                if b:
-                    values_dict[agent_id] = rewards[agent_id]
+                    # perform guided learning with scheduler
+                    #todo: remove optimal end generalize with policy
+                    if self.guided_learning_prob > random.uniform(0, 1):
+                        action, action_log_prob = self.env.optimal_action(agent_id)
+                        guided_learning[agent_id] = True
+                        value = -1
+                    else:
+                        with torch.no_grad():
+                            value, action, action_log_prob, recurrent_hs = self.actor_critic_dict[agent_id].act(
+                                obs, rollout.recurrent_hs[step, agent_index], rollout.masks[step, agent_index]
+                            )
 
-            masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
-            rewards = mas_dict2tensor(rewards, float)
-            actions = mas_dict2tensor(action_dict, int)
-            values = mas_dict2tensor(values_dict, float)
-            recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
-            action_log_probs = mas_dict2tensor(action_log_dict, float)
+                    # get action with softmax and multimodal (stochastic)
+                    action_dict[agent_id] = int(action)
+                    values_dict[agent_id] = float(value)
+                    action_log_dict[agent_id] = float(action_log_prob)
+                    recurrent_hs_dict[agent_id] = recurrent_hs[0]
 
-            # update observation
-            observation = new_observation
+                # Obser reward and next obs
+                ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
+                observation, rewards, done, infos = self.env.step(action_dict)
 
-            rollout.insert(
-                state=observation,
-                recurrent_hs=recurrent_hs,
-                action=actions,
-                action_log_probs=action_log_probs,
-                value_preds=values,
-                reward=rewards,
-                mask=masks
-            )
+                # if guided then use actual reward as predicted value
+                for agent_id, b in guided_learning.items():
+                    if b:
+                        values_dict[agent_id] = rewards[agent_id]
 
-            if done["__all__"]:
-                observation = self.env.reset()
+                masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
+                rewards = mas_dict2tensor(rewards, float)
+                actions = mas_dict2tensor(action_dict, int)
+                values = mas_dict2tensor(values_dict, float)
+                recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
+                action_log_probs = mas_dict2tensor(action_log_dict, float)
 
-        ## fixme: qui bisogna come farlo per multi agent
-        with torch.no_grad():
-            next_value = self.actor_critic_dict["agent_0"].get_value(
-                rollout.states[-1], rollout.recurrent_hs[-1, 0], rollout.masks[-1,0]).detach()
+                rollout.insert(
+                    state=observation,
+                    recurrent_hs=recurrent_hs,
+                    action=actions,
+                    action_log_probs=action_log_probs,
+                    value_preds=values,
+                    reward=rewards,
+                    mask=masks
+                )
 
-        rollout.compute_returns(next_value, True, self.gamma, 0.95)
+                if done["__all__"]:
+                    observation = self.env.reset()
 
-        self.ppo_agent.train()
-        with torch.enable_grad():
-            value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
+            ## fixme: qui bisogna come farlo per multi agent
+            with torch.no_grad():
+                next_value = self.actor_critic_dict["agent_0"].get_value(
+                    rollout.states[-1], rollout.recurrent_hs[-1, 0], rollout.masks[-1,0]).detach()
+
+            rollout.compute_returns(next_value, True, self.gamma, 0.95)
+
+            self.ppo_agent.train()
+            with torch.enable_grad():
+                value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
+
+            if self.use_wandb:
+                logs = preprocess_logs([value_loss, action_loss, entropy, logs], self)
+                self.logger.on_batch_end(logs=logs, batch_id=episode, rollout=rollout)
+
             rollout.after_update()
 
-        return value_loss, action_loss, entropy, rollout, logs
+        return
+
 
     def set_env(self, env):
         self.env = env
+
+
+    def init_schedulers(self, episodes, use_curriculum: bool = True, use_guided_learning: bool = True,
+                        use_learning_rate: bool = True, use_entropy_reg: bool = True):
+        schedulers = []
+
+        if use_curriculum:
+            from common.schedulers import CurriculumScheduler
+
+            curriculum = {
+                400: dict(reward=0, landmark=1),
+                600: dict(reward=1, landmark=0),
+                800: dict(reward=1, landmark=1),
+                900: dict(reward=0, landmark=2),
+                1100: dict(reward=1, landmark=2),
+                1300: dict(reward=2, landmark=2),
+            }
+
+            cs = CurriculumScheduler(
+                episodes=episodes,
+                values_list=list(curriculum.values()),
+                set_fn=self.env.set_curriculum,
+                step_list=list(curriculum.keys()),
+                get_curriculum_fn=self.env.get_curriculum
+            )
+            schedulers.append(cs)
+
+        if use_guided_learning:
+            from common.schedulers import linear_decay, StepScheduler
+
+            guided_learning = {
+                100: 0.8,
+                200: 0.7,
+                400: 0.6,
+                600: 0.4,
+                800: 0.2,
+                900: 0.0,
+                1200: 0.4,
+                1400: 0.2,
+                1600: 0.1,
+                1700: 0.0,
+            }
+
+            ep = int(episodes * 0.8)
+            guided_learning = linear_decay(start_val=1, episodes=ep)
+
+            gls = StepScheduler(
+                episodes=ep,
+                values_list=guided_learning,
+                set_fn=self.set_guided_learning_prob
+            )
+            schedulers.append(gls)
+
+        if use_learning_rate:
+            from torch.optim.lr_scheduler import ExponentialLR
+            from common.schedulers import LearningRateScheduler
+
+            kwargs = dict(gamma=0.997)
+            lrs = LearningRateScheduler(
+                base_scheduler=ExponentialLR,
+                optimizer_dict=self.ppo_agent.optimizers,
+                scheduler_kwargs=kwargs
+            )
+            schedulers.append(lrs)
+
+        if use_entropy_reg:
+            from common.schedulers import exponential_decay, StepScheduler
+
+            values = exponential_decay(Params().entropy_coef, episodes, gamma=0.999)
+            es = StepScheduler(
+                episodes=episodes,
+                values_list=values,
+                set_fn=self.set_entropy_coeff
+            )
+            schedulers.append(es)
+
+        return schedulers

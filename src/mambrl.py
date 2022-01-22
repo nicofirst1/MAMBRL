@@ -16,7 +16,6 @@ params = Params()
 
 if not params.visible:
     import pyglet
-
     pyglet.options['shadow_window'] = False
 
 
@@ -46,35 +45,6 @@ class MAMBRL:
 
         self.ppo_wrapper = PpoWrapper(env=self.real_env, config=config)
 
-        if self.config.use_wandb:
-            from pytorchCnnVisualizations.src import CamExtractor, ScoreCam
-
-            model = self.ppo_wrapper.actor_critic_dict["agent_0"].base
-            cams = []
-
-            if config.base == "resnet":
-
-                for idx, layer in enumerate(list(model.features)):
-                    extractor = CamExtractor(model, target_layer=idx)
-                    name = type(layer).__name__
-                    score_cam = ScoreCam(model, extractor, name)
-                    cams.append(score_cam)
-            elif config.base == "cnn":
-                pass
-
-            from logging_callbacks import PPOWandb
-
-            self.logger = PPOWandb(
-                train_log_step=5,
-                val_log_step=5,
-                project="model_free",
-                opts={},
-                models=self.ppo_wrapper.actor_critic_dict["agent_0"].get_modules(),
-                horizon=params.horizon,
-                mode="disabled" if params.debug else "online",
-                action_meaning=self.real_env.env.action_meaning_dict,
-                cams=cams,
-            )
 
     def collect_trajectories(self):
         self.ppo_wrapper.set_env(self.real_env)
@@ -106,10 +76,8 @@ class MAMBRL:
 
     def train_agent_sim_env(self, epoch):
         self.ppo_wrapper.set_env(self.simulated_env)
-
-        for _ in trange(1000, desc="Training agent in simulated environment"):
-            self.simulated_env.frames = self.simulated_env.get_initial_frame()
-            losses = self.ppo_wrapper.learn(episodes=self.config.episodes)
+        self.simulated_env.frames = self.simulated_env.get_initial_frame()
+        self.ppo_wrapper.learn(episodes=self.config.episodes)
 
     def train(self):
         for epoch in trange(self.config.epochs, desc="Epoch"):
@@ -126,40 +94,7 @@ class MAMBRL:
 
     def train_model_free(self):
         self.ppo_wrapper.set_env(self.real_env)
-
-        for step in trange(1000, desc="Training model free"):
-            out = self.ppo_wrapper.learn(
-                episodes=self.config.episodes
-            )
-
-            if self.config.use_wandb:
-                logs, rollout = preprocess_logs(out, self)
-
-                self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
-
-
-    def train_model_free_curriculum(self):
-        self.ppo_wrapper.set_env(self.real_env)
-
-        episodes = 3000
-
-        schedulers = init_schedulers(self, episodes,
-                                     use_curriculum=False, use_guided_learning=False, use_learning_rate=False,
-                                     use_entropy_reg=False
-                                     )
-
-        for step in trange(episodes, desc="Training model free"):
-            out = self.ppo_wrapper.learn(
-                episodes=self.config.episodes,
-            )
-
-            for s in schedulers:
-                s.update_step(step)
-
-            if self.config.use_wandb:
-                logs, rollout = preprocess_logs(out, self)
-                self.logger.on_batch_end(logs=logs, batch_id=step, rollout=rollout)
-
+        self.ppo_wrapper.learn(episodes=self.config.episodes)
 
     def user_game(self):
         moves = {"w": 4, "a": 1, "s": 3, "d": 2}
@@ -194,68 +129,7 @@ class MAMBRL:
                         break
 
 
-def init_schedulers(mambrl: MAMBRL, episodes, use_curriculum: bool = True, use_guided_learning: bool = True,
-                    use_learning_rate: bool = True, use_entropy_reg: bool = True):
-    schedulers = []
-
-    if use_curriculum:
-        curriculum = {
-            400: dict(reward=0, landmark=1),
-            600: dict(reward=1, landmark=0),
-            800: dict(reward=1, landmark=1),
-            900: dict(reward=0, landmark=2),
-            1100: dict(reward=1, landmark=2),
-            1300: dict(reward=2, landmark=2),
-        }
-
-        cs = CurriculumScheduler(values_list=list(curriculum.values()), episodes=episodes,
-                                 set_fn=mambrl.real_env.set_curriculum,
-                                 step_list=list(curriculum.keys()),
-                                 get_curriculum_fn=mambrl.real_env.get_curriculum)
-        schedulers.append(cs)
-
-    if use_guided_learning:
-        guided_learning = {
-            100: 0.8,
-            200: 0.7,
-            400: 0.6,
-            600: 0.4,
-            800: 0.2,
-            900: 0.0,
-            1200: 0.4,
-            1400: 0.2,
-            1600: 0.1,
-            1700: 0.0,
-        }
-
-        ep = int(episodes * 0.8)
-        guided_learning = linear_decay(start_val=1, episodes=ep)
-
-        gls = StepScheduler(values_list=guided_learning, episodes=ep,
-                            set_fn=mambrl.ppo_wrapper.set_guided_learning_prob)
-        schedulers.append(gls)
-
-    if use_learning_rate:
-        kwargs = dict(gamma=0.997)
-        lrs = LearningRateScheduler(base_scheduler=ExponentialLR,
-                                    optimizer_dict=mambrl.ppo_wrapper.ppo_agent.optimizers,
-                                    scheduler_kwargs=kwargs)
-        schedulers.append(lrs)
-
-    if use_entropy_reg:
-        values = exponential_decay(Params().entropy_coef, episodes, gamma=0.999)
-
-        es = StepScheduler(
-            values_list=values, episodes=episodes,
-            set_fn=mambrl.ppo_wrapper.set_entropy_coeff
-        )
-
-        schedulers.append(es)
-
-    return schedulers
-
-
 if __name__ == "__main__":
     params = Params()
     mambrl = MAMBRL(params)
-    mambrl.train_model_free_curriculum()
+    mambrl.train_model_free()

@@ -257,14 +257,14 @@ class RolloutStorage(object):
         self.num_channels = obs_shape[0]
 
         #todo: togli stati RNN
-        self.states = torch.zeros(num_steps + 1, 1, *obs_shape)
-        self.recurrent_hs = torch.zeros(num_steps + 1, num_agents, 1, recurrent_hs_size)
-        self.rewards = torch.zeros(num_steps, num_agents, 1, 1)
-        self.value_preds = torch.zeros(num_steps + 1, num_agents, 1, 1)
-        self.returns = torch.zeros(num_steps + 1, num_agents, 1, 1)
-        self.actions = torch.zeros(num_steps, num_agents, 1, 1).long()
-        self.action_log_probs = torch.zeros(num_steps, num_agents, 1, 1)
-        self.masks = torch.ones(num_steps + 1, 1, 1)
+        self.states = torch.zeros(num_steps + 1, *obs_shape)
+        self.recurrent_hs = torch.zeros(num_steps + 1, num_agents, recurrent_hs_size)
+        self.rewards = torch.zeros(num_steps, num_agents, 1)
+        self.value_preds = torch.zeros(num_steps + 1, num_agents, 1)
+        self.returns = torch.zeros(num_steps + 1, num_agents, 1)
+        self.actions = torch.zeros(num_steps, num_agents, 1).long()
+        self.action_log_probs = torch.zeros(num_steps, num_agents, 1)
+        self.masks = torch.ones(num_steps + 1, 1)
 
     def to(self, device):
         self.states = self.states.to(device)
@@ -295,7 +295,7 @@ class RolloutStorage(object):
 
     def compute_returns(self, next_value, use_gae, gamma, gae_lambda):
         if use_gae:
-            #fixme: add sel.step as index
+            #fixme: add self.step as index
             self.value_preds[-1] = next_value
             gae = 0
             for step in reversed(range(self.rewards.size(0))):
@@ -325,7 +325,7 @@ class RolloutStorage(object):
             next_states_minibatch: torch.Tensor[minibatch_size, num_channels, width, height]
         """
         #todo: vedi se splittare i frames nel rollout oppure nell'env
-        total_samples = self.step
+        total_samples = self.rewards.size(0)
         perm = torch.randperm(total_samples)
 
         for start_ind in range(0, total_samples, minibatch_frames):
