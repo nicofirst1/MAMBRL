@@ -3,7 +3,7 @@ import time
 
 from rich import print
 
-from src.common import Params, print_current_curriculum
+from src.common import Params, print_current_strategy
 from src.env import get_env, EnvWrapper
 from src.model import PpoWrapper
 

@@ -25,11 +25,14 @@ class EnvWrapper:
         self.agents = self.env.agents_dict
         self.device = device
 
-    def set_curriculum(self, reward: int = None, landmark: int = None):
-        self.env.set_curriculum(reward, landmark)
+    def set_strategy(self, **kwargs):
+        self.env.set_strategy(**kwargs)
 
-    def get_curriculum(self) -> Tuple[Tuple[int, str], Tuple[int, str]]:
-        return self.env.get_curriculum()
+    def get_current_strategy(self) -> Tuple[str, str, str, str]:
+        return self.env.get_current_strategy()
+
+    def get_strategies(self):
+        return self.env.get_strategies()
 
     def reset(self):
         observation = self.env.reset()

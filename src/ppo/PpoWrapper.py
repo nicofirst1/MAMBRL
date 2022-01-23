@@ -230,7 +230,7 @@ class PpoWrapper:
             cs = CurriculumScheduler(
                 episodes=episodes,
                 values_list=list(curriculum.values()),
-                set_fn=self.env.set_curriculum,
+                set_fn=self.env.set_strategy,
                 step_list=list(curriculum.keys()),
                 get_curriculum_fn=self.env.get_curriculum
             )

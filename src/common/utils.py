@@ -1,18 +1,20 @@
 import numpy as np
 import torch
+from numpy.linalg import norm
 
 
-def print_current_curriculum(curriculum):
-    reward, landmark = curriculum
-
-    r_val, r_desc = reward
-    l_val, l_desc = landmark
+def print_current_strategy(strategies):
+    reward_step_strategy, \
+    reward_collision_strategy, \
+    landmark_reset_strategy, \
+    landmark_collision_strategy = strategies
 
     to_print = f"""
-    Rewards:
-    \t {r_val} : {r_desc}
-    Landmark:
-    \t {l_val} : {l_desc}
+    reward_step_strategy: {reward_step_strategy}
+    reward_collision_strategy: {reward_collision_strategy}
+    landmark_reset_strategy: {landmark_reset_strategy}
+    landmark_collision_strategy: {landmark_collision_strategy}
+
     """
 
     print(to_print)
@@ -75,6 +77,12 @@ def is_collision(entity1, entity2):
     delta_pos = entity1.state.p_pos - entity2.state.p_pos
     dist = np.sqrt(np.sum(np.square(delta_pos)))
     dist_min = entity1.size + entity2.size
+    return True if dist < dist_min else False
+
+
+def is_collision_border(border, agent):
+    dist=norm(np.cross(border.end - border.start, border.start - agent.state.p_pos)) / norm(border.end - border.start)
+    dist_min = border.size + agent.size
     return True if dist < dist_min else False
 
 

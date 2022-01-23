@@ -4,7 +4,7 @@ from typing import Dict
 import numpy as np
 import torch
 
-from src.common import print_current_curriculum
+from src.common import print_current_strategy
 
 
 class StepScheduler:
@@ -44,7 +44,7 @@ class CurriculumScheduler(StepScheduler):
     def update_step(self, step):
         value = super(CurriculumScheduler, self).update_step(step)
         if value is not None:
-            print_current_curriculum(self.get_curriculum_fn())
+            print_current_strategy(self.get_curriculum_fn())
 
 
 

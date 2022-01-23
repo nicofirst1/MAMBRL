@@ -55,11 +55,14 @@ class NavEnv(SimpleEnv):
         self.viewer = rendering.Viewer(frame_shape[1], frame_shape[2], visible=visible)
         self.viewer.set_max_size(scenario_kwargs["max_size"])
 
-    def set_curriculum(self, reward: int = None, landmark: int = None):
-        self.scenario.set_curriculum(reward, landmark)
+    def set_strategy(self, **kwargs):
+        self.scenario.set_strategy(**kwargs)
 
-    def get_curriculum(self) -> Tuple[Tuple[int, str], Tuple[int, str]]:
-        return self.scenario.get_curriculum()
+    def get_current_strategy(self) -> Tuple[str, str, str, str]:
+        return self.scenario.get_current_strategy()
+
+    def get_strategies(self):
+        return self.scenario.get_strategies()
 
     def reset(self):
         super(NavEnv, self).reset()
@@ -121,22 +124,16 @@ class NavEnv(SimpleEnv):
             super(NavEnv, self).step(action)
 
         self.steps += 1
+        # perform a landmark step
+        [land.step() for land in self.world.landmarks]
         self.dones["__all__"] = False
         if self.steps >= self.max_cycles:
             self.dones["__all__"] = True
 
         # update landmarks status
-        visited_landmarks = set(itertools.chain(self.scenario.visited_landmarks))
-        self.scenario.visited_landmarks = []
-
-        if len(visited_landmarks) > 0:
+        removed = self.scenario.remove_collided_landmarks(self.world)
+        if removed:
             self.render_geoms = None
-            self.scenario.num_landmarks -= len(visited_landmarks)
-
-            for lndmrk_id in visited_landmarks:
-                landmark = self.scenario.landmarks[lndmrk_id]
-                self.world.entities.remove(landmark)
-                self.world.landmarks.remove(landmark)
 
         if self.scenario.num_landmarks <= 0:
             self.dones["__all__"] = True

@@ -1,6 +1,5 @@
 import argparse
 import inspect
-import multiprocessing
 import os
 import uuid
 
@@ -22,7 +21,7 @@ class Params:
     TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
     MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
     MODEL_FREE_LOGGER_FILE = os.path.join(
-    MODEL_FREE_LOG_DIR, "model_free_log.log")
+        MODEL_FREE_LOG_DIR, "model_free_log.log")
 
     # =============================================================================
     # TRAINING
@@ -68,13 +67,12 @@ class Params:
     latent_use_max_probability = 0.8
     residual_dropout = 0.5
     target_loss_clipping = 0.03
-    scheduled_sampling_decay_steps=3000
-    input_noise=0.05
-    use_stochastic_model=True
-    clip_grad_norm=1.0
+    scheduled_sampling_decay_steps = 3000
+    input_noise = 0.05
+    use_stochastic_model = True
+    clip_grad_norm = 1.0
     rollout_len = 10
-    save_models=True
-
+    save_models = True
 
     # =============================================================================
     # ALGO PARAMETERS
@@ -113,7 +111,7 @@ class Params:
     use_residual = False
 
     base = "resnet"  # [ cnn , resnet ]
-    base_hidden_size=64
+    base_hidden_size = 64
 
     # Config Dict
     ppo_configs = {
@@ -132,7 +130,7 @@ class Params:
     # ENVIRONMENT
     # =============================================================================
     agents = 1
-    landmarks = 1
+    landmarks = 2
     step_reward = -1
     landmark_reward = 50
     episodes = 3
@@ -148,6 +146,7 @@ class Params:
     visible = False
     max_landmark_counter = 4
     landmark_penalty = -0.01  # -0.01   # -1
+    border_penalty = -1
     # 0 don't move, 1 left, 2 right,  3 down, 4 top
     num_actions = 5
 
@@ -252,10 +251,11 @@ class Params:
             scenario_kwargs=dict(
                 step_reward=self.step_reward,
                 landmark_reward=self.landmark_reward,
+                landmark_penalty=self.landmark_penalty,
+                border_penalty=self.border_penalty,
                 num_agents=self.agents,
                 num_landmarks=self.landmarks,
                 max_size=self.world_max_size,
-                normalize_rewards=self.normalize_reward
             ),
         )
 
@@ -268,7 +268,7 @@ class Params:
             base=self.base,
             hidden_size=self.base_hidden_size,
             base_kwargs=dict(
-                recurrent=self.recurrent,
+                #recurrent=self.recurrent,
                 hidden_size=self.base_hidden_size
             ),
         )
