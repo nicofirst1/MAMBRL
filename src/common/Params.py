@@ -106,11 +106,11 @@ class Params:
     # fully connected layers to use after the Conv layers.
     fc_layers = [1024, 512, 124, 64, 32]
     # use recurrent neural network
-    use_recurrent = False
+    use_recurrent = True
     # recurrent_layers
     use_residual = False
 
-    base = "resnet"  # [ cnn , resnet ]
+    base = "cnn"  # [ cnn , resnet ]
     base_hidden_size = 64
 
     # Config Dict
@@ -268,7 +268,7 @@ class Params:
             base=self.base,
             hidden_size=self.base_hidden_size,
             base_kwargs=dict(
-                #recurrent=self.recurrent,
+                recurrent=self.use_recurrent,
                 hidden_size=self.base_hidden_size
             ),
         )

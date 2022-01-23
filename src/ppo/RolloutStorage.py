@@ -343,14 +343,14 @@ class RolloutStorage(object):
 
             for offset in range(minibatch_frames):
                 ind = perm[start_ind + offset]
-                states_minibatch.append(self.states[ind])
-                recurrent_hs_minibatch.append(self.recurrent_hs[ind])
-                actions_minibatch.append(self.actions[ind])
-                log_probs_minibatch.append(self.action_log_probs[ind])
-                value_preds_minibatch.append(self.value_preds[ind])
-                return_minibatch.append(self.returns[ind])
+                states_minibatch.append(self.states[ind].unsqueeze(dim=0))
+                recurrent_hs_minibatch.append(self.recurrent_hs[ind].unsqueeze(dim=0))
+                actions_minibatch.append(self.actions[ind].unsqueeze(dim=0))
+                log_probs_minibatch.append(self.action_log_probs[ind].unsqueeze(dim=0))
+                value_preds_minibatch.append(self.value_preds[ind].unsqueeze(dim=0))
+                return_minibatch.append(self.returns[ind].unsqueeze(dim=0))
                 masks_minibatch.append(self.masks[ind])
-                adv_targ_minibatch.append(advantages[ind])
+                adv_targ_minibatch.append(advantages[ind].unsqueeze(dim=0))
 
             # cat on firt dimension
             states_minibatch = torch.cat(states_minibatch, dim=0)

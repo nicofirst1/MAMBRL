@@ -5,7 +5,7 @@ from tqdm import trange
 
 from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import mas_dict2tensor, Params
-from .Ppo import PPO
+from .PPO import PPO
 from .RolloutStorage import RolloutStorage
 from ..model.ModelFree import Policy
 
@@ -35,6 +35,7 @@ class PpoWrapper:
 
         self.ppo_agent = PPO(
             actor_critic_dict=self.actor_critic_dict,
+            ppo_epochs=config.epochs,
             clip_param=config.ppo_clip_param,
             num_minibatch=self.num_minibatch,
             value_loss_coef=config.value_loss_coef,
@@ -149,7 +150,9 @@ class PpoWrapper:
                     else:
                         with torch.no_grad():
                             value, action, action_log_prob, recurrent_hs = self.actor_critic_dict[agent_id].act(
-                                obs, rollout.recurrent_hs[step, agent_index], rollout.masks[step, agent_index]
+                                obs,
+                                rollout.recurrent_hs[step, agent_index].unsqueeze(dim=0),
+                                rollout.masks[step]
                             )
 
                     # get action with softmax and multimodal (stochastic)
@@ -190,7 +193,10 @@ class PpoWrapper:
             ## fixme: qui bisogna come farlo per multi agent
             with torch.no_grad():
                 next_value = self.actor_critic_dict["agent_0"].get_value(
-                    rollout.states[-1], rollout.recurrent_hs[-1, 0], rollout.masks[-1,0]).detach()
+                    rollout.states[-1].unsqueeze(dim=0),
+                    rollout.recurrent_hs[-1, 0].unsqueeze(dim=0),
+                    rollout.masks[-1]
+                ).detach()
 
             rollout.compute_returns(next_value, True, self.gamma, 0.95)
 
