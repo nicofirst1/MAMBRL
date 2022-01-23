@@ -91,20 +91,25 @@ class Params:
     entropy_coef = 0.01  # [0.5, 0.1]
 
     # =============================================================================
-    # PPO NETWORK PARAMETERS
+    # MODEL FREE NETWORK PARAMETERS
     # =============================================================================
     # if to use the same architecture for the actor-critic
     share_weights = False
-    # valid options are "actor","critic","actor-critic".
-    # Use "actor-critic" to share layers between actor and critic
-    network_type = "actor-critic"
+    # conv_layers is a tuple of 1 or 2 elements. If len(conv_layers)==1 we use
+    # the same structure for both actor and critic network, otherwise the first
+    # element are the layers of the critic and the second are the layers of
+    # the actor. if share_weights=True we use the first element as shared architecture.
     # A single conv layer is a 3-ple (Channel_out, kernel_size, stride)
     # Conv3D kernel_size and stride can be int or a 3-ple
-    conv_layers = [(64, (2, 3, 3), 1), (64, (1, 3, 3), 1), (32, 2, 1)]  # ,(32, 3, 2)]
+    # NOTE: for a single element tuple use the comma, e.g conv_layers = (list1,)
+
+    # conv_layers = ([(64, (2, 3, 3), 1), (64, (1, 3, 3), 1), (32, 2, 1)],)
+
     # Conv2D kernel_size and stride can be int or a 2-ple
-    # conv_layers = [(64,3,1), (64,3,1), (32, 3, 2)]
-    # fully connected layers to use after the Conv layers.
-    fc_layers = [1024, 512, 124, 64, 32]
+    conv_layers = ([(64, 3, 1), (64, 3, 1), (32, 3, 2)],)
+
+    # same as the conv_layers
+    fc_layers = ([128, 64, 32], [64, 32])
     # use recurrent neural network
     use_recurrent = True
     # recurrent_layers
@@ -112,19 +117,6 @@ class Params:
 
     base = "cnn"  # [ cnn , resnet ]
     base_hidden_size = 64
-
-    # Config Dict
-    ppo_configs = {
-        "rollout_fragment_length": 50,
-        # PPO parameter
-        "lambda": 0.95,
-        "gamma": 0.998,
-        "clip_param": 0.2,
-        "use_critic": True,
-        "use_gae": True,
-        "grad_clip": 5,
-        "num_sgd_iter": 10,
-    }
 
     # =============================================================================
     # ENVIRONMENT
@@ -138,7 +130,7 @@ class Params:
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
-    num_frames = 4
+    num_frames = 1
     num_steps = horizon // num_frames
     gray_scale = False
     normalize_reward = True
@@ -176,7 +168,8 @@ class Params:
         if self.gray_scale:
             self.frame_shape[0] = 1
 
-        self.obs_shape = (self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
+        self.obs_shape = (
+            self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
 
     def __initialize_dirs(self):
         """
@@ -261,19 +254,29 @@ class Params:
 
         return env_config
 
-    def get_policy_configs(self):
-        env_config = dict(
+    def get_ppo_configs(self):
+        ppo_configs = dict(
+            rollout_fragment_length=self.rollout_len,
+            gamma=self.gamma,
+            clip_param=self.ppo_clip_param,
+            grad_clip=self.clip_grad_norm,
+        )
+        return ppo_configs
+
+    def get_model_free_configs(self):
+        model_config = dict(
+            base=self.base,
+            share_weights=self.share_weights,
             obs_shape=self.obs_shape,
             action_space=self.num_actions,
-            base=self.base,
-            hidden_size=self.base_hidden_size,
-            base_kwargs=dict(
-                recurrent=self.use_recurrent,
-                hidden_size=self.base_hidden_size
-            ),
+            conv_layers=self.conv_layers,
+            fc_layers=self.fc_layers,
+            use_recurrent=self.use_recurrent,
+            use_residual=self.use_residual,
+            num_frames=self.num_frames,
+            base_hidden_size=self.base_hidden_size,
         )
-
-        return env_config
+        return model_config
 
     def get_env_wrapper_configs(self):
 
