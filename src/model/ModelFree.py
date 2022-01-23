@@ -53,8 +53,7 @@ def relu_init_weights(m):
         m.bias.data.fill_(0.01)
 
 
-def init_multi_layer(num_layers, activation, input_size, hidden_size,
-                     output_size):
+def init_multi_layer(num_layers, activation, input_size, hidden_size, output_size):
     """init_multi_layer function.
 
     create and return a nn.Sequential module with num_layers nn.Linear layers,
@@ -99,17 +98,20 @@ class ModelFree(nn.Module):
     it.
     """
 
-    def __init__(self, base):
+    def __init__(self, base, base_kwargs):
         super(ModelFree, self).__init__()
 
         if base == "resnet":
-            self.base = ResNetBase
+            base = ResNetBase
         elif base == "cnn":
-            self.base = CNNBase
+            base = Conv2DModelFree
         else:
             Exception("Base model not supported")
+
         # TODO: tieni buffer interno per RNN
         # self.dist = Categorical(self.base.output_size, action_space)
+
+        self.base = base(**base_kwargs)
 
     def get_modules(self):
         return self.base.get_modules()
@@ -139,22 +141,25 @@ class ModelFree(nn.Module):
         """
         raise NotImplementedError
 
-    def act(self, inputs, rnn_hxs, masks, deterministic=False):
-        action_logit, value = self.forward(inputs, rnn_hxs, masks)
+    def act(self, inputs, masks, deterministic=False):
+        action_logit, value = self.base(inputs, masks)
 
-        probs = F.softmax(action_logit, dim=0)
+        probs = F.softmax(action_logit, dim=1)
 
         if deterministic:
             action = probs.max(1)[1]
         else:
             action = probs.multinomial(1)
 
-        return action
+        action_log_probs = F.log_softmax(action_logit, dim=1)
 
-    def get_value(self, inputs, rnn_hxs, masks):
-        return self.base(inputs, rnn_hxs, masks)[0]
+        ##fixme: derivare gli action_log_probs, che questi credo siano sbagliati (vanno fatti con log_softmax?)
+        return value, action, action_log_probs.gather(1, action)
 
-    def evaluate_action(self, frames: torch.Tensor, rnn_hxs, masks, action):
+    def get_value(self, inputs, masks):
+        return self.base(inputs, masks)[1]
+
+    def evaluate_actions(self, inputs: torch.Tensor, masks, actions):
         """evaluate_actions method.
 
         compute the actions logit, value and actions probability by passing
@@ -162,7 +167,7 @@ class ModelFree(nn.Module):
         the entropy of the actions
         Parameters
         ----------
-        frames : PyTorch Array
+        inputs : PyTorch Array
             a 4 dimensional tensor [batch_size, channels, width, height]
 
         Returns
@@ -176,15 +181,15 @@ class ModelFree(nn.Module):
         value : Torch.Tensor [batch_size,1]
             value of the state given by the ModelFree network
         entropy : Torch.Tensor [batch_size,1]
-            value of the entropy given by the action with index equal to
-            action_indx.
+            value of the entropy given by the action with index equal to action_indx.
         """
-        action_logit, value = self.forward(frames, rnn_hxs, masks)
+
+        action_logit, value = self.base(inputs, masks)
         action_probs = F.softmax(action_logit, dim=1)
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
 
-        return action_logit, action_log_probs, action_probs, value, entropy
+        return value, action_log_probs.gather(1, actions), entropy
 
 
 class NNBase(nn.Module):
@@ -235,8 +240,7 @@ class NNBase(nn.Module):
             # Let's figure out which steps in the sequence have a zero for any
             # agent. We will always assume t=0 has a zero in it as that makes
             # the logic cleaner
-            has_zeros = ((masks[1:] == 0.0).any(
-                dim=-1).nonzero().squeeze().cpu())
+            has_zeros = ((masks[1:] == 0.0).any(dim=-1).nonzero().squeeze().cpu())
 
             # +1 to correct the masks[1:]
             if has_zeros.dim() == 0:
@@ -274,66 +278,8 @@ class NNBase(nn.Module):
     def get_modules(self):
         return {}
 
-    def _forward_gru(self, x, hxs, masks):
-        if x.size(0) == hxs.size(0):
-            hxs *= masks.unsqueeze(1)
-            x, hxs = self.gru(x.unsqueeze(0), (hxs).unsqueeze(0))
-            x = x.squeeze(0)
-            hxs = hxs.squeeze(0)
-        else:
-            # x is a (T, N, -1) tensor that has been flatten to (T * N, -1)
-            N = hxs.size(0)
-            T = int(x.size(0) / N)
 
-            # unflatten
-            x = x.view(T, N, x.size(1))
-
-            # Same deal with masks
-            masks = masks.view(T, N)
-
-            # Let's figure out which steps in the sequence have a zero for any agent
-            # We will always assume t=0 has a zero in it as that makes the logic cleaner
-            has_zeros = ((masks[1:] == 0.0)
-                         .any(dim=-1)
-                         .nonzero()
-                         .squeeze()
-                         .cpu())
-
-            # +1 to correct the masks[1:]
-            if has_zeros.dim() == 0:
-                # Deal with scalar
-                has_zeros = [has_zeros.item() + 1]
-            else:
-                has_zeros = (has_zeros + 1).numpy().tolist()
-
-            # add t=0 and t=T to the list
-            has_zeros = [0] + has_zeros + [T]
-
-            hxs = hxs.unsqueeze(0)
-            outputs = []
-            for i in range(len(has_zeros) - 1):
-                # We can now process steps that don't have any zeros in masks together!
-                # This is much faster
-                start_idx = has_zeros[i]
-                end_idx = has_zeros[i + 1]
-
-                rnn_scores, hxs = self.gru(
-                    x[start_idx:end_idx],
-                    hxs * masks[start_idx].view(1, -1, 1))
-
-                outputs.append(rnn_scores)
-
-            # assert len(outputs) == T
-            # x is a (T, N, -1) tensor
-            x = torch.cat(outputs, dim=0)
-            # flatten
-            x = x.view(T * N, -1)
-            hxs = hxs.squeeze(0)
-
-        return x, hxs
-
-
-class CNNBase(NNBase):
+class FeatureExtractor(NNBase):
     """CNNBase class.
 
     base module for the extraction of features composed of convolutional
@@ -342,93 +288,92 @@ class CNNBase(NNBase):
     """
 
     def __init__(self, input_shape, conv_layers, fc_layers, recurrent=False, hidden_size=512, num_frames=1):
-        super(CNNBase, self).__init__(recurrent=recurrent,
-                                      hidden_size=hidden_size,
-                                      recurrent_input_size=hidden_size)
+        super(FeatureExtractor, self).__init__(recurrent=recurrent, hidden_size=hidden_size, recurrent_input_size=hidden_size)
         self.in_shape = input_shape
         self.num_channels = input_shape[0]
         self.num_frames = num_frames
 
         next_inp = None
         feature_extractor_layers = OrderedDict()
-        # if num_frames == 1 we build a 2DConv base, otherwise we build a
-        # 3Dconv base
+
+        # if num_frames == 1 we build a 2DConv base, otherwise we build a 3Dconv base
         if self.num_frames == 1:
             for i, cnn in enumerate(conv_layers):
                 if i == 0:
-                    feature_extractor_layers["conv_0"] = nn.Conv2d(
-                        self.num_channels, cnn[0], kernel_size=cnn[1],
-                        stride=cnn[2])
+                    feature_extractor_layers["conv_0"] = nn.Conv2d(self.num_channels, cnn[0], kernel_size=cnn[1], stride=cnn[2])
                     feature_extractor_layers["conv_0_activ"] = nn.LeakyReLU()
                 else:
-                    feature_extractor_layers["conv_" + str(i)] = nn.Conv2d(
-                        next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
-                    feature_extractor_layers["conv_" +
-                                             str(i) + "_activ"] = nn.LeakyReLU()
+                    feature_extractor_layers["conv_" + str(i)] = nn.Conv2d(next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
+                    feature_extractor_layers["conv_" + str(i) + "_activ"] = nn.LeakyReLU()
                 next_inp = cnn[0]
 
+            ## TODO: replace with right calculation after last conv
             for layer in feature_extractor_layers:
-                if layer == ("conv_0"):
+                if layer == "conv_0":
                     fake_inp = torch.zeros(
                         [1, self.num_channels, *self.in_shape[1:]])
                     fake_inp = feature_extractor_layers[layer](fake_inp)
                 else:
                     fake_inp = feature_extractor_layers[layer](fake_inp)
+
             # flatten layer
             next_inp = fake_inp.view(1, -1).size(1)
 
             # flatten the output starting from dim=1 by default
             feature_extractor_layers["flatten"] = nn.Flatten()
-            feature_extractor_layers["fc_0"] = nn.Linear(
-                next_inp, fc_layers[0])
+            feature_extractor_layers["fc_0"] = nn.Linear(next_inp, fc_layers[0])
             feature_extractor_layers["fc_0_activ"] = nn.LeakyReLU()
             self.model = nn.Sequential(feature_extractor_layers)
         # TODO else with more than 1 frame
 
-    def forward(self, inputs, rnn_hxs, masks):
+    def forward(self, inputs, masks):
         x = self.model(inputs)
         if self.is_recurrent:
-            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+            x, rnn_hxs = self._forward_gru(x, masks)
 
-        return x, rnn_hxs
+        return x
 
 
-class Conv2DModelFree(ModelFree):
+class Conv2DModelFree(nn.Module):
     """Conv2DModelFree class.
 
     Applies a 2D convolution over a frame
     """
 
-    def __init__(self, in_shape, num_actions, **kwargs):
-        assert kwargs["num_frames"] == 1, "The parameter num_frames should be one when using the 2D convolution"
-        assert len(kwargs["fc_layers"]) == 1 or len(kwargs["fc_layers"]) == 2,\
-            f"fc_layers should be a tuple of lists of 1 or 2 elements while it's {kwargs['fc_layers']}"
-        assert len(kwargs["conv_layers"]) == 1 or len(kwargs["conv_layers"]) == 2,\
-            f"conv_layers should be a tuple of lists of 1 or 2 elements while it's {kwargs['conv_layers']}"
-        super(Conv2DModelFree, self).__init__(base="cnn")
+    def __init__(self, obs_shape, share_weights, action_space, conv_layers, fc_layers,
+            use_recurrent, use_residual, num_frames, base_hidden_size):
+        assert num_frames == 1, "The parameter num_frames should be one when using the 2D convolution"
+        assert 0 < len(fc_layers) < 3, f"fc_layers should be a tuple of lists of 1 or 2 elements while it's {fc_layers}"
+        assert 0 < len(conv_layers) < 3, f"conv_layers should be a tuple of lists of 1 or 2 elements while it's {kwargs['conv_layers']}"
+        super(Conv2DModelFree, self).__init__()
 
-        # self, obs_shape, action_space, base, hidden_size,
-        #              share_weights, base_kwargs
+        # self, obs_shape, action_space, base, hidden_size, share_weights, base_kwargs
 
         self.name = "Conv2DModelFree"
-        self.num_actions = num_actions
-        self.share_weights = kwargs["share_weights"]
+        self.num_actions = action_space
+        self.share_weights = share_weights
 
-        fc_layers = kwargs["fc_layers"]
-        conv_layers = kwargs["conv_layers"]
+        fc_layers = fc_layers
+        conv_layers = conv_layers
         if len(conv_layers) == 1:
             conv_layers = (conv_layers[0], conv_layers[0])
         if len(fc_layers) == 1:
             fc_layers = (fc_layers[0], fc_layers[0])
 
         if self.share_weights:
-            self.feature_extractor = self.build_base(in_shape,
-                                                     conv_layers[0], fc_layers[0])
+            self.feature_extractor = FeatureExtractor(
+                obs_shape, conv_layers[0], fc_layers[0], recurrent=use_recurrent,
+                hidden_size=base_hidden_size, num_frames=num_frames
+            )
         else:
-            self.feature_extractor_critic = self.build_base(in_shape,
-                                                            conv_layers[0], fc_layers[0])
-            self.feature_extractor_actor = self.build_base(in_shape,
-                                                           conv_layers[1], fc_layers[1])
+            self.feature_extractor_actor = FeatureExtractor(
+                obs_shape, conv_layers[1], fc_layers[1], recurrent=use_recurrent,
+                hidden_size=base_hidden_size, num_frames=num_frames
+            )
+            self.feature_extractor_critic = FeatureExtractor(
+                obs_shape, conv_layers[0], fc_layers[0], recurrent=use_recurrent,
+                hidden_size=base_hidden_size, num_frames=num_frames
+            )
 
         # =============================================================================
         # CRITIC SUBNETS
@@ -436,13 +381,11 @@ class Conv2DModelFree(ModelFree):
         next_inp = fc_layers[0][0]
         critic_subnet = OrderedDict()
         for i, fc in enumerate(fc_layers[0][1:]):
-            critic_subnet["critic_fc_" +
-                          str(i)] = nn.Linear(next_inp, fc)
-            critic_subnet["critic_fc_" +
-                          str(i) + "_activ"] = nn.Tanh()
+            critic_subnet["critic_fc_" + str(i)] = nn.Linear(next_inp, fc)
+            critic_subnet["critic_fc_" + str(i) + "_activ"] = nn.Tanh()
             next_inp = fc
-
         critic_subnet["critic_out"] = nn.Linear(next_inp, 1)
+
         # =============================================================================
         # ACTOR SUBNETS
         # =============================================================================
@@ -456,7 +399,7 @@ class Conv2DModelFree(ModelFree):
             actor_subnet["actor_fc_" + str(i) + "_activ"] = nn.Tanh()
             next_inp = fc
 
-        actor_subnet["actor_out"] = nn.Linear(next_inp, num_actions)
+        actor_subnet["actor_out"] = nn.Linear(next_inp, action_space)
 
         self.actor = nn.Sequential(actor_subnet)
         self.critic = nn.Sequential(critic_subnet)
@@ -467,21 +410,19 @@ class Conv2DModelFree(ModelFree):
         else:
             self.feature_extractor_critic.to(device)
             self.feature_extractor_actor.to(device)
+
         self.critic.to(device)
         self.actor.to(device)
 
         return self
 
-    def build_base(self, input_shape, conv_layers, fc_layers):
-        return self.base(input_shape, conv_layers, fc_layers)
-
-    def forward(self,  inputs, rnn_hxs, masks):
+    def forward(self,  inputs, masks):
         """forward method.
 
         Return the logit and the values of the Conv2DModelFree.
         Parameters
         ----------
-        input : torch.Tensor
+        inputs : torch.Tensor
             [batch_size, num_channels, width, height]
 
         Returns
@@ -493,25 +434,18 @@ class Conv2DModelFree(ModelFree):
 
         """
         # TODO check how to use the rnn
+        inputs = inputs / 255
         if self.share_weights:
-            x = self.feature_extractor.model(inputs / 255.0)
-            if self.feature_extractor.is_recurrent:
-                x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
-
-            value = self.critic(x)
-            action_logits = self.actor(x)
+            x = self.feature_extractor.forward(inputs, masks)
+            return self.critic(x), self.actor(x)
         else:
-            x = self.feature_extractor_critic.model(inputs)
-            if self.feature_extractor_critic.is_recurrent:
-                x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+            x = self.feature_extractor_critic.forward(inputs, masks)
             value = self.critic(x)
 
-            x = self.feature_extractor_actor.model(inputs)
-            if self.feature_extractor_actor.is_recurrent:
-                x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+            x = self.feature_extractor_actor.forward(inputs, masks)
             action_logits = self.actor(x)
 
-        return action_logits, value
+            return action_logits, value
 
 
 class ResNetBase(NNBase):

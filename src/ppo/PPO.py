@@ -63,21 +63,21 @@ class PPO:
             )
 
             for sample in data_generator:
-                states_batch, recurrent_hs_batch, actions_batch, old_logs_probs_batch, \
+                states_batch, actions_batch, old_logs_probs_batch, \
                 values_batch, return_batch, masks_batch, adv_targ = sample
 
                 for agent_id in self.actor_critic_dict.keys():
                     agent_index = int(agent_id[-1])  ## fixme: per il momento fatto così per l'indice
 
-                    agent_recurrent_hs = recurrent_hs_batch[:, agent_index]
+                    #agent_recurrent_hs = recurrent_hs_batch[:, agent_index]
                     agent_log_probs = old_logs_probs_batch[:, agent_index, :]
                     agent_actions = actions_batch[:, agent_index]
                     agent_values = values_batch[:, agent_index]
                     agent_returns = return_batch[:, agent_index]
                     agent_adv_targ = adv_targ[:, agent_index]
 
-                    values, curr_log_porbs, entropy, _ = self.actor_critic_dict[agent_id].evaluate_actions(
-                        states_batch, agent_recurrent_hs, masks_batch, agent_actions
+                    values, curr_log_porbs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(
+                        states_batch, masks_batch, agent_actions
                     )
 
                     logs[agent_id]["curr_log_porbs"].append(log_fn(curr_log_porbs))

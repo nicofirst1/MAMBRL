@@ -7,7 +7,7 @@ from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import mas_dict2tensor, Params
 from .PPO import PPO
 from .RolloutStorage import RolloutStorage
-from ..model.ModelFree import Policy
+from ..model.ModelFree import ModelFree
 
 
 class PpoWrapper:
@@ -26,11 +26,11 @@ class PpoWrapper:
 
         self.guided_learning_prob = config.guided_learning_prob
 
-        policy_configs = config.get_policy_configs()
+        policy_configs = config.get_model_free_configs()
         self.base_hidden_size = config.base_hidden_size
 
         self.actor_critic_dict = {
-            agent_id: Policy(**policy_configs).to(self.device) for agent_id in self.env.agents
+            agent_id: ModelFree(**policy_configs).to(self.device) for agent_id in self.env.agents
         }
 
         self.ppo_agent = PPO(
@@ -95,7 +95,7 @@ class PpoWrapper:
             num_steps=self.num_steps,
             obs_shape=self.obs_shape,
             num_agents=self.num_agents,
-            recurrent_hs_size=self.actor_critic_dict["agent_0"].recurrent_hidden_state_size
+            #recurrent_hs_size=self.actor_critic_dict["agent_0"].recurrent_hidden_state_size
         )
         rollout.to(self.device)
 
@@ -111,7 +111,7 @@ class PpoWrapper:
         action_dict = {agent_id: False for agent_id in self.env.agents}
         values_dict = {agent_id: False for agent_id in self.env.agents}
         action_log_dict = {agent_id: False for agent_id in self.env.agents}
-        recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
+        #recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
 
         for episode in trange(episodes, desc="Training model free"):
             self.ppo_agent.eval()
@@ -139,8 +139,6 @@ class PpoWrapper:
                 guided_learning = {agent_id: False for agent_id in self.env.agents}
 
                 for agent_id in self.env.agents:
-                    agent_index = int(agent_id[-1])
-
                     # perform guided learning with scheduler
                     #todo: remove optimal end generalize with policy
                     if self.guided_learning_prob > random.uniform(0, 1):
@@ -149,17 +147,15 @@ class PpoWrapper:
                         value = -1
                     else:
                         with torch.no_grad():
-                            value, action, action_log_prob, recurrent_hs = self.actor_critic_dict[agent_id].act(
-                                obs,
-                                rollout.recurrent_hs[step, agent_index].unsqueeze(dim=0),
-                                rollout.masks[step]
+                            value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
+                                obs, rollout.masks[step]
                             )
 
                     # get action with softmax and multimodal (stochastic)
                     action_dict[agent_id] = int(action)
                     values_dict[agent_id] = float(value)
                     action_log_dict[agent_id] = float(action_log_prob)
-                    recurrent_hs_dict[agent_id] = recurrent_hs[0]
+                    #recurrent_hs_dict[agent_id] = recurrent_hs[0]
 
                 # Obser reward and next obs
                 ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
@@ -174,12 +170,12 @@ class PpoWrapper:
                 rewards = mas_dict2tensor(rewards, float)
                 actions = mas_dict2tensor(action_dict, int)
                 values = mas_dict2tensor(values_dict, float)
-                recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
+                #recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
                 action_log_probs = mas_dict2tensor(action_log_dict, float)
 
                 rollout.insert(
                     state=observation,
-                    recurrent_hs=recurrent_hs,
+                    #recurrent_hs=recurrent_hs,
                     action=actions,
                     action_log_probs=action_log_probs,
                     value_preds=values,
@@ -193,9 +189,7 @@ class PpoWrapper:
             ## fixme: qui bisogna come farlo per multi agent
             with torch.no_grad():
                 next_value = self.actor_critic_dict["agent_0"].get_value(
-                    rollout.states[-1].unsqueeze(dim=0),
-                    rollout.recurrent_hs[-1, 0].unsqueeze(dim=0),
-                    rollout.masks[-1]
+                    rollout.states[-1].unsqueeze(dim=0), rollout.masks[-1]
                 ).detach()
 
             rollout.compute_returns(next_value, True, self.gamma, 0.95)

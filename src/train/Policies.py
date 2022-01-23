@@ -108,8 +108,7 @@ class MultimodalMAS(TrajCollectionPolicy):
         if self.share_weights:
             self.ac_dict = ac_dict
         else:
-            assert cr_dict is not None, \
-                f"{cr_dict} is invalid. You need to specify a valid model for the critic"
+            assert cr_dict is not None, f"{cr_dict} is invalid. You need to specify a valid model for the critic"
             self.ac_dict = ac_dict
             self.cr_dict = cr_dict
 

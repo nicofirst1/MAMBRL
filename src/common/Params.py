@@ -20,8 +20,7 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
     TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
     MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
-    MODEL_FREE_LOGGER_FILE = os.path.join(
-        MODEL_FREE_LOG_DIR, "model_free_log.log")
+    MODEL_FREE_LOGGER_FILE = os.path.join(MODEL_FREE_LOG_DIR, "model_free_log.log")
 
     # =============================================================================
     # TRAINING
@@ -32,7 +31,7 @@ class Params:
     resize = True
     frame_shape = [3, 96, 96]  # [3, 600, 600]
     guided_learning_prob = 0.0
-    epochs = 1000
+    epochs = 1
     minibatch = 32  # 64
     batch_size = 4
     framework = "torch"
@@ -111,7 +110,7 @@ class Params:
     # same as the conv_layers
     fc_layers = ([128, 64, 32], [64, 32])
     # use recurrent neural network
-    use_recurrent = True
+    use_recurrent = False
     # recurrent_layers
     use_residual = False
 
@@ -266,15 +265,17 @@ class Params:
     def get_model_free_configs(self):
         model_config = dict(
             base=self.base,
-            share_weights=self.share_weights,
-            obs_shape=self.obs_shape,
-            action_space=self.num_actions,
-            conv_layers=self.conv_layers,
-            fc_layers=self.fc_layers,
-            use_recurrent=self.use_recurrent,
-            use_residual=self.use_residual,
-            num_frames=self.num_frames,
-            base_hidden_size=self.base_hidden_size,
+            base_kwargs = dict(
+                obs_shape=self.obs_shape,
+                share_weights=self.share_weights,
+                action_space=self.num_actions,
+                conv_layers=self.conv_layers,
+                fc_layers=self.fc_layers,
+                use_recurrent=self.use_recurrent,
+                use_residual=self.use_residual,
+                num_frames=self.num_frames,
+                base_hidden_size=self.base_hidden_size
+            )
         )
         return model_config
 

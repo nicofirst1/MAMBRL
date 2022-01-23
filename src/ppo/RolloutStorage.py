@@ -252,13 +252,13 @@ class RolloutStorage_francesco(object):
 
 
 class RolloutStorage(object):
-    def __init__(self, num_steps, obs_shape, num_agents, recurrent_hs_size):
+    def __init__(self, num_steps, obs_shape, num_agents):
         self.step = 0
         self.num_channels = obs_shape[0]
 
         #todo: togli stati RNN
         self.states = torch.zeros(num_steps + 1, *obs_shape)
-        self.recurrent_hs = torch.zeros(num_steps + 1, num_agents, recurrent_hs_size)
+        #self.recurrent_hs = torch.zeros(num_steps + 1, num_agents, recurrent_hs_size)
         self.rewards = torch.zeros(num_steps, num_agents, 1)
         self.value_preds = torch.zeros(num_steps + 1, num_agents, 1)
         self.returns = torch.zeros(num_steps + 1, num_agents, 1)
@@ -268,7 +268,7 @@ class RolloutStorage(object):
 
     def to(self, device):
         self.states = self.states.to(device)
-        self.recurrent_hs = self.recurrent_hs.to(device)
+        #self.recurrent_hs = self.recurrent_hs.to(device)
         self.rewards = self.rewards.to(device)
         self.value_preds = self.value_preds.to(device)
         self.returns = self.returns.to(device)
@@ -276,9 +276,9 @@ class RolloutStorage(object):
         self.action_log_probs = self.action_log_probs.to(device)
         self.masks = self.masks.to(device)
 
-    def insert(self, state, recurrent_hs, action, action_log_probs, value_preds, reward, mask):
+    def insert(self, state, action, action_log_probs, value_preds, reward, mask):
         self.states[self.step + 1].copy_(state)
-        self.recurrent_hs[self.step + 1].copy_(recurrent_hs)
+        #self.recurrent_hs[self.step + 1].copy_(recurrent_hs)
         self.actions[self.step].copy_(action)
         self.action_log_probs[self.step].copy_(action_log_probs)
         self.value_preds[self.step].copy_(value_preds)
@@ -289,7 +289,7 @@ class RolloutStorage(object):
 
     def after_update(self):
         self.states[0].copy_(self.states[self.step])
-        self.recurrent_hs[0].copy_(self.recurrent_hs[self.step])
+        #self.recurrent_hs[0].copy_(self.recurrent_hs[self.step])
         self.masks[0].copy_(self.masks[self.step])
         self.step = 0
 
@@ -330,7 +330,7 @@ class RolloutStorage(object):
 
         for start_ind in range(0, total_samples, minibatch_frames):
             states_minibatch = []
-            recurrent_hs_minibatch = []
+            #recurrent_hs_minibatch = []
             actions_minibatch = []
             log_probs_minibatch = []
             value_preds_minibatch = []
@@ -344,7 +344,7 @@ class RolloutStorage(object):
             for offset in range(minibatch_frames):
                 ind = perm[start_ind + offset]
                 states_minibatch.append(self.states[ind].unsqueeze(dim=0))
-                recurrent_hs_minibatch.append(self.recurrent_hs[ind].unsqueeze(dim=0))
+                #recurrent_hs_minibatch.append(self.recurrent_hs[ind].unsqueeze(dim=0))
                 actions_minibatch.append(self.actions[ind].unsqueeze(dim=0))
                 log_probs_minibatch.append(self.action_log_probs[ind].unsqueeze(dim=0))
                 value_preds_minibatch.append(self.value_preds[ind].unsqueeze(dim=0))
@@ -354,7 +354,7 @@ class RolloutStorage(object):
 
             # cat on firt dimension
             states_minibatch = torch.cat(states_minibatch, dim=0)
-            recurrent_hs_minibatch = torch.cat(recurrent_hs_minibatch, dim=0)
+            #recurrent_hs_minibatch = torch.cat(recurrent_hs_minibatch, dim=0)
             actions_minibatch = torch.cat(actions_minibatch, dim=0)
             value_preds_minibatch = torch.cat(value_preds_minibatch, dim=0)
             return_minibatch = torch.cat(return_minibatch, dim=0)
@@ -363,5 +363,5 @@ class RolloutStorage(object):
             adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
 
 
-            yield states_minibatch, recurrent_hs_minibatch, actions_minibatch, log_probs_minibatch, \
+            yield states_minibatch, actions_minibatch, log_probs_minibatch, \
                   value_preds_minibatch, return_minibatch, masks_minibatch, adv_targ_minibatch
