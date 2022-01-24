@@ -3,6 +3,7 @@ import random
 import torch
 from tqdm import trange
 
+from logging_callbacks.CnnViz import CnnViz
 from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import mas_dict2tensor, Params
 from .PPO import PPO
@@ -48,19 +49,9 @@ class PpoWrapper:
 
         self.use_wandb = config.use_wandb
         if self.use_wandb:
-            from pytorchCnnVisualizations.src import CamExtractor, ScoreCam
 
-            model = self.actor_critic_dict["agent_0"].base
             cams = []
 
-            if config.base == "resnet":
-                for idx, layer in enumerate(list(model.features)):
-                    extractor = CamExtractor(model, target_layer=idx)
-                    name = type(layer).__name__
-                    score_cam = ScoreCam(model, extractor, name)
-                    cams.append(score_cam)
-            elif config.base == "cnn":
-                pass
 
             from logging_callbacks import PPOWandb
 
@@ -71,7 +62,6 @@ class PpoWrapper:
                 opts={},
                 models=self.actor_critic_dict["agent_0"].get_modules(),
                 horizon=config.horizon,
-                mode="disabled" if config.debug else "online",
                 action_meaning=self.env.env.action_meaning_dict,
                 cams=cams,
             )

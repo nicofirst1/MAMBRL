@@ -31,7 +31,6 @@ class EnvModelTrainer:
               val_log_step=50,
               project="env_model",
               models=model,
-              mode="disabled" if self.config.debug else "online"
           )
 
     def train(self, epoch, env, steps=15000):
