@@ -164,7 +164,7 @@ class PPOWandb(WandbLogger):
             logs["episode_length"] = done_idx
 
         if batch_id % self.log_heatmap_step == 0:
-            images = self.cnn_viz.visualize(states)
+            images = self.cnn_viz.visualize()
             for name, vid in images.items():
                 logs[f"cams/{name}"] = wandb.Image(vid)
 

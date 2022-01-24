@@ -5,6 +5,44 @@ import torch
 from lucent.misc.channel_reducer import ChannelReducer
 
 
+
+def conv2d(image, kernel, bias=0):
+    assert image.ndim == 4, (
+        "input_ must have 4 dimensions "
+        "corresponding to batch, height, width and channels"
+    )
+    assert (
+            kernel.ndim == 2
+    ), "filter_ must have 2 dimensions and will be applied channelwise"
+
+    kernel = np.dot(
+        kernel.astype(image.dtype),
+        np.eye(image.shape[-1], dtype=image.dtype),
+    )
+
+    m, n = kernel.shape
+    if (m == n):
+        batch,y, x,c = image.shape
+        y = y - m + 1
+        x = x - m + 1
+        new_image = np.zeros((batch, y, x,c))
+        for b in range(batch):
+            for i in range(y):
+                for j in range(x):
+                    new_image[b][i][j] = np.sum(image[b, i:i + m, j:j + m] * kernel) + bias
+
+
+    return np.resize(new_image, image.shape)
+
+def norm_filter(length, norm_ord=2, norm_func=lambda n: np.exp(-n), clip=True):
+    arr = np.indices((length, length)) - ((length - 1) / 2)
+    func1d = lambda x: norm_func(np.linalg.norm(x, ord=norm_ord))
+    result = np.apply_along_axis(func1d, axis=0, arr=arr)
+    if clip:
+        bound = np.amax(np.amin(result, axis=0), axis=0)
+        result *= np.logical_or(result >= bound, np.isclose(result, bound, atol=0))
+    return result
+
 def argmax_nd(x, axes, *, max_rep=np.inf, max_rep_strict=None):
     assert max_rep > 0
     assert np.isinf(max_rep) or max_rep_strict is not None
@@ -133,7 +171,7 @@ class LayerNMF:
             features=10,
             reduction_alg="NMF",
             *,
-            attrs=None,
+            grads=None,
     ):
         self.obses = obses
         self.obses_full = obses_full
@@ -155,11 +193,11 @@ class LayerNMF:
             self.transform = lambda acts: acts.copy()
             self.inverse_transform = lambda acts: acts.copy()
         else:
-            if attrs is None:
+            if grads is None:
                 self.acts_reduced = self.reducer.fit_transform(acts)
             else:
                 attrs_signed = np.concatenate(
-                    [np.maximum(0, attrs), np.maximum(0, -attrs)], axis=0
+                    [np.maximum(0, grads), np.maximum(0, -grads)], axis=0
                 )
                 self.reducer.fit(attrs_signed)
                 self.acts_reduced = self.reducer.transform(acts)
