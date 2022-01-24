@@ -26,7 +26,7 @@ class Params:
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = False
+    use_wandb = True
     device = torch.device("cuda")
     resize = True
     frame_shape = [3, 96, 96]  # [3, 600, 600]
@@ -124,7 +124,7 @@ class Params:
     landmarks = 2
     step_reward = -1
     landmark_reward = 50
-    episodes = 3
+    episodes = 3000
     horizon = 50
     env_name = "collab_nav"
     model_name = f"{env_name}_model"

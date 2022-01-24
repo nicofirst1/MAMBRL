@@ -1,5 +1,3 @@
-import os
-import random
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -8,8 +6,8 @@ import wandb
 from PIL import Image, ImageDraw, ImageFont
 from torch import nn
 
+from logging_callbacks.CnnViz import CnnViz
 from logging_callbacks.callbacks import WandbLogger
-from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
 
 
 class EnvModelWandb(WandbLogger):
@@ -32,7 +30,7 @@ class EnvModelWandb(WandbLogger):
 
         super(EnvModelWandb, self).__init__(**kwargs)
 
-        wandb.watch(models, log_freq=1000, log_graph=True,  log="all")
+        wandb.watch(models, log_freq=1000, log_graph=True, log="all")
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
@@ -40,7 +38,7 @@ class EnvModelWandb(WandbLogger):
         self.epoch = 0
 
     def on_batch_end(
-            self, logs: Dict[str, Any],  batch_id: int, is_training: bool = True
+            self, logs: Dict[str, Any], batch_id: int, is_training: bool = True
     ):
 
         flag = "training" if is_training else "validation"
@@ -50,14 +48,13 @@ class EnvModelWandb(WandbLogger):
         if not is_training:
             log_step = self.val_log_step
 
-
-        if batch_id% log_step!=0:
+        if batch_id % log_step != 0:
             return
 
         image_log_step = log_step * 10
 
         wandb_log = {
-            f"loss/total": logs["loss_reward"] + logs["loss_reconstruct"]+ logs["loss_value"],
+            f"loss/total": logs["loss_reward"] + logs["loss_reconstruct"] + logs["loss_value"],
             f"loss/reward": logs["loss_reward"],
             f"loss/reconstruct": logs["loss_reconstruct"],
             f"loss/value": logs["loss_value"],
@@ -66,23 +63,23 @@ class EnvModelWandb(WandbLogger):
         }
 
         if "loss_lstm" in logs:
-            wandb_log["loss/lstm"]=logs['loss_lstm']
+            wandb_log["loss/lstm"] = logs['loss_lstm']
 
         # image logging_callbacks
         if batch_id % image_log_step == 0:
-            imagined_state=logs["imagined_state"]
+            imagined_state = logs["imagined_state"]
             actual_state = logs["actual_state"]
 
             imagined_state = torch.stack(imagined_state)
             actual_state = torch.stack(actual_state)
 
-            #bring imageine state in range 0 255
-            imagined_state=(imagined_state - imagined_state.min()) / (imagined_state.max() - imagined_state.min())
-            imagined_state*=255
+            # bring imageine state in range 0 255
+            imagined_state = (imagined_state - imagined_state.min()) / (imagined_state.max() - imagined_state.min())
+            imagined_state *= 255
 
-            diff=abs(imagined_state-actual_state)
+            diff = abs(imagined_state - actual_state)
 
-            fps=5
+            fps = 5
             img_log = {
                 f"imagined_state": wandb.Video(imagined_state, fps=fps, format="gif"),
                 f"actual_state": wandb.Video(actual_state, fps=fps, format="gif"),
@@ -121,9 +118,14 @@ class PPOWandb(WandbLogger):
 
         super(PPOWandb, self).__init__(**kwargs)
 
-        for idx, mod in enumerate(models.values()):
+        idx = 0
+        for name, mod in models.items():
             wandb.watch(mod, log_freq=1000, log_graph=True, idx=idx, log="all")
+            idx += 1
 
+        cnn_viz = CnnViz(models['feature_extractor_critic'], models['critic'], "critic", self.params.device)
+
+        self.cnn_viz = cnn_viz
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
         self.horizon = horizon
@@ -131,7 +133,7 @@ class PPOWandb(WandbLogger):
         self.epoch = 0
 
         self.log_behavior_step = 10
-        self.log_heatmap_step = 100
+        self.log_heatmap_step = 50
 
         # Grad cam
         self.cams = cams
@@ -153,41 +155,26 @@ class PPOWandb(WandbLogger):
             actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
             rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
 
-            states = write_rewards(states, rewards)
+            rew_states = write_rewards(states, rewards)
 
-            logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
+            logs["behaviour"] = wandb.Video(rew_states, fps=16, format="gif")
             logs["hist/actions"] = actions
             logs["hist/rewards"] = rewards
             logs["mean_reward"] = rewards.mean()
             logs["episode_length"] = done_idx
 
-        if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
-
-            # map heatmap on image
-            idx = random.choice(range(done_idx))
-            img = rollout.states[idx]
-            reprs = []
-            for c in self.cams:
-                cam = c.generate_cam(img.clone().unsqueeze(dim=0))
-                reprs.append((c.name, cam))
-            img = img[-3:]
-            img = np.uint8(img.cpu().data.numpy())
-            img = img.transpose(2, 1, 0)
-            img = Image.fromarray(img).convert("RGB")
-
-            for name, rep in reprs:
-                heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
-
-                logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
+        if batch_id % self.log_heatmap_step == 0:
+            images = self.cnn_viz.visualize(states)
+            for name, vid in images.items():
+                logs[f"cams/{name}"] = wandb.Image(vid)
 
                 # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
         self.log_to_wandb(logs, commit=True)
 
 
-
 def on_epoch_end(self, loss: float, logs: Dict[str, Any], model_path: str):
-        self.epoch += 1
+    self.epoch += 1
 
 
 def write_rewards(states, rewards):
@@ -233,15 +220,17 @@ def preprocess_logs(learn_output, ppo_wrapper):
     reward_collision_strategy, \
     landmark_reset_strategy, \
     landmark_collision_strategy \
-    = ppo_wrapper.env.get_current_strategy()
+        = ppo_wrapper.env.get_current_strategy()
 
-    strat=ppo_wrapper.env.get_strategies()
-    tbl = wandb.Table(columns=["list","current strategy", "description"])
+    strat = ppo_wrapper.env.get_strategies()
+    tbl = wandb.Table(columns=["list", "current strategy", "description"])
 
     tbl.add_data("reward_step", reward_step_strategy, strat["reward_step_strategy"][reward_step_strategy])
-    tbl.add_data("reward_collision", reward_collision_strategy, strat["reward_collision_strategy"][reward_collision_strategy])
+    tbl.add_data("reward_collision", reward_collision_strategy,
+                 strat["reward_collision_strategy"][reward_collision_strategy])
     tbl.add_data("landmark_reset", landmark_reset_strategy, strat["landmark_reset_strategy"][landmark_reset_strategy])
-    tbl.add_data("landmark_collision", landmark_collision_strategy, strat["landmark_collision_strategy"][landmark_collision_strategy])
+    tbl.add_data("landmark_collision", landmark_collision_strategy,
+                 strat["landmark_collision_strategy"][landmark_collision_strategy])
 
     general_logs = {
         "loss/value_loss": value_loss,
