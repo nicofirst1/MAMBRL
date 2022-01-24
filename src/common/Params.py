@@ -20,18 +20,19 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
     TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
     MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
-    MODEL_FREE_LOGGER_FILE = os.path.join(MODEL_FREE_LOG_DIR, "model_free_log.log")
+    MODEL_FREE_LOGGER_FILE = os.path.join(
+        MODEL_FREE_LOG_DIR, "model_free_log.log")
 
     # =============================================================================
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = False
+    use_wandb = True
     device = torch.device("cuda")
     resize = True
-    frame_shape = [3, 96, 96]  # [3, 600, 600]
+    frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     guided_learning_prob = 0.0
-    epochs = 1
+    epochs = 1000
     minibatch = 32  # 64
     batch_size = 4
     framework = "torch"
@@ -105,7 +106,8 @@ class Params:
     # conv_layers = ([(64, (2, 3, 3), 1), (64, (1, 3, 3), 1), (32, 2, 1)],)
 
     # Conv2D kernel_size and stride can be int or a 2-ple
-    conv_layers = ([(64, 3, 1), (64, 3, 1), (32, 3, 2)],)
+    conv_layers = ([(64, 4, 2), (32, 2, 2), (32, 2, 2)],
+                   [(32, 4, 2), (32, 3, 2)])
 
     # same as the conv_layers
     fc_layers = ([128, 64, 32], [64, 32])
@@ -122,10 +124,10 @@ class Params:
     # =============================================================================
     agents = 1
     landmarks = 2
-    step_reward = -1
-    landmark_reward = 50
+    step_reward = -0.01
+    landmark_reward = 1
     episodes = 3
-    horizon = 50
+    horizon = 100
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
@@ -137,7 +139,7 @@ class Params:
     visible = False
     max_landmark_counter = 4
     landmark_penalty = -0.01  # -0.01   # -1
-    border_penalty = -1
+    border_penalty = -0.01
     # 0 don't move, 1 left, 2 right,  3 down, 4 top
     num_actions = 5
 
@@ -265,7 +267,7 @@ class Params:
     def get_model_free_configs(self):
         model_config = dict(
             base=self.base,
-            base_kwargs = dict(
+            base_kwargs=dict(
                 obs_shape=self.obs_shape,
                 share_weights=self.share_weights,
                 action_space=self.num_actions,
