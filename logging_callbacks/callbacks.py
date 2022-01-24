@@ -33,9 +33,11 @@ class WandbLogger:
             dir=out_dir,
             entity="mambrl",
             config=params.__dict__,
+            mode="disabled" if params.debug else "online",
             **kwargs,
         )
         wandb.config.update(opts)
+        self.params=params
 
     @staticmethod
     def log_to_wandb(metrics: Dict[str, Any], commit: bool = False, **kwargs):
