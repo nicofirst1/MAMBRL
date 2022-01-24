@@ -76,7 +76,7 @@ class CollectLandmarkScenario(BaseScenario):
             landmark_reward: int = 1,
             max_landmark_counter: int = 4,
             landmark_penalty: int = -2,
-            border_penalty: int= -3,
+            border_penalty: int = -3,
             agent_size: int = 0.1,
             landmark_size: int = 0.3,
             step_reward: int = 0,
@@ -100,7 +100,7 @@ class CollectLandmarkScenario(BaseScenario):
         self.max_landmark_counter = max_landmark_counter
         self.landmark_reward = landmark_reward
         self.landmark_penalty = landmark_penalty
-        self.border_penalty= border_penalty
+        self.border_penalty = border_penalty
         self.num_agents = num_agents
         self.num_landmarks = num_landmarks
         self.max_size = max_size
@@ -126,14 +126,14 @@ class CollectLandmarkScenario(BaseScenario):
         Set internal strategy for given options.
 
 
-        landmark_reset_strategy : str,
+        --landmark_reset_strategy : str,
             Dictates the strategy for initializing landmarks
             The default is "simple". Possible tasks:
               "simple": Landmark have static dimension and positions
               "random_pos": Landmark have static dimension and random positions
               "random_size": Landmark have random dimension and static positions
               "fully_random":Landmark have random dimension and position
-        landmark_collision_strategy : str,
+        --landmark_collision_strategy : str,
             Dictates the strategy for when landmark experience collision with agent
 
             The default is "stay". Possible tasks:
@@ -141,7 +141,7 @@ class CollectLandmarkScenario(BaseScenario):
               "remove": Landmark is removed
 
 
-        reward_step_strategy/reward_collision_strategy : str, optional
+        --reward_step_strategy/reward_collision_strategy : str, optional
             The default is "simple". Possible tasks:
                 "simple": return 1 when the agent enters a landmark, 0
                     otherwise
@@ -165,27 +165,27 @@ class CollectLandmarkScenario(BaseScenario):
                     it enters a new landmark. So to maximize the reward of the
                     episode it must reach all points of reference in the
                     environment
-                "positive_distance" : the agent receives a positive reward which
-                    increases when getting closer to a landmark
+                "positive_distance" : The agent receives a positive reward which
+                    increases when getting closer to a landmark.
                  "negative_distance" : the agent receives a negative reward which
                     tends to zero when getting closer to a landmark
 
         """
 
-        reward_valid_keys, landmark_reset_keys, landmark_collision_keys = self.get_strategies()
+        reward_step_keys, reward_collision_keys, landmark_reset_keys, landmark_collision_keys = self._get_valid_strategies()
 
         if reward_step_strategy is not None:
             assert (
-                    reward_step_strategy in reward_valid_keys
+                    reward_step_strategy in reward_step_keys
             ), f"Reward step strategy '{reward_step_strategy}' is not valid." \
-               f"\nValid options are {reward_valid_keys}"
+               f"\nValid options are {reward_step_keys}"
             self.reward_step_strategy = reward_step_strategy
 
         if reward_collision_strategy is not None:
             assert (
-                    reward_collision_strategy in reward_valid_keys
+                    reward_collision_strategy in reward_collision_keys
             ), f"Reward collision strategy '{reward_collision_strategy}' is not valid." \
-               f"\nValid options are {reward_valid_keys}"
+               f"\nValid options are {reward_collision_keys}"
             self.reward_collision_strategy = reward_collision_strategy
 
         if landmark_reset_strategy is not None:
@@ -202,18 +202,61 @@ class CollectLandmarkScenario(BaseScenario):
                f"\nValid options are {landmark_collision_keys}"
             self.landmark_collision_strategy = landmark_collision_strategy
 
-    @staticmethod
-    def get_strategies():
+    def _get_valid_strategies(self):
 
-        reward_valid_keys = ["simple", "time_penalty", "change_landmark", "change_landmark_avoid_borders",
-                             "all_landmarks", "positive_distance", "negative_distance"]
-        landmark_reset_keys = ["simple", "random_pos", "random_size", "fully_random"]
-        landmark_collision_keys = ["stay", "remove"]
+        strat_docs=self.get_descriptive_strategy()
 
-        return reward_valid_keys, landmark_reset_keys, landmark_collision_keys
+        landmark_reset_keys = list(strat_docs["landmark_reset_strategy"].keys())
+        landmark_collision_keys = list(strat_docs["landmark_collision_strategy"].keys())
+        reward_step_keys = list(strat_docs["reward_step_strategy"].keys())
+        reward_collision_keys = list(strat_docs["reward_collision_strategy"].keys())
+
+        return reward_step_keys, reward_collision_keys, landmark_reset_keys, landmark_collision_keys
 
     def get_current_strategy(self) -> Tuple[str, str, str, str]:
         return self.reward_step_strategy, self.reward_collision_strategy, self.landmark_reset_strategy, self.landmark_collision_strategy
+
+    def get_descriptive_strategy(self):
+
+        doc = dict(
+            landmark_reset_strategy=dict(
+                simple=" Landmark have static dimension and positions",
+                random_pos=" Landmark have static dimension and random positions",
+                random_size="Landmark have random dimension and static positions",
+                fully_random=" Landmark have random dimension and positions",
+
+            ),
+            landmark_collision_strategy=dict(
+                stay="Does nothing",
+                remove="Landmark is removed on collision"
+            ),
+            reward_step_strategy=dict(
+                simple="Reward at each timestep is zero",
+                time_penalty=""" If the agent does not enter a landmark, it receives a negative reward that increases with each step.
+                    When the agent enters a landmark it receives a positive reward and resets the previously accumulated negative reward. 
+                    (Note: the agent receives a negative reward even if it remains in a landmark. To receive a positive reward it must exit and re-enter)""",
+                change_landmark=f"The step reward is equal to landmark_penalty {self.landmark_penalty}",
+                positive_distance="""The agent receives a positive reward which increases when getting closer to a landmark. """,
+                negative_distance="""The agent receives a negative reward which increases when getting closer to a landmark. """
+
+            ),
+            reward_collision_strategy=dict(
+                simple=f"The agent get a reward equal to landmark_reward ({self.landmark_reward}) when colliding with a landmark",
+                time_penalty=f"""The agent get a reward equal to landmark_reward ({self.landmark_reward}) when colliding with a landmark.
+                The collision also resets the previously accumulated negative reward in the landmarks.
+                (Note: the agent receives a negative reward even if it remains in a landmark. To receive a positive reward it must exit and re-enter)""",
+                change_landmark=f"""The agent receives a positive reward when entering a new landmark. 
+                This means that the agent cannot receive a positive reward by exiting and re-entering the same landmark. 
+                (Note: at least two landmarks are required in this mode). 
+                If self.landmark_penalty is not 0, the agent receive a penalty at each time step (Note: penalty should be much smaller than the reward)""",
+                change_landmark_avoid_borders=f"Same as change landmark but the agent also experience a penalty of border_penalty ({self.border_penalty}) when hitting a border.",
+                all_landmarks="""The agent receives a positive reward only when it enters a new landmark. 
+                So to maximize the reward of the episode it must reach all points of reference in the environment"""
+            )
+
+        )
+
+        return doc
 
     def make_world(self) -> World:
         """
@@ -377,6 +420,13 @@ class CollectLandmarkScenario(BaseScenario):
                     self.registered_collisions[agent.name].remove(
                         landmark.name)
 
+        if self.reward_collision_strategy == "change_landmark_avoid_borders":
+            for border in world.borders:
+                had_collided = is_collision_border(border, agent)
+
+                if had_collided:
+                    rew += self.border_penalty
+
         ##############################################
         # STEP REWARD
         ##############################################
@@ -402,8 +452,8 @@ class CollectLandmarkScenario(BaseScenario):
 
             if self.reward_step_strategy == "time_penalty":
 
-                counters=[land.counter for land in world.landmarks]
-                counters=max(counters)
+                counters = [land.counter for land in world.landmarks]
+                counters = max(counters)
 
                 rew += self.landmark_penalty * min(
                     counters, self.max_landmark_counter
@@ -418,13 +468,6 @@ class CollectLandmarkScenario(BaseScenario):
                 rew += dist_reward(is_positive=True)
             elif self.reward_step_strategy == "negative_distance":
                 rew += dist_reward(is_positive=False)
-
-        if self.reward_step_strategy == "change_landmark_avoid_borders":
-            for border in world.borders:
-                had_collided = is_collision_border(border, agent)
-
-                if had_collided:
-                    rew += self.border_penalty
 
         return rew
 

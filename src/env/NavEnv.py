@@ -62,7 +62,7 @@ class NavEnv(SimpleEnv):
         return self.scenario.get_current_strategy()
 
     def get_strategies(self):
-        return self.scenario.get_strategies()
+        return self.scenario.get_descriptive_strategy()
 
     def reset(self):
         super(NavEnv, self).reset()

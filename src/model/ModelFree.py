@@ -98,7 +98,7 @@ class ModelFree(nn.Module):
     it.
     """
 
-    def __init__(self, base, base_kwargs):
+    def __init__(self, base:str, base_kwargs):
         super(ModelFree, self).__init__()
 
         if base == "resnet":
@@ -403,6 +403,20 @@ class Conv2DModelFree(nn.Module):
 
         self.actor = nn.Sequential(actor_subnet)
         self.critic = nn.Sequential(critic_subnet)
+
+    def get_modules(self):
+
+        modules_dict={}
+        if self.share_weights:
+            modules_dict['feature_extractor']=self.feature_extractor.model
+        else:
+            modules_dict['feature_extractor_actor'] = self.feature_extractor_actor.model
+            modules_dict['feature_extractor_critic'] = self.feature_extractor_critic.model
+
+        modules_dict["actor"] = self.actor
+        modules_dict["critic"] = self.critic
+
+        return modules_dict
 
     def to(self, device):
         if self.share_weights:

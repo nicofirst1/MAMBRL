@@ -159,7 +159,7 @@ class PPOWandb(WandbLogger):
             logs["hist/actions"] = actions
             logs["hist/rewards"] = rewards
             logs["mean_reward"] = rewards.mean()
-            logs["episode_lenght"] = done_idx
+            logs["episode_length"] = done_idx
 
         if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
 
@@ -217,8 +217,8 @@ def write_rewards(states, rewards):
     return states
 
 
-def preprocess_logs(learn_output, mamrbl):
-    value_loss, action_loss, entropy, rollout, logs = learn_output
+def preprocess_logs(learn_output, ppo_wrapper):
+    value_loss, action_loss, entropy, logs = learn_output
 
     # merge logs with agent id
     new_logs = {}
@@ -229,22 +229,34 @@ def preprocess_logs(learn_output, mamrbl):
             new_logs[f"{new_key}_{k}"] = np.asarray(v).mean()
 
     logs = new_logs
+    reward_step_strategy, \
+    reward_collision_strategy, \
+    landmark_reset_strategy, \
+    landmark_collision_strategy \
+    = ppo_wrapper.env.get_current_strategy()
+
+    strat=ppo_wrapper.env.get_strategies()
+    tbl = wandb.Table(columns=["list","current strategy", "description"])
+
+    tbl.add_data("reward_step", reward_step_strategy, strat["reward_step_strategy"][reward_step_strategy])
+    tbl.add_data("reward_collision", reward_collision_strategy, strat["reward_collision_strategy"][reward_collision_strategy])
+    tbl.add_data("landmark_reset", landmark_reset_strategy, strat["landmark_reset_strategy"][landmark_reset_strategy])
+    tbl.add_data("landmark_collision", landmark_collision_strategy, strat["landmark_collision_strategy"][landmark_collision_strategy])
 
     general_logs = {
         "loss/value_loss": value_loss,
         "loss/action_loss": action_loss,
         "loss/entropy_loss": entropy,
         "loss/total": value_loss + action_loss - entropy,
-        "curriculum/guided_learning": mamrbl.ppo_wrapper.guided_learning_prob,
-        "curriculum/reward": mamrbl.real_env.get_curriculum()[0][0],
-        "curriculum/landmark": mamrbl.real_env.get_curriculum()[1][0],
-        "curriculum/lr": mamrbl.ppo_wrapper.get_learning_rate(),
-        "curriculum/entropy_coef": mamrbl.ppo_wrapper.ppo_agent.entropy_coef,
+        "curriculum/guided_learning": ppo_wrapper.guided_learning_prob,
+        "strategies": tbl,
+        "curriculum/lr": ppo_wrapper.get_learning_rate(),
+        "curriculum/entropy_coef": ppo_wrapper.ppo_agent.entropy_coef,
     }
 
     logs.update(general_logs)
 
-    return logs, rollout
+    return logs
 
 
 def delete_run(run_to_remove: str):
