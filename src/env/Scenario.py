@@ -176,48 +176,76 @@ class CollectLandmarkScenario(BaseScenario):
 
         if reward_step_strategy is not None:
             assert (
-                    reward_step_strategy in reward_step_keys
+                reward_step_strategy in reward_step_keys
             ), f"Reward step strategy '{reward_step_strategy}' is not valid." \
                f"\nValid options are {reward_step_keys}"
             self.reward_step_strategy = reward_step_strategy
 
         if reward_collision_strategy is not None:
             assert (
-                    reward_collision_strategy in reward_collision_keys
+                reward_collision_strategy in reward_collision_keys
             ), f"Reward collision strategy '{reward_collision_strategy}' is not valid." \
                f"\nValid options are {reward_collision_keys}"
             self.reward_collision_strategy = reward_collision_strategy
 
         if landmark_reset_strategy is not None:
             assert (
-                    landmark_reset_strategy in landmark_reset_keys
+                landmark_reset_strategy in landmark_reset_keys
             ), f"Landmark reset strategy '{landmark_reset_strategy}' is not valid." \
                f"\nValid options are {landmark_reset_keys}"
             self.landmark_reset_strategy = landmark_reset_strategy
 
         if landmark_collision_strategy is not None:
             assert (
-                    landmark_collision_strategy in landmark_collision_keys
+                landmark_collision_strategy in landmark_collision_keys
             ), f"Landmark collision strategy '{landmark_collision_strategy}' is not valid." \
                f"\nValid options are {landmark_collision_keys}"
             self.landmark_collision_strategy = landmark_collision_strategy
 
     def _get_valid_strategies(self):
 
-        strat_docs=self.get_descriptive_strategy()
+        strat_docs = self.get_descriptive_strategy()
 
-        landmark_reset_keys = list(strat_docs["landmark_reset_strategy"].keys())
-        landmark_collision_keys = list(strat_docs["landmark_collision_strategy"].keys())
+        landmark_reset_keys = list(
+            strat_docs["landmark_reset_strategy"].keys())
+        landmark_collision_keys = list(
+            strat_docs["landmark_collision_strategy"].keys())
         reward_step_keys = list(strat_docs["reward_step_strategy"].keys())
-        reward_collision_keys = list(strat_docs["reward_collision_strategy"].keys())
+        reward_collision_keys = list(
+            strat_docs["reward_collision_strategy"].keys())
 
         return reward_step_keys, reward_collision_keys, landmark_reset_keys, landmark_collision_keys
 
     def get_current_strategy(self) -> Tuple[str, str, str, str]:
+        """get_current_strategy method.
+
+        returns a list of strings describing the strategies adopted for
+        defining certain events in the environment, i.e. reward_step_strategy
+        (which reward is given during a normal step in the environment),
+        reward_collision_strategy (which reward is given during a collision),
+        landmark_reset_strategy (how landmarks are handled),
+        landmark_collision_strategy (what happens when there is a
+        collision with a landmark)
+        Returns
+        -------
+        Tuple[str, str, str, str]
+
+        """
         return self.reward_step_strategy, self.reward_collision_strategy, self.landmark_reset_strategy, self.landmark_collision_strategy
 
     def get_descriptive_strategy(self):
+        """get_descriptive_strategy method.
 
+        returns a dictionary containing customizable elements within the
+        environment. Each of the elements is represented with a dictionary
+        having as keys the possible selectable options and as values ​​some
+        descriptions on their behavior
+        Returns
+        -------
+        doc : dict
+
+
+        """
         doc = dict(
             landmark_reset_strategy=dict(
                 simple=" Landmark have static dimension and positions",
@@ -282,7 +310,8 @@ class CollectLandmarkScenario(BaseScenario):
             agent.color = np.array([0, 0, 1])
 
             # add agents collisions
-            self.registered_collisions = {agent.name: [] for agent in world.agents}
+            self.registered_collisions = {agent.name: []
+                                          for agent in world.agents}
 
         # add landmarks
         world.landmarks = [
@@ -297,7 +326,8 @@ class CollectLandmarkScenario(BaseScenario):
             pos = landmark.get_random_pos(world)
             landmark_pos[landmark.name] = pos
 
-        self.landmarks = {landmark.name: landmark for landmark in world.landmarks}
+        self.landmarks = {
+            landmark.name: landmark for landmark in world.landmarks}
         self.landmark_pos = landmark_pos
 
         return world
@@ -309,7 +339,8 @@ class CollectLandmarkScenario(BaseScenario):
         if self.landmark_collision_strategy == "remove":
             # get visited landmarks ids
             visited_landmarks = list(self.registered_collisions.values())
-            visited_landmarks = [item for sublist in visited_landmarks for item in sublist]
+            visited_landmarks = [
+                item for sublist in visited_landmarks for item in sublist]
 
             # remove duplicates
             visited_landmarks = list(set(visited_landmarks))
@@ -334,7 +365,8 @@ class CollectLandmarkScenario(BaseScenario):
                 world.landmarks.append(landmark)
 
             if self.landmark_reset_strategy == "simple":
-                landmark.reset(world, position=self.landmark_pos[land_id], size=1)
+                landmark.reset(
+                    world, position=self.landmark_pos[land_id], size=1)
             elif self.landmark_reset_strategy == "random_pos":
                 landmark.reset(world, size=1)
             elif self.landmark_reset_strategy == "random_size":
@@ -357,7 +389,8 @@ class CollectLandmarkScenario(BaseScenario):
                     world.max_size - eta,
                     world.dim_p)
 
-                collide = any([is_collision(agent, land) for land in self.landmarks.values()])
+                collide = any([is_collision(agent, land)
+                              for land in self.landmarks.values()])
 
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)

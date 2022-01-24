@@ -47,12 +47,12 @@ class CurriculumScheduler(StepScheduler):
             print_current_strategy(self.get_curriculum_fn())
 
 
-
 class LearningRateScheduler:
 
     def __init__(self, base_scheduler: torch.optim.lr_scheduler, optimizer_dict: Dict[str, torch.optim.Optimizer],
                  scheduler_kwargs):
-        self.schedulers = [base_scheduler(optim, **scheduler_kwargs) for optim in optimizer_dict.values()]
+        self.schedulers = [base_scheduler(
+            optim, **scheduler_kwargs) for optim in optimizer_dict.values()]
 
     def update_step(self, step):
         for sc in self.schedulers:
@@ -77,4 +77,3 @@ def exponential_decay(start_val, episodes, gamma=0.99):
 
 def linear_decay(start_val, episodes):
     return list(np.linspace(start_val, 0, episodes))
-

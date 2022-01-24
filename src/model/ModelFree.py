@@ -98,7 +98,7 @@ class ModelFree(nn.Module):
     it.
     """
 
-    def __init__(self, base:str, base_kwargs):
+    def __init__(self, base: str, base_kwargs):
         super(ModelFree, self).__init__()
 
         if base == "resnet":
@@ -115,6 +115,9 @@ class ModelFree(nn.Module):
 
     def get_modules(self):
         return self.base.get_modules()
+
+    def get_all_parameters(self):
+        return self.base.get_all_parameters()
 
     @property
     def is_recurrent(self):
@@ -139,7 +142,8 @@ class ModelFree(nn.Module):
             values : the value from the value layer
 
         """
-        raise NotImplementedError
+        # TODO add proper value instead of None
+        return self.base.forward(inputs, None, masks)
 
     def act(self, inputs, masks, deterministic=False):
         action_logit, value = self.base(inputs, masks)
@@ -153,7 +157,7 @@ class ModelFree(nn.Module):
 
         action_log_probs = F.log_softmax(action_logit, dim=1)
 
-        ##fixme: derivare gli action_log_probs, che questi credo siano sbagliati (vanno fatti con log_softmax?)
+        # fixme: derivare gli action_log_probs, che questi credo siano sbagliati (vanno fatti con log_softmax?)
         return value, action, action_log_probs.gather(1, action)
 
     def get_value(self, inputs, masks):
@@ -240,7 +244,8 @@ class NNBase(nn.Module):
             # Let's figure out which steps in the sequence have a zero for any
             # agent. We will always assume t=0 has a zero in it as that makes
             # the logic cleaner
-            has_zeros = ((masks[1:] == 0.0).any(dim=-1).nonzero().squeeze().cpu())
+            has_zeros = ((masks[1:] == 0.0).any(
+                dim=-1).nonzero().squeeze().cpu())
 
             # +1 to correct the masks[1:]
             if has_zeros.dim() == 0:
@@ -288,7 +293,8 @@ class FeatureExtractor(NNBase):
     """
 
     def __init__(self, input_shape, conv_layers, fc_layers, recurrent=False, hidden_size=512, num_frames=1):
-        super(FeatureExtractor, self).__init__(recurrent=recurrent, hidden_size=hidden_size, recurrent_input_size=hidden_size)
+        super(FeatureExtractor, self).__init__(recurrent=recurrent,
+                                               hidden_size=hidden_size, recurrent_input_size=hidden_size)
         self.in_shape = input_shape
         self.num_channels = input_shape[0]
         self.num_frames = num_frames
@@ -300,14 +306,17 @@ class FeatureExtractor(NNBase):
         if self.num_frames == 1:
             for i, cnn in enumerate(conv_layers):
                 if i == 0:
-                    feature_extractor_layers["conv_0"] = nn.Conv2d(self.num_channels, cnn[0], kernel_size=cnn[1], stride=cnn[2])
+                    feature_extractor_layers["conv_0"] = nn.Conv2d(
+                        self.num_channels, cnn[0], kernel_size=cnn[1], stride=cnn[2])
                     feature_extractor_layers["conv_0_activ"] = nn.LeakyReLU()
                 else:
-                    feature_extractor_layers["conv_" + str(i)] = nn.Conv2d(next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
-                    feature_extractor_layers["conv_" + str(i) + "_activ"] = nn.LeakyReLU()
+                    feature_extractor_layers["conv_" + str(i)] = nn.Conv2d(
+                        next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
+                    feature_extractor_layers["conv_" +
+                                             str(i) + "_activ"] = nn.LeakyReLU()
                 next_inp = cnn[0]
 
-            ## TODO: replace with right calculation after last conv
+            # TODO: replace with right calculation after last conv
             for layer in feature_extractor_layers:
                 if layer == "conv_0":
                     fake_inp = torch.zeros(
@@ -321,7 +330,8 @@ class FeatureExtractor(NNBase):
 
             # flatten the output starting from dim=1 by default
             feature_extractor_layers["flatten"] = nn.Flatten()
-            feature_extractor_layers["fc_0"] = nn.Linear(next_inp, fc_layers[0])
+            feature_extractor_layers["fc_0"] = nn.Linear(
+                next_inp, fc_layers[0])
             feature_extractor_layers["fc_0_activ"] = nn.LeakyReLU()
             self.model = nn.Sequential(feature_extractor_layers)
         # TODO else with more than 1 frame
@@ -341,10 +351,12 @@ class Conv2DModelFree(nn.Module):
     """
 
     def __init__(self, obs_shape, share_weights, action_space, conv_layers, fc_layers,
-            use_recurrent, use_residual, num_frames, base_hidden_size):
+                 use_recurrent, use_residual, num_frames, base_hidden_size):
         assert num_frames == 1, "The parameter num_frames should be one when using the 2D convolution"
-        assert 0 < len(fc_layers) < 3, f"fc_layers should be a tuple of lists of 1 or 2 elements while it's {fc_layers}"
-        assert 0 < len(conv_layers) < 3, f"conv_layers should be a tuple of lists of 1 or 2 elements while it's {kwargs['conv_layers']}"
+        assert 0 < len(
+            fc_layers) < 3, f"fc_layers should be a tuple of lists of 1 or 2 elements while it's {fc_layers}"
+        assert 0 < len(
+            conv_layers) < 3, f"conv_layers should be a tuple of lists of 1 or 2 elements while it's {conv_layers}"
         super(Conv2DModelFree, self).__init__()
 
         # self, obs_shape, action_space, base, hidden_size, share_weights, base_kwargs
@@ -406,9 +418,9 @@ class Conv2DModelFree(nn.Module):
 
     def get_modules(self):
 
-        modules_dict={}
+        modules_dict = {}
         if self.share_weights:
-            modules_dict['feature_extractor']=self.feature_extractor.model
+            modules_dict['feature_extractor'] = self.feature_extractor.model
         else:
             modules_dict['feature_extractor_actor'] = self.feature_extractor_actor.model
             modules_dict['feature_extractor_critic'] = self.feature_extractor_critic.model
@@ -460,6 +472,61 @@ class Conv2DModelFree(nn.Module):
             action_logits = self.actor(x)
 
             return action_logits, value
+
+    def get_actor_parameters(self):
+        """get_actor_parameters method.
+
+        returns all parameters relating to the actor network
+        Returns
+        -------
+        list
+            DESCRIPTION.
+
+        """
+        if self.share_weights:
+            return [{'params': self.feature_extractor.parameters()},
+                    {'params': self.actor.parameters()}]
+        else:
+            return [{'params': self.feature_extractor_actor.parameters()},
+                    {'params': self.actor.parameters()}]
+
+    def get_critic_parameters(self):
+        """get_critic_parameters method.
+
+        returns all parameters relating to the critic network
+        Returns
+        -------
+        list
+            DESCRIPTION.
+
+        """
+        if self.share_weights:
+            return [{'params': self.feature_extractor.parameters()},
+                    {'params': self.critic.parameters()}]
+        else:
+            return [{'params': self.feature_extractor_critic.parameters()},
+                    {'params': self.critic.parameters()}]
+
+    def get_all_parameters(self):
+        """get_all_parameters method.
+
+        returns all parameters relating to the network
+        Returns
+        -------
+        list
+            DESCRIPTION.
+
+        """
+        if self.share_weights:
+            return [{'params': self.feature_extractor.parameters()},
+                    {'params': self.critic.parameters()},
+                    {'params': self.actor.parameters()}]
+        else:
+            return [{'params': self.feature_extractor_critic.parameters()},
+                    {'params': self.feature_extractor_actor.parameters()},
+                    {'params': self.critic.parameters()},
+                    {'params': self.actor.parameters()}
+                    ]
 
 
 class ResNetBase(NNBase):
