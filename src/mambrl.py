@@ -21,11 +21,21 @@ if not params.visible:
 
 
 class MAMBRL:
-    def __init__(self, config):
+    def __init__(self, config: Params):
+        """__init__ method.
+
+        config is a Params object which class is defined in
+        src/common/Params.py
+        """
         self.config = config
         self.logger = None
 
+        # wrapper_configs = frame_shape, num_stacked_frames, device, gamma
         wrapper_configs = self.config.get_env_wrapper_configs()
+        # env_config = horizon, continuous_actions, gray_scale, frame_shape,
+        # visible,
+        # scenario_kwargs = step_reward, landmark_reward, landmark_penalty,
+        # border_penalty, num_agents, num_landmarks, max_size
         self.real_env = EnvWrapper(
             env=get_env(self.config.get_env_configs()),
             **wrapper_configs,
@@ -47,6 +57,8 @@ class MAMBRL:
         self.ppo_wrapper = PpoWrapper(env=self.real_env, config=config)
 
     def collect_trajectories(self):
+        # FIXME: perché settiamo di nuovo l'env del PPOWrapper, non dovrebbe già
+        # essere settato nell' __init__?
         self.ppo_wrapper.set_env(self.real_env)
         agent = OptimalAction(
             self.real_env, self.config.num_actions, self.config.device)
@@ -96,8 +108,11 @@ class MAMBRL:
             self.trainer.train(step, self.real_env)
 
     def train_model_free(self):
+
+        # self.real_env.set_strategy(reward_step_strategy="positive_distance")
+        self.real_env.set_strategy(reward_step_strategy="time_penalty")
         self.ppo_wrapper.set_env(self.real_env)
-        self.ppo_wrapper.learn(episodes=self.config.episodes)
+        self.ppo_wrapper.learn(epochs=self.config.epochs)
 
     def user_game(self):
         moves = {"w": 4, "a": 1, "s": 3, "d": 2}

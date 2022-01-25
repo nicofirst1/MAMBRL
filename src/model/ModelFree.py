@@ -146,19 +146,22 @@ class ModelFree(nn.Module):
         return self.base.forward(inputs, None, masks)
 
     def act(self, inputs, masks, deterministic=False):
+        # normalize the input outside
         action_logit, value = self.base(inputs, masks)
 
-        probs = F.softmax(action_logit, dim=1)
+        action_probs = F.softmax(action_logit, dim=1)
 
         if deterministic:
-            action = probs.max(1)[1]
+            action = action_probs.max(1)[1]
         else:
-            action = probs.multinomial(1)
+            action = action_probs.multinomial(1)
 
-        action_log_probs = F.log_softmax(action_logit, dim=1)
+        log_actions_prob = F.log_softmax(action_logit, dim=1).squeeze()
 
-        # fixme: derivare gli action_log_probs, che questi credo siano sbagliati (vanno fatti con log_softmax?)
-        return value, action, action_log_probs.gather(1, action)
+        value = float(value)
+        action = int(action)
+
+        return value, action, log_actions_prob
 
     def get_value(self, inputs, masks):
         return self.base(inputs, masks)[1]
@@ -193,7 +196,7 @@ class ModelFree(nn.Module):
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
 
-        return value, action_log_probs.gather(1, actions), entropy
+        return value, action_log_probs, entropy
 
 
 class NNBase(nn.Module):
