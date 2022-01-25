@@ -124,10 +124,10 @@ class Params:
     # =============================================================================
     agents = 1
     landmarks = 2
-    step_reward = -0.01
-    landmark_reward = 1
-    episodes = 3
-    horizon = 100
+    step_reward = -1
+    landmark_reward = 50
+    episodes = 3000
+    horizon = 50
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"

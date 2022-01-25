@@ -290,7 +290,8 @@ class RolloutStorage(object):
     def after_update(self):
         self.states[0].copy_(self.states[self.step])
         #self.recurrent_hs[0].copy_(self.recurrent_hs[self.step])
-        self.masks[0].copy_(self.masks[self.step])
+        #todo: commentedd mask copy cos is always zero
+        #self.masks[0].copy_(self.masks[self.step])
         self.step = 0
 
     def compute_returns(self, next_value, use_gae, gamma, gae_lambda):

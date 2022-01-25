@@ -96,6 +96,8 @@ class MAMBRL:
             self.trainer.train(step, self.real_env)
 
     def train_model_free(self):
+
+        #self.real_env.set_strategy(reward_step_strategy="positive_distance")
         self.ppo_wrapper.set_env(self.real_env)
         self.ppo_wrapper.learn(episodes=self.config.episodes)
 
