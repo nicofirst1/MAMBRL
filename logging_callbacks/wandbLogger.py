@@ -186,8 +186,8 @@ def write_rewards(states, rewards):
     :return:
     """
 
-    font_size = int(states.shape[-1] * 0.05)
-    box_h = int(states.shape[-1] * 0.05)
+    font_size = int(states.shape[-1] * 0.15)
+    box_h = int(states.shape[-1] * 0.1)
     box_w = int(states.shape[-1])
 
     states = states.transpose((0, 2, 3, 1))

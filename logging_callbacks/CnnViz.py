@@ -3,9 +3,7 @@ from functools import reduce
 
 import numpy as np
 import scipy.ndimage as nd
-import torch
-from PIL import Image
-from lucent.misc.channel_reducer import ChannelReducer
+from PIL import Image, ImageDraw
 
 from logging_callbacks.prov import LayerNMF, conv2d, norm_filter
 
@@ -118,7 +116,7 @@ def view(image):
         4,
     ], "Image should have 3 or 4 dimensions, invalid image shape {}".format(image.shape)
     # Change dtype for PIL.Image
-    image = (image ).astype(np.uint8)
+    image = (image).astype(np.uint8)
     if len(image.shape) == 4:
         image = np.concatenate(image, axis=1)
     Image.fromarray(image).show()
@@ -134,7 +132,6 @@ def zoom_to(img, width):
 
 class ModuleHook:
     def __init__(self, module):
-
         self.fw_hook = module.register_forward_hook(self.forward_hook)
         self.bk_hook = module.register_backward_hook(self.backward_hook)
         self.module = None
@@ -150,7 +147,6 @@ class ModuleHook:
     def backward_hook(self, module, grad_input, grad_output):
         self.grads = grad_output[0].detach().cpu()
 
-
     def close(self):
         self.fw_hook.remove()
         self.bk_hook.remove()
@@ -163,18 +159,20 @@ def hook_model(model):
     def hook_layers(net, prefix=[]):
         if hasattr(net, "_modules"):
             for name, layer in net._modules.items():
-                if "conv" in name or "out" in name and "activ" in name:
+                if "conv" in name or "out" in name:
                     features["_".join(prefix + [name])] = ModuleHook(layer)
                 hook_layers(layer, prefix=prefix + [name])
 
     hook_layers(model)
     return features
 
+
 def apply_alpha(image):
-    assert image.shape[-1]==4
-    alpha= np.repeat(np.expand_dims(image[..., -1], axis=-1), 3, axis=2)
+    assert image.shape[-1] == 4
+    alpha = np.repeat(np.expand_dims(image[..., -1], axis=-1), 3, axis=2)
     image = image[..., :3] * alpha
     return image
+
 
 class CnnViz:
 
@@ -188,64 +186,104 @@ class CnnViz:
         self.name = name
 
     def visualize(self):
-        # self.feature_extractor.train()
-        # self.linear.train()
-        #
-        # inputs = torch.as_tensor(states) / 255.0
-        # inputs = inputs.to(self.device)
-        # out = self.feature_extractor(inputs)
-        # out = self.linear(out)
 
         images = {}
 
-        reduction_alg="PCA"
+        reduction_alg = "PCA"
 
-        states=self.fe_acts['conv_0'].input*255
-        states=states.cpu()
+        # get original image input, denormalize and transpose
+        states = self.fe_acts['conv_0'].input * 255
+        states = states.cpu().detach().numpy()
         states = np.transpose(states, [0, 2, 3, 1])
-        states=np.asarray(states)
 
         for name, hook in self.fe_acts.items():
-            features = hook.acts
-            grads=hook.grads
 
-            if reduction_alg=="NMF":
-                features[features < 0] = 0
+            if "activ" not in name:
+                continue
 
-            nmf = LayerNMF(features, states, features=3, reduction_alg="PCA", grads=grads)  # , attr_layer_name=value_function_name)
+            # get activations and grads
+            acts = hook.acts
+            grads = hook.grads
 
+            if reduction_alg == "NMF":
+                # if reduction is NMF zero out negative activations
+                acts[acts < 0] = 0
 
-            image = nmf.vis_dataset_thumbnail(0, num_mult=4, expand_mult=4)[0]
-            image = apply_alpha(image)
-            image = zoom_to(image, 200)
-            images[f"thumb/{name}"] = image
+            images[f"map/{name}"]=most_active_patch(acts, states)
 
-            image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
-            image = apply_alpha(image)
-            image = zoom_to(image, 800)
-            images[f"spatio/{name}"] = image
+            # nmf = LayerNMF(acts, states, features=3,
+            #                reduction_alg="PCA", )  # grads=grads)  # , attr_layer_name=value_function_name)
 
-            attr_reduced = nmf.transform(np.maximum(grads, 0)) - nmf.transform(
-                np.maximum(-grads, 0))  # transform the positive and negative parts separately
-            nmf_norms = nmf.channel_dirs.sum(-1)
-            attr_reduced *= nmf_norms[
-                None, None, None]  # multiply by the norms of the NMF directions, since the magnitudes of the NMF directions are not relevant
-            attr_reduced /= np.median(attr_reduced.max(axis=(-3, -2,
-                                                             -1)))  # globally normalize by the median max value to make the visualization balanced (a bit of a hack)
-            attr_pos = np.maximum(attr_reduced, 0)
-            attr_pos = conv2d(attr_pos, norm_filter(attr_pos.shape[-1]))
-            nmf.acts_reduced=attr_pos
-            image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
-            image = zoom_to(image, 200)
-            image = apply_alpha(image)
-            images[f"grad/{name}_pos"] = image
+            # image = nmf.vis_dataset_thumbnail(0, num_mult=4, expand_mult=4)[0]
+            # image = apply_alpha(image)
+            # image = zoom_to(image, 200)
+            # images[f"thumb/{name}"] = image
+            #
+            # image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
+            # image = apply_alpha(image)
+            # image = zoom_to(image, 800)
+            # images[f"spatio/{name}"] = image
 
-            attr_neg = np.maximum(-attr_reduced, 0)
-            attr_neg = conv2d(attr_neg, norm_filter(attr_pos.shape[-1]))
-            nmf.acts_reduced = attr_neg
-            image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
-            image = zoom_to(image, 200)
-            image = apply_alpha(image)
-
-            images[f"grad/{name}_neg"] = image
+            # attr_reduced = nmf.transform(np.maximum(grads, 0)) - nmf.transform(
+            #     np.maximum(-grads, 0))  # transform the positive and negative parts separately
+            # nmf_norms = nmf.channel_dirs.sum(-1)
+            # attr_reduced *= nmf_norms[
+            #     None, None, None]  # multiply by the norms of the NMF directions, since the magnitudes of the NMF directions are not relevant
+            # attr_reduced /= np.median(attr_reduced.max(axis=(-3, -2,
+            #                                                  -1)))  # globally normalize by the median max value to make the visualization balanced (a bit of a hack)
+            # attr_pos = np.maximum(attr_reduced, 0)
+            # attr_pos = conv2d(attr_pos, norm_filter(attr_pos.shape[-1]))
+            # nmf.acts_reduced = attr_pos
+            # image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
+            # image = zoom_to(image, 200)
+            # image = apply_alpha(image)
+            # images[f"grad/{name}_pos"] = image
+            #
+            # attr_neg = np.maximum(-attr_reduced, 0)
+            # attr_neg = conv2d(attr_neg, norm_filter(attr_pos.shape[-1]))
+            # nmf.acts_reduced = attr_neg
+            # image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
+            # image = zoom_to(image, 200)
+            # image = apply_alpha(image)
+            #
+            # images[f"grad/{name}_neg"] = image
         return images
+
+
+def most_active_patch(acts, states):
+    """
+    Get the most active patch in the states
+    """
+
+    # discard first image which is incomplete
+    states = states[1:]
+    acts = acts[1:]
+
+    # get most activate batch
+    acts=acts.max(0)
+    max_index= acts[1][0, 0, 0]
+    acts=acts[0]
+    states = states[max_index]
+
+    # get max x,y for image
+    max_mag = acts.max(-1)[0]
+    max_x = np.argmax(max_mag.max(-1)[0])
+    max_y = np.argmax(max_mag[max_x])
+
+    # convert states to PIL
+    states= np.array(states).astype(np.uint8)
+    states= Image.fromarray(states)
+
+    # draw rectangle centered in max x,y
+    sprite_dim = int(states.size[0] * 0.1)
+    draw= ImageDraw.Draw(states, 'RGBA')
+
+    box_w0 = max(0, max_x - sprite_dim)
+    box_w1 = min(max_x + sprite_dim, states.size[0])
+
+    box_h0 = max(0, max_y - sprite_dim)
+    box_h1 = min(max_y + sprite_dim, states.size[1])
+
+    draw.rectangle(((box_w0, box_h0), (box_w1, box_h1)), fill=(255,255,0,100))
+
+    return np.asarray(states)
