@@ -3,7 +3,6 @@ import random
 import torch
 from tqdm import trange
 
-from logging_callbacks.CnnViz import CnnViz
 from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import mas_dict2tensor, Params
 from .PPO import PPO

@@ -1,4 +1,3 @@
-import os
 import random
 from typing import Any, Dict, Optional
 
@@ -197,10 +196,18 @@ def write_rewards(states, rewards):
     :param rewards:
     :return:
     """
+
+    font_size = int(states.shape[-1] * 0.05)
+    box_h = int(states.shape[-1] * 0.05)
+    box_w = int(states.shape[-1])
+
     states = states.transpose((0, 2, 3, 1))
     states = [Image.fromarray(states[i]) for i in range(states.shape[0])]
     draws = [ImageDraw.Draw(img) for img in states]
-    font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", 10)
+
+
+
+    font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", font_size)
 
     if rewards.size == 1:
         rewards = np.expand_dims(rewards, 0)
@@ -208,7 +215,7 @@ def write_rewards(states, rewards):
     for idx in range(rewards.size):
         rew = rewards[idx]
         draw = draws[idx]
-        draw.rectangle(((0, 0), (160, 10)), fill="black")
+        draw.rectangle(((0, 0), (box_w, box_h)), fill="black")
         draw.text((0, 0), f"Rew {rew}", font=font, fill=(255, 255, 255))
 
     states = [np.asarray(state) for state in states]
