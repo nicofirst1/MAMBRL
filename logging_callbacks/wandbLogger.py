@@ -134,7 +134,7 @@ class PPOWandb(WandbLogger):
         self.epoch = 0
 
         self.log_behavior_step = 10
-        self.log_heatmap_step = 50
+        self.log_heatmap_step = 10
 
         # Grad cam
         self.cams = cams
@@ -165,9 +165,12 @@ class PPOWandb(WandbLogger):
             logs["episode_length"] = done_idx
 
         if batch_id % self.log_heatmap_step == 0:
-            images = self.cnn_viz.visualize()
+            images = self.cnn_viz.visualize(states)
             for name, vid in images.items():
-                logs[f"cams/{name}"] = wandb.Image(vid)
+                if "vid" in name:
+                    logs[f"cams/{name}"] = wandb.Video(vid)
+                else:
+                    logs[f"cams/{name}"] = wandb.Image(vid)
 
                 # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 

@@ -411,3 +411,24 @@ def rescale_opacity(
     if keep_zeros:
         images[..., 3][images_orig[..., 3] == 0] = 0
     return images
+
+
+color_correlation_svd_sqrt = np.asarray([[0.26, 0.09, 0.02],
+                                         [0.27, 0.00, -0.05],
+                                         [0.27, -0.09, 0.03]]).astype("float32")
+
+max_norm_svd_sqrt = np.max(np.linalg.norm(color_correlation_svd_sqrt, axis=0))
+
+color_correlation_normalized = color_correlation_svd_sqrt / max_norm_svd_sqrt
+
+
+def _linear_decorrelate_color(tensor):
+    tensor = torch.matmul(tensor, torch.tensor(color_correlation_normalized.T))
+    return tensor
+
+
+def to_valid_rgb(image, decorrelate=False):
+    if decorrelate:
+        image = _linear_decorrelate_color(image)
+    return torch.sigmoid(image)
+
