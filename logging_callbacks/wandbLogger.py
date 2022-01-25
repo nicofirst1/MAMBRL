@@ -1,4 +1,3 @@
-import random
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -124,9 +123,10 @@ class PPOWandb(WandbLogger):
             wandb.watch(mod, log_freq=1000, log_graph=True, idx=idx, log="all")
             idx += 1
 
-        cnn_viz = CnnViz(models['feature_extractor_critic'], models['critic'], "critic", self.params.device)
+        crit_cnn_viz = CnnViz(models['feature_extractor_critic'], models['critic'], "critic", self.params.device)
+        actor_cnn_viz = CnnViz(models['feature_extractor_actor'], models['actor'], "actor", self.params.device)
 
-        self.cnn_viz = cnn_viz
+        self.cnn_vizs = [crit_cnn_viz, actor_cnn_viz]
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
         self.horizon = horizon
@@ -165,7 +165,11 @@ class PPOWandb(WandbLogger):
             logs["episode_length"] = done_idx
 
         if batch_id % self.log_heatmap_step == 0:
-            images = self.cnn_viz.visualize(states)
+            images = {}
+            for cnn_viz in self.cnn_vizs:
+                imgs = cnn_viz.visualize(states)
+                images.update(imgs)
+
             for name, vid in images.items():
                 if "vid" in name:
                     logs[f"cams/{name}"] = wandb.Video(vid)
@@ -196,8 +200,6 @@ def write_rewards(states, rewards):
     states = states.transpose((0, 2, 3, 1))
     states = [Image.fromarray(states[i]) for i in range(states.shape[0])]
     draws = [ImageDraw.Draw(img) for img in states]
-
-
 
     font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", font_size)
 
