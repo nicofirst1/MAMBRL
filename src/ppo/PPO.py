@@ -60,9 +60,7 @@ class PPO:
         self.optimizers = {
             agent_id: optim.Adam(
                 self.actor_critic_dict[agent_id].get_all_parameters(), lr=lr, eps=eps
-            )
-
-            for agent_id in self.actor_critic_dict.keys()
+            ) for agent_id in self.actor_critic_dict.keys()
         }
 
     def train(self):
@@ -108,7 +106,7 @@ class PPO:
 
             for sample in data_generator:
                 states_batch, actions_batch, old_logs_probs_batch, \
-                    values_batch, return_batch, masks_batch, adv_targ = sample
+                values_batch, return_batch, masks_batch, adv_targ = sample
 
                 for agent_id in self.actor_critic_dict.keys():
                     # fixme: per il momento fatto così per l'indice
@@ -123,7 +121,7 @@ class PPO:
 
                     # FIXED: NORMALIZE THE STATE
                     values, curr_log_probs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(
-                        states_batch, masks_batch, agent_actions
+                        states_batch, masks_batch
                     )
 
                     logs[agent_id]["curr_log_probs"].append(mean_fn(curr_log_probs))
@@ -131,18 +129,13 @@ class PPO:
                     logs[agent_id]["returns"].append(mean_fn(agent_returns))
                     logs[agent_id]["adv_targ"].append(mean_fn(agent_adv_targ))
 
-                    single_action_log_prob = curr_log_probs.gather(
-                        -1, agent_actions)
-                    single_action_old_log_prob = \
-                        old_log_probs.gather(
-                            -1, agent_actions)
+                    single_action_log_prob = curr_log_probs.gather(-1, agent_actions)
+                    single_action_old_log_prob = old_log_probs.gather(-1, agent_actions)
 
-                    ratio = torch.exp(single_action_log_prob -
-                                      single_action_old_log_prob)
+                    ratio = torch.exp(single_action_log_prob - single_action_old_log_prob)
                     surr1 = ratio * agent_adv_targ
                     surr2 = (
-                        torch.clamp(ratio, 1.0 - self.clip_param,
-                                    1.0 + self.clip_param)
+                        torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param)
                         * agent_adv_targ
                     )
 

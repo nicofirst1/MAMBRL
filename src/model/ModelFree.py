@@ -166,7 +166,7 @@ class ModelFree(nn.Module):
     def get_value(self, inputs, masks):
         return self.base(inputs, masks)[1]
 
-    def evaluate_actions(self, inputs: torch.Tensor, masks, actions):
+    def evaluate_actions(self, inputs: torch.Tensor, masks):
         """evaluate_actions method.
 
         compute the actions logit, value and actions probability by passing
