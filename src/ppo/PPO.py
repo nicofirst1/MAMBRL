@@ -146,7 +146,7 @@ class PPO:
                         * agent_adv_targ
                     )
 
-                    action_loss = -torch.min(surr1, surr2)
+                    action_loss = -torch.min(surr1, surr2).mean()
 
                     logs[agent_id]["ratio"].append(mean_fn(ratio))
                     logs[agent_id]["surr1"].append(mean_fn(surr1))
@@ -154,22 +154,17 @@ class PPO:
                     logs[agent_id]["perc_surr1"].append(mean_fn((surr1 <= surr2).float()))
                     logs[agent_id]["perc_surr2"].append(mean_fn((surr1 < surr2).float()))
 
-                    action_loss = -action_loss.mean()
-
                     if self.use_clipped_value_loss:
                         value_pred_clipped = agent_values + (values - agent_values).clamp(
                             -self.clip_param, self.clip_param
                         )
                         value_losses = (values - agent_returns).pow(2)
-                        value_losses_clipped = (
-                            value_pred_clipped - agent_returns).pow(2)
+                        value_losses_clipped = (value_pred_clipped - agent_returns).pow(2)
                         value_loss = (
-                            0.5 * torch.max(value_losses,
-                                            value_losses_clipped).mean()
+                            0.5 * torch.max(value_losses, value_losses_clipped).mean()
                         )
                     else:
-                        value_loss = 0.5 * \
-                            (agent_returns - values).pow(2).mean()
+                        value_loss = 0.5 * (agent_returns - values).pow(2).mean()
 
                     self.optimizers[agent_id].zero_grad()
 
@@ -192,7 +187,7 @@ class PPO:
                     # =============================================================================
 
                     nn.utils.clip_grad_norm_(
-                        self.actor_critic_dict[agent_id].parameters(
+                        self.actor_critic_dict[agent_id].get_all_parameters(
                         ), self.max_grad_norm
                     )
                     self.optimizers[agent_id].step()
