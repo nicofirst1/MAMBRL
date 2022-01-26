@@ -55,6 +55,17 @@ class TimerLandmark(Entity):
             self.size = self.get_random_size()
         self.state.p_vel = np.zeros(world.dim_p)
 
+    def set_pos(self, world, position):
+        assert len(
+            position) == world.dim_p, "the number of coordinates for the Landmark position is invalid"
+        self.state.p_pos = position
+
+    def set_size(self, world, size):
+        self.size = size
+
+    def set_color(self, world, color):
+        self.color = color
+
     def step(self):
         self.counter += 1
 

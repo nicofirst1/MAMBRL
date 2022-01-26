@@ -50,14 +50,13 @@ class EnvModelWandb(WandbLogger):
         if not is_training:
             log_step = self.val_log_step
 
-
-        if batch_id% log_step!=0:
+        if batch_id % log_step != 0:
             return
 
         image_log_step = log_step * 10
 
         wandb_log = {
-            f"loss/total": logs["loss_reward"] + logs["loss_reconstruct"]+ logs["loss_value"],
+            f"loss/total": logs["loss_reward"] + logs["loss_reconstruct"] + logs["loss_value"],
             f"loss/reward": logs["loss_reward"],
             f"loss/reconstruct": logs["loss_reconstruct"],
             f"loss/value": logs["loss_value"],
@@ -66,23 +65,24 @@ class EnvModelWandb(WandbLogger):
         }
 
         if "loss_lstm" in logs:
-            wandb_log["loss/lstm"]=logs['loss_lstm']
+            wandb_log["loss/lstm"] = logs['loss_lstm']
 
         # image logging_callbacks
         if batch_id % image_log_step == 0:
-            imagined_state=logs["imagined_state"]
+            imagined_state = logs["imagined_state"]
             actual_state = logs["actual_state"]
 
             imagined_state = torch.stack(imagined_state)
             actual_state = torch.stack(actual_state)
 
-            #bring imageine state in range 0 255
-            imagined_state=(imagined_state - imagined_state.min()) / (imagined_state.max() - imagined_state.min())
-            imagined_state*=255
+            # bring imageine state in range 0 255
+            imagined_state = (imagined_state - imagined_state.min()) / \
+                (imagined_state.max() - imagined_state.min())
+            imagined_state *= 255
 
-            diff=abs(imagined_state-actual_state)
+            diff = abs(imagined_state-actual_state)
 
-            fps=5
+            fps = 5
             img_log = {
                 f"imagined_state": wandb.Video(imagined_state, fps=fps, format="gif"),
                 f"actual_state": wandb.Video(actual_state, fps=fps, format="gif"),
@@ -147,13 +147,14 @@ class PPOWandb(WandbLogger):
                 done_idx = done_idx[0]
 
             states = (
-                rollout.states[:done_idx][:, -3:, :, :].cpu().numpy().astype(np.uint8)
+                rollout.states[:done_idx][:, -3:, :,
+                                          :].cpu().numpy().astype(np.uint8)
             )
 
             actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
             rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
 
-            states = write_rewards(states, rewards)
+            # states = write_rewards(states, rewards)
 
             logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
             logs["hist/actions"] = actions
@@ -176,7 +177,8 @@ class PPOWandb(WandbLogger):
             img = Image.fromarray(img).convert("RGB")
 
             for name, rep in reprs:
-                heatmap, heatmap_on_image = apply_colormap_on_image(img, rep, "hsv")
+                heatmap, heatmap_on_image = apply_colormap_on_image(
+                    img, rep, "hsv")
 
                 logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
 
@@ -185,9 +187,8 @@ class PPOWandb(WandbLogger):
         self.log_to_wandb(logs, commit=True)
 
 
-
 def on_epoch_end(self, loss: float, logs: Dict[str, Any], model_path: str):
-        self.epoch += 1
+    self.epoch += 1
 
 
 def write_rewards(states, rewards):
@@ -236,18 +237,22 @@ def preprocess_logs(learn_output, ppo_wrapper):
 
     logs = new_logs
     reward_step_strategy, \
-    reward_collision_strategy, \
-    landmark_reset_strategy, \
-    landmark_collision_strategy \
-    = ppo_wrapper.env.get_current_strategy()
+        reward_collision_strategy, \
+        landmark_reset_strategy, \
+        landmark_collision_strategy \
+        = ppo_wrapper.env.get_current_strategy()
 
-    strat=ppo_wrapper.env.get_strategies()
-    tbl = wandb.Table(columns=["list","current strategy", "description"])
+    strat = ppo_wrapper.env.get_strategies()
+    tbl = wandb.Table(columns=["list", "current strategy", "description"])
 
-    tbl.add_data("reward_step", reward_step_strategy, strat["reward_step_strategy"][reward_step_strategy])
-    tbl.add_data("reward_collision", reward_collision_strategy, strat["reward_collision_strategy"][reward_collision_strategy])
-    tbl.add_data("landmark_reset", landmark_reset_strategy, strat["landmark_reset_strategy"][landmark_reset_strategy])
-    tbl.add_data("landmark_collision", landmark_collision_strategy, strat["landmark_collision_strategy"][landmark_collision_strategy])
+    tbl.add_data("reward_step", reward_step_strategy,
+                 strat["reward_step_strategy"][reward_step_strategy])
+    tbl.add_data("reward_collision", reward_collision_strategy,
+                 strat["reward_collision_strategy"][reward_collision_strategy])
+    tbl.add_data("landmark_reset", landmark_reset_strategy,
+                 strat["landmark_reset_strategy"][landmark_reset_strategy])
+    tbl.add_data("landmark_collision", landmark_collision_strategy,
+                 strat["landmark_collision_strategy"][landmark_collision_strategy])
 
     general_logs = {
         "loss/value_loss": value_loss,

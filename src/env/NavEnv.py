@@ -35,7 +35,8 @@ class NavEnv(SimpleEnv):
 
         self.seed()
 
-        scenario = CollectLandmarkScenario(**scenario_kwargs, np_random=self.np_random)
+        scenario = CollectLandmarkScenario(
+            **scenario_kwargs, np_random=self.np_random)
         world = scenario.make_world()
         super().__init__(
             scenario,
@@ -52,11 +53,15 @@ class NavEnv(SimpleEnv):
         self.agent_selection = None
         self.agents_dict = {agent.name: agent for agent in world.agents}
 
-        self.viewer = rendering.Viewer(frame_shape[1], frame_shape[2], visible=visible)
+        self.viewer = rendering.Viewer(
+            frame_shape[1], frame_shape[2], visible=visible)
         self.viewer.set_max_size(scenario_kwargs["max_size"])
 
     def set_strategy(self, **kwargs):
         self.scenario.set_strategy(**kwargs)
+
+    def set_landmarks_pos(self, landmarks_pos):
+        self.scenario.set_landmarks_pos(self.world, landmarks_pos)
 
     def get_current_strategy(self) -> Tuple[str, str, str, str]:
         return self.scenario.get_current_strategy()
