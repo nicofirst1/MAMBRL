@@ -32,10 +32,10 @@ class PpoWrapper:
         self.actor_critic_dict = {
             agent_id: ModelFree(**policy_configs).to(self.device) for agent_id in self.env.agents
         }
-
+        # epochs = config.epochs,
         self.ppo_agent = PPO(
             actor_critic_dict=self.actor_critic_dict,
-            ppo_epochs=config.epochs,
+            ppo_epochs=config.batch_epochs,
             clip_param=config.ppo_clip_param,
             num_minibatch=self.num_minibatch,
             value_loss_coef=config.value_loss_coef,
@@ -50,7 +50,6 @@ class PpoWrapper:
         if self.use_wandb:
 
             cams = []
-
 
             from logging_callbacks import PPOWandb
 
@@ -79,17 +78,18 @@ class PpoWrapper:
     def set_entropy_coeff(self, value):
         self.ppo_agent.entropy_coef = value
 
-    def learn(self, episodes):
+    def learn(self, epochs):
         rollout = RolloutStorage(
             num_steps=self.num_steps,
             obs_shape=self.obs_shape,
+            num_actions=self.action_space,
             num_agents=self.num_agents,
-            #recurrent_hs_size=self.actor_critic_dict["agent_0"].recurrent_hidden_state_size
+            # recurrent_hs_size=self.actor_critic_dict["agent_0"].recurrent_hidden_state_size
         )
         rollout.to(self.device)
 
         schedulers = self.init_schedulers(
-            episodes,
+            epochs,
             use_curriculum=False,
             use_guided_learning=False,
             use_learning_rate=False,
@@ -102,11 +102,11 @@ class PpoWrapper:
         action_log_dict = {agent_id: False for agent_id in self.env.agents}
         #recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
 
-        for episode in trange(episodes, desc="Training model free"):
+        for epoch in trange(epochs, desc="Training model free"):
             self.ppo_agent.eval()
 
             for s in schedulers:
-                s.update_step(episode)
+                s.update_step(epoch)
 
             logs = {ag: dict(
                 ratio=[],
@@ -116,7 +116,7 @@ class PpoWrapper:
                 adv_targ=[],
                 perc_surr1=[],
                 perc_surr2=[],
-                curr_log_porbs=[],
+                curr_log_probs=[],
                 old_log_probs=[]
             ) for ag in self.actor_critic_dict.keys()}
 
@@ -125,29 +125,32 @@ class PpoWrapper:
 
             for step in range(self.num_steps):
                 obs = observation.to(self.device).unsqueeze(dim=0)
-                guided_learning = {agent_id: False for agent_id in self.env.agents}
+                guided_learning = {
+                    agent_id: False for agent_id in self.env.agents}
 
                 for agent_id in self.env.agents:
                     # perform guided learning with scheduler
-                    #todo: remove optimal end generalize with policy
+                    # todo: remove optimal end generalize with policy
                     if self.guided_learning_prob > random.uniform(0, 1):
-                        action, action_log_prob = self.env.optimal_action(agent_id)
+                        action, action_log_prob = self.env.optimal_action(
+                            agent_id)
                         guided_learning[agent_id] = True
                         value = -1
                     else:
+                        # FIXED: NORMALIZED THE STATE
                         with torch.no_grad():
                             value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
-                                obs, rollout.masks[step]
+                                obs/255., rollout.masks[step]
                             )
 
                     # get action with softmax and multimodal (stochastic)
-                    action_dict[agent_id] = int(action)
-                    values_dict[agent_id] = float(value)
-                    action_log_dict[agent_id] = float(action_log_prob)
+                    action_dict[agent_id] = action
+                    values_dict[agent_id] = value
+                    action_log_dict[agent_id] = action_log_prob
                     #recurrent_hs_dict[agent_id] = recurrent_hs[0]
 
                 # Obser reward and next obs
-                ## fixme: questo con multi agent non funziona, bisogna capire come impostarlo
+                # fixme: questo con multi agent non funziona, bisogna capire come impostarlo
                 observation, rewards, done, infos = self.env.step(action_dict)
 
                 # if guided then use actual reward as predicted value
@@ -155,16 +158,19 @@ class PpoWrapper:
                     if b:
                         values_dict[agent_id] = rewards[agent_id]
 
+                # FIXME mask dovrebbe avere un valore per ogni agente
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
                 rewards = mas_dict2tensor(rewards, float)
                 actions = mas_dict2tensor(action_dict, int)
                 values = mas_dict2tensor(values_dict, float)
                 #recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
-                action_log_probs = mas_dict2tensor(action_log_dict, float)
+                action_log_probs_list = [elem.unsqueeze(dim=0)
+                                         for _, elem in action_log_dict.items()]
+                action_log_probs = torch.cat(action_log_probs_list, 0)
 
                 rollout.insert(
                     state=observation,
-                    #recurrent_hs=recurrent_hs,
+                    # recurrent_hs=recurrent_hs,
                     action=actions,
                     action_log_probs=action_log_probs,
                     value_preds=values,
@@ -175,7 +181,7 @@ class PpoWrapper:
                 if done["__all__"]:
                     observation = self.env.reset()
 
-            ## fixme: qui bisogna come farlo per multi agent
+            # fixme: qui bisogna come farlo per multi agent
             with torch.no_grad():
                 next_value = self.actor_critic_dict["agent_0"].get_value(
                     rollout.states[-1].unsqueeze(dim=0), rollout.masks[-1]
@@ -185,22 +191,23 @@ class PpoWrapper:
 
             self.ppo_agent.train()
             with torch.enable_grad():
-                value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
+                value_loss, action_loss, entropy = self.ppo_agent.update(
+                    rollout, logs)
 
             if self.use_wandb:
-                logs = preprocess_logs([value_loss, action_loss, entropy, logs], self)
-                self.logger.on_batch_end(logs=logs, batch_id=episode, rollout=rollout)
+                logs = preprocess_logs(
+                    [value_loss, action_loss, entropy, logs], self)
+                self.logger.on_batch_end(
+                    logs=logs, batch_id=epoch, rollout=rollout)
 
             rollout.after_update()
 
         return
 
-
     def set_env(self, env):
         self.env = env
 
-
-    def init_schedulers(self, episodes, use_curriculum: bool = True, use_guided_learning: bool = True,
+    def init_schedulers(self, epochs, use_curriculum: bool = True, use_guided_learning: bool = True,
                         use_learning_rate: bool = True, use_entropy_reg: bool = True):
         schedulers = []
 
@@ -217,7 +224,7 @@ class PpoWrapper:
             }
 
             cs = CurriculumScheduler(
-                episodes=episodes,
+                epochs=epochs,
                 values_list=list(curriculum.values()),
                 set_fn=self.env.set_strategy,
                 step_list=list(curriculum.keys()),
@@ -241,11 +248,11 @@ class PpoWrapper:
                 1700: 0.0,
             }
 
-            ep = int(episodes * 0.8)
-            guided_learning = linear_decay(start_val=1, episodes=ep)
+            ep = int(epochs * 0.8)
+            guided_learning = linear_decay(start_val=1, epochs=ep)
 
             gls = StepScheduler(
-                episodes=ep,
+                epochs=ep,
                 values_list=guided_learning,
                 set_fn=self.set_guided_learning_prob
             )
@@ -266,9 +273,10 @@ class PpoWrapper:
         if use_entropy_reg:
             from common.schedulers import exponential_decay, StepScheduler
 
-            values = exponential_decay(Params().entropy_coef, episodes, gamma=0.999)
+            values = exponential_decay(
+                Params().entropy_coef, epochs, gamma=0.999)
             es = StepScheduler(
-                episodes=episodes,
+                epochs=epochs,
                 values_list=values,
                 set_fn=self.set_entropy_coeff
             )

@@ -9,15 +9,15 @@ from src.common import print_current_strategy
 
 class StepScheduler:
 
-    def __init__(self, values_list, episodes, set_fn, step_list=None):
+    def __init__(self, values_list, epochs, set_fn, step_list=None):
         self.values_list = values_list
-        self.episodes = episodes
+        self.epochs = epochs
         self.set_fn = set_fn
 
         if step_list is not None:
             assert len(values_list) == len(step_list)
         else:
-            step_list = list(range(0, episodes, episodes // len(values_list)))
+            step_list = list(range(0, epochs, epochs // len(values_list)))
 
         self.step_list = step_list
 
@@ -59,13 +59,13 @@ class LearningRateScheduler:
             sc.step()
 
 
-def exponential_decay(start_val, episodes, gamma=0.99):
+def exponential_decay(start_val, epochs, gamma=0.99):
     gamma = 1 - gamma
     values = []
 
     prev = start_val
 
-    for idx in range(0, episodes):
+    for idx in range(0, epochs):
         val = prev * pow(math.e, - gamma * idx)
         prev = val
         values.append(
@@ -75,5 +75,5 @@ def exponential_decay(start_val, episodes, gamma=0.99):
     return values
 
 
-def linear_decay(start_val, episodes):
-    return list(np.linspace(start_val, 0, episodes))
+def linear_decay(start_val, epochs):
+    return list(np.linspace(start_val, 0, epochs))

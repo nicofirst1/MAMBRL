@@ -3,6 +3,8 @@ import math
 import torch
 import torch.nn as nn
 from torch import optim
+from .RolloutStorage import RolloutStorage
+from typing import Dict
 
 
 class PPO:
@@ -19,6 +21,29 @@ class PPO:
             max_grad_norm,
             use_clipped_value_loss=True,
     ):
+        """__init__ method.
+
+        create a PPO agent. A PPO agent must implement the update function
+        which, given a rollout, takes care of updating the parameters
+        of its model
+        Parameters
+        ----------
+        actor_critic_dict : Dict[str, ModelFree]
+        ppo_epochs : int
+            number of times the PPO update its model's parameters over the
+            same set of trajectories
+        clip_param : float
+        num_minibatch : int
+            number of elements inside a minibatch
+        value_loss_coef : float
+        entropy_coef : float
+        lr : float
+        eps : float
+        max_grad_norm : int
+        use_clipped_value_loss : Bool, optional
+            The default is True.
+
+        """
 
         self.actor_critic_dict = actor_critic_dict
         self.ppo_epochs = ppo_epochs
@@ -48,16 +73,33 @@ class PPO:
         for model in self.actor_critic_dict.values():
             model.eval()
 
-    def update(self, rollout, logs):
+    def update(self, rollout: RolloutStorage, logs: Dict[str, Dict[str, list]]):
+        """update method.
+
+        update the models parameters inside the self.actor_critic_dict
+        given a rollout
+        Parameters
+        ----------
+        rollout : RolloutStorage
+        logs : logs: Dict[str,Dict[str,list]]
+            update the log of each agents
+
+        Returns
+        -------
+        value_loss: float
+        action_loss: float
+        entropy_loss: float
+
+        """
         advantages = rollout.returns[:-1] - rollout.value_preds[:-1]
-        advantages = (advantages - advantages.mean()) / \
-            (advantages.std() + 1e-10)
+        # advantages = (advantages - advantages.mean()) / \
+        #     (advantages.std() + 1e-10)
 
         agents_value_losses = torch.zeros(len(self.actor_critic_dict))
         agents_action_losses = torch.zeros(len(self.actor_critic_dict))
         agents_entropies = torch.zeros(len(self.actor_critic_dict))
 
-        def log_fn(tensor): return float(tensor.mean())
+        def mean_fn(tensor): return float(tensor.mean())
 
         for _ in range(self.ppo_epochs):
             data_generator = rollout.recurrent_generator(
@@ -73,24 +115,32 @@ class PPO:
                     agent_index = int(agent_id[-1])
 
                     #agent_recurrent_hs = recurrent_hs_batch[:, agent_index]
-                    agent_log_probs = old_logs_probs_batch[:, agent_index, :]
+                    old_log_probs = old_logs_probs_batch[:, agent_index, :]
                     agent_actions = actions_batch[:, agent_index]
                     agent_values = values_batch[:, agent_index]
                     agent_returns = return_batch[:, agent_index]
                     agent_adv_targ = adv_targ[:, agent_index]
 
-                    values, curr_log_porbs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(
-                        states_batch, masks_batch, agent_actions
+                    # FIXED: NORMALIZE THE STATE
+                    values, curr_log_probs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(
+                        states_batch/255., masks_batch, agent_actions
                     )
 
-                    logs[agent_id]["curr_log_porbs"].append(
-                        log_fn(curr_log_porbs))
+                    logs[agent_id]["curr_log_probs"].append(
+                        mean_fn(curr_log_probs))
                     logs[agent_id]["old_log_probs"].append(
-                        log_fn(agent_log_probs))
-                    logs[agent_id]["returns"].append(log_fn(agent_returns))
-                    logs[agent_id]["adv_targ"].append(log_fn(agent_adv_targ))
+                        mean_fn(old_log_probs))
+                    logs[agent_id]["returns"].append(mean_fn(agent_returns))
+                    logs[agent_id]["adv_targ"].append(mean_fn(agent_adv_targ))
 
-                    ratio = torch.exp(curr_log_porbs - agent_log_probs)
+                    single_action_log_prob = curr_log_probs.gather(
+                        -1, agent_actions)
+                    single_action_old_log_prob = \
+                        old_log_probs.gather(
+                            -1, agent_actions)
+
+                    ratio = torch.exp(single_action_log_prob -
+                                      single_action_old_log_prob)
                     surr1 = ratio * agent_adv_targ
                     surr2 = (
                         torch.clamp(ratio, 1.0 - self.clip_param,
@@ -98,16 +148,16 @@ class PPO:
                         * agent_adv_targ
                     )
 
-                    logs[agent_id]["ratio"].append(log_fn(ratio))
-                    logs[agent_id]["surr1"].append(log_fn(surr1))
-                    logs[agent_id]["surr2"].append(log_fn(surr2))
+                    logs[agent_id]["ratio"].append(mean_fn(ratio))
+                    logs[agent_id]["surr1"].append(mean_fn(surr1))
+                    logs[agent_id]["surr2"].append(mean_fn(surr2))
 
                     action_loss = torch.min(surr1, surr2)
 
                     logs[agent_id]["perc_surr1"].append(
-                        log_fn((action_loss == surr1).float()))
+                        mean_fn((action_loss == surr1).float()))
                     logs[agent_id]["perc_surr2"].append(
-                        log_fn((action_loss == surr2).float()))
+                        mean_fn((action_loss == surr2).float()))
 
                     action_loss = -action_loss.mean()
 
@@ -136,6 +186,15 @@ class PPO:
                         - entropy
                     )
                     loss.backward()
+
+                    # =============================================================================
+                    # TO PRINT THE WHOLE COMPUTATIONAL GRAPH (FOR THE ACTOR, CRITIC AND BOTHS)
+                    # =============================================================================
+                    # getBack(loss.grad_fn)
+                    # params_dict = dict(self.actor_critic_dict["agent_0"].named_parameters())
+                    # make_dot(loss, params=params_dict,
+                    #          show_attrs=True, show_saved=True).render("model_backward_graph", format="png")
+                    # =============================================================================
 
                     nn.utils.clip_grad_norm_(
                         self.actor_critic_dict[agent_id].parameters(

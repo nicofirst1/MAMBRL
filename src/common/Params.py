@@ -31,8 +31,13 @@ class Params:
     device = torch.device("cuda")
     resize = True
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
+    # TODO: add description
     guided_learning_prob = 0.0
     epochs = 1000
+    # number of learning iterations that the algorithm does on the same batch
+    # of trajectories (trajectories are shuffled at each iteration)
+    batch_epochs = 3
+    # number of elements on which the algorithm performs a learning step
     minibatch = 32  # 64
     batch_size = 4
     framework = "torch"
@@ -79,7 +84,7 @@ class Params:
     # =============================================================================
     gamma = 0.998
     ppo_clip_param = 0.1
-    clip_value_loss = True
+    clip_value_loss = False
     # Clip param for the value function. Note that this is sensitive to the
     # scale of the rewards. If your expected V is large, increase this.
     vf_clip_param = 10.0

@@ -73,12 +73,12 @@ class RolloutStorage_francesco(object):
                 self.gae[step] = delta
             else:
                 delta = (
-                        self.rewards[step] +
-                        self.gamma * self.values[step + 1] * self.masks[step] -
-                        self.values[step]
+                    self.rewards[step] +
+                    self.gamma * self.values[step + 1] * self.masks[step] -
+                    self.values[step]
                 )
                 self.gae[step] = delta + self.gamma * \
-                                 tau * self.masks[step] * self.gae[step + 1]
+                    tau * self.masks[step] * self.gae[step + 1]
 
             # fix: advantage normalization, not sure if we should use it or not
             # self.gae = (self.gae - self.gae.mean()) / (self.gae.std() + 1e-5)
@@ -181,9 +181,9 @@ class RolloutStorage_francesco(object):
                 adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
 
                 yield states_minibatch, actions_minibatch, value_minibatch, \
-                      return_minibatch, rewards_minibatch, \
-                      masks_minibatch, old_action_log_probs_minibatch, \
-                      adv_targ_minibatch, next_states_minibatch
+                    return_minibatch, rewards_minibatch, \
+                    masks_minibatch, old_action_log_probs_minibatch, \
+                    adv_targ_minibatch, next_states_minibatch
         else:
             for start_ind in range(0, total_samples, minibatch_frames):
                 next_states_minibatch = []
@@ -246,24 +246,25 @@ class RolloutStorage_francesco(object):
                 adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
 
                 yield states_minibatch, actions_minibatch, value_minibatch, \
-                      return_minibatch, rewards_minibatch, \
-                      masks_minibatch, old_action_log_probs_minibatch, \
-                      adv_targ_minibatch, next_states_minibatch
+                    return_minibatch, rewards_minibatch, \
+                    masks_minibatch, old_action_log_probs_minibatch, \
+                    adv_targ_minibatch, next_states_minibatch
 
 
 class RolloutStorage(object):
-    def __init__(self, num_steps, obs_shape, num_agents):
+    def __init__(self, num_steps, obs_shape, num_actions, num_agents):
         self.step = 0
         self.num_channels = obs_shape[0]
+        self.num_actions = num_actions
 
-        #todo: togli stati RNN
+        # todo: togli stati RNN
         self.states = torch.zeros(num_steps + 1, *obs_shape)
         #self.recurrent_hs = torch.zeros(num_steps + 1, num_agents, recurrent_hs_size)
         self.rewards = torch.zeros(num_steps, num_agents, 1)
         self.value_preds = torch.zeros(num_steps + 1, num_agents, 1)
         self.returns = torch.zeros(num_steps + 1, num_agents, 1)
         self.actions = torch.zeros(num_steps, num_agents, 1).long()
-        self.action_log_probs = torch.zeros(num_steps, num_agents, 1)
+        self.action_log_probs = torch.zeros(num_steps, num_agents, num_actions)
         self.masks = torch.ones(num_steps + 1, 1)
 
     def to(self, device):
@@ -289,14 +290,14 @@ class RolloutStorage(object):
 
     def after_update(self):
         self.states[0].copy_(self.states[self.step])
-        #self.recurrent_hs[0].copy_(self.recurrent_hs[self.step])
-        #todo: commentedd mask copy cos is always zero
-        #self.masks[0].copy_(self.masks[self.step])
+        # self.recurrent_hs[0].copy_(self.recurrent_hs[self.step])
+        # todo: commentedd mask copy cos is always zero
+        # self.masks[0].copy_(self.masks[self.step])
         self.step = 0
 
     def compute_returns(self, next_value, use_gae, gamma, gae_lambda):
         if use_gae:
-            #fixme: add self.step as index
+            # fixme: add self.step as index
             self.value_preds[-1] = next_value
             gae = 0
             for step in reversed(range(self.rewards.size(0))):
@@ -325,7 +326,7 @@ class RolloutStorage(object):
             adv_targ_minibatch: torch.Tensor[minibatch_size, num_agents]
             next_states_minibatch: torch.Tensor[minibatch_size, num_channels, width, height]
         """
-        #todo: vedi se splittare i frames nel rollout oppure nell'env
+        # todo: vedi se splittare i frames nel rollout oppure nell'env
         total_samples = self.rewards.size(0)
         perm = torch.randperm(total_samples)
 
@@ -345,10 +346,12 @@ class RolloutStorage(object):
             for offset in range(minibatch_frames):
                 ind = perm[start_ind + offset]
                 states_minibatch.append(self.states[ind].unsqueeze(dim=0))
-                #recurrent_hs_minibatch.append(self.recurrent_hs[ind].unsqueeze(dim=0))
+                # recurrent_hs_minibatch.append(self.recurrent_hs[ind].unsqueeze(dim=0))
                 actions_minibatch.append(self.actions[ind].unsqueeze(dim=0))
-                log_probs_minibatch.append(self.action_log_probs[ind].unsqueeze(dim=0))
-                value_preds_minibatch.append(self.value_preds[ind].unsqueeze(dim=0))
+                log_probs_minibatch.append(
+                    self.action_log_probs[ind].unsqueeze(dim=0))
+                value_preds_minibatch.append(
+                    self.value_preds[ind].unsqueeze(dim=0))
                 return_minibatch.append(self.returns[ind].unsqueeze(dim=0))
                 masks_minibatch.append(self.masks[ind])
                 adv_targ_minibatch.append(advantages[ind].unsqueeze(dim=0))
@@ -363,6 +366,5 @@ class RolloutStorage(object):
             log_probs_minibatch = torch.cat(log_probs_minibatch, dim=0)
             adv_targ_minibatch = torch.cat(adv_targ_minibatch, dim=0)
 
-
             yield states_minibatch, actions_minibatch, log_probs_minibatch, \
-                  value_preds_minibatch, return_minibatch, masks_minibatch, adv_targ_minibatch
+                value_preds_minibatch, return_minibatch, masks_minibatch, adv_targ_minibatch
