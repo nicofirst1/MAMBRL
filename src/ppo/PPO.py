@@ -90,8 +90,7 @@ class PPO:
 
         """
         advantages = rollout.returns[:-1] - rollout.value_preds[:-1]
-        # advantages = (advantages - advantages.mean()) / \
-        #     (advantages.std() + 1e-10)
+        #advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
 
         agents_value_losses = torch.zeros(len(self.actor_critic_dict))
         agents_action_losses = torch.zeros(len(self.actor_critic_dict))
@@ -180,8 +179,7 @@ class PPO:
                     # =============================================================================
 
                     nn.utils.clip_grad_norm_(
-                        self.actor_critic_dict[agent_id].get_all_parameters(
-                        ), self.max_grad_norm
+                        self.actor_critic_dict[agent_id].parameters(), self.max_grad_norm
                     )
                     self.optimizers[agent_id].step()
 
