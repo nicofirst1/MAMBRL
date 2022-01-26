@@ -123,13 +123,11 @@ class PPO:
 
                     # FIXED: NORMALIZE THE STATE
                     values, curr_log_probs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(
-                        states_batch/255., masks_batch, agent_actions
+                        states_batch, masks_batch, agent_actions
                     )
 
-                    logs[agent_id]["curr_log_probs"].append(
-                        mean_fn(curr_log_probs))
-                    logs[agent_id]["old_log_probs"].append(
-                        mean_fn(old_log_probs))
+                    logs[agent_id]["curr_log_probs"].append(mean_fn(curr_log_probs))
+                    logs[agent_id]["old_log_probs"].append(mean_fn(old_log_probs))
                     logs[agent_id]["returns"].append(mean_fn(agent_returns))
                     logs[agent_id]["adv_targ"].append(mean_fn(agent_adv_targ))
 
@@ -148,16 +146,13 @@ class PPO:
                         * agent_adv_targ
                     )
 
+                    action_loss = -torch.min(surr1, surr2)
+
                     logs[agent_id]["ratio"].append(mean_fn(ratio))
                     logs[agent_id]["surr1"].append(mean_fn(surr1))
                     logs[agent_id]["surr2"].append(mean_fn(surr2))
-
-                    action_loss = torch.min(surr1, surr2)
-
-                    logs[agent_id]["perc_surr1"].append(
-                        mean_fn((action_loss == surr1).float()))
-                    logs[agent_id]["perc_surr2"].append(
-                        mean_fn((action_loss == surr2).float()))
+                    logs[agent_id]["perc_surr1"].append(mean_fn((surr1 <= surr2).float()))
+                    logs[agent_id]["perc_surr2"].append(mean_fn((surr1 < surr2).float()))
 
                     action_loss = -action_loss.mean()
 
@@ -206,8 +201,7 @@ class PPO:
                     agents_action_losses[agent_index] += action_loss.item()
                     agents_entropies[agent_index] += entropy.item()
 
-        num_updates = self.ppo_epochs * \
-            int(math.ceil(rollout.rewards.size(0) / self.num_minibatch))
+        num_updates = self.ppo_epochs * int(math.ceil(rollout.rewards.size(0) / self.num_minibatch))
 
         agents_value_losses /= num_updates
         agents_action_losses /= num_updates
