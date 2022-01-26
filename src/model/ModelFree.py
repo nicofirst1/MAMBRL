@@ -463,7 +463,7 @@ class Conv2DModelFree(nn.Module):
 
         """
         # TODO check how to use the rnn
-        inputs = inputs / 255
+        inputs = inputs / 255.
         if self.share_weights:
             x = self.feature_extractor.forward(inputs, masks)
             return self.critic(x), self.actor(x)
