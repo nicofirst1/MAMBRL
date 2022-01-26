@@ -503,6 +503,7 @@ class CnnViz:
         """
         param_f = lambda: param.image(224, batch=2)
         images = {}
+        c=-1
         for lay in get_model_layers(self.feature_extractor):
 
             if "conv" not in lay or "activ" in lay:
@@ -510,12 +511,11 @@ class CnnViz:
             channels = getattr(self.feature_extractor, lay).out_channels
             print(f"Layer {lay} with {channels} channels\n")
 
-            for c in range(channels):
-                obj = objectives.channel(lay, c, batch=1) - objectives.channel(lay, c, batch=0)
-                img = render.render_vis(self.feature_extractor, obj, param_f, show_image=False, thresholds=(32,),
-                                        progress=False)
+            obj = objectives.channel(lay, c, batch=1) - objectives.channel(lay, c, batch=0)
+            img = render.render_vis(self.feature_extractor, obj, param_f, show_image=False, thresholds=(32,),
+                                    progress=False)
 
-                images[f"ncv/{lay}/{c}"] = make_grid(img[0])
+            images[f"ncv/{lay}/{c}"] = make_grid(img[0])
         return images
 
     def combined_neurons(self):
@@ -621,7 +621,6 @@ class CnnViz:
 
             neuron_groups(states, acts, name, self.feature_extractor, n_groups=6, attr_classes=[])
 
-            images[f"map/{name}"] = most_active_patch(acts, states)
 
             nmf = LayerNMF(acts, states, features=3,
                            reduction_alg="PCA", )  # grads=grads)  # , attr_layer_name=value_function_name)
