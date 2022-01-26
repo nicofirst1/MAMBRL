@@ -133,6 +133,7 @@ class Params:
     landmark_reward = 1
     episodes = 3
     horizon = 100
+    landmarks_positions = [[0.0, -1.0], [0.0, 1.0]]  # None
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
@@ -250,6 +251,7 @@ class Params:
             scenario_kwargs=dict(
                 step_reward=self.step_reward,
                 landmark_reward=self.landmark_reward,
+                landmarks_positions=self.landmarks_positions,
                 landmark_penalty=self.landmark_penalty,
                 border_penalty=self.border_penalty,
                 num_agents=self.agents,
