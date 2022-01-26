@@ -1,15 +1,16 @@
-import os
 import random
 from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
+import torchvision
 import wandb
 from PIL import Image, ImageDraw, ImageFont
 from torch import nn
 
 from logging_callbacks.callbacks import WandbLogger
 from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
+from src.ppo.RolloutStorage import RolloutStorage
 
 
 class EnvModelWandb(WandbLogger):
@@ -32,7 +33,7 @@ class EnvModelWandb(WandbLogger):
 
         super(EnvModelWandb, self).__init__(**kwargs)
 
-        wandb.watch(models, log_freq=1000, log_graph=True,  log="all")
+        wandb.watch(models, log_freq=1000, log_graph=True, log="all")
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
@@ -40,7 +41,7 @@ class EnvModelWandb(WandbLogger):
         self.epoch = 0
 
     def on_batch_end(
-            self, logs: Dict[str, Any],  batch_id: int, is_training: bool = True
+            self, logs: Dict[str, Any], batch_id: int, is_training: bool = True
     ):
 
         flag = "training" if is_training else "validation"
@@ -77,10 +78,10 @@ class EnvModelWandb(WandbLogger):
 
             # bring imageine state in range 0 255
             imagined_state = (imagined_state - imagined_state.min()) / \
-                (imagined_state.max() - imagined_state.min())
+                             (imagined_state.max() - imagined_state.min())
             imagined_state *= 255
 
-            diff = abs(imagined_state-actual_state)
+            diff = abs(imagined_state - actual_state)
 
             fps = 5
             img_log = {
@@ -148,15 +149,16 @@ class PPOWandb(WandbLogger):
 
             states = (
                 rollout.states[:done_idx][:, -3:, :,
-                                          :].cpu().numpy().astype(np.uint8)
+                :].cpu().numpy().astype(np.uint8)
             )
 
             actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
             rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
 
-            # states = write_rewards(states, rewards)
+            grids = write_infos(states, rollout, self.params.action_meanings)
 
             logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
+            logs["behaviour_info"] = wandb.Video(grids, fps=10, format="gif")
             logs["hist/actions"] = actions
             logs["hist/rewards"] = rewards
             logs["mean_reward"] = rewards.mean()
@@ -191,7 +193,7 @@ def on_epoch_end(self, loss: float, logs: Dict[str, Any], model_path: str):
     self.epoch += 1
 
 
-def write_rewards(states, rewards):
+def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
     """
     Write reward on state image
     :param states:
@@ -199,29 +201,79 @@ def write_rewards(states, rewards):
     :return:
     """
 
-    font_size = int(states.shape[-1] * 0.15)
-    box_h = int(states.shape[-1] * 0.1)
-    box_w = int(states.shape[-1])
+    font_size = 10
 
-    states = states.transpose((0, 2, 3, 1))
-    states = [Image.fromarray(states[i]) for i in range(states.shape[0])]
-    draws = [ImageDraw.Draw(img) for img in states]
+    img_size = 128
+    batch_size = states.shape[0]
+    state_shape = states.shape[-1]
+    img_size = state_shape if state_shape > img_size else img_size
+
+    info_img = np.zeros((batch_size, img_size, img_size, 3)).astype(np.uint8)
+
+    info_img = [Image.fromarray(info_img[i]) for i in range(batch_size)]
+    draws = [ImageDraw.Draw(img) for img in info_img]
 
     font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", font_size)
 
-    if rewards.size == 1:
-        rewards = np.expand_dims(rewards, 0)
+    # if rewards.size == 1:
+    #     rewards = np.expand_dims(rewards, 0)
 
-    for idx in range(rewards.size):
-        rew = rewards[idx]
+    for idx in range(batch_size):
+        rew = float(rollout.rewards[idx].squeeze().cpu())
+        act = int(rollout.actions[idx].squeeze().cpu())
+        ret = float(rollout.returns[idx].squeeze().cpu())
+        val = float(rollout.value_preds[idx].squeeze().cpu())
+
+        rew = f"{rew:.3f}"
+        ret = f"{ret:.3f}"
+        val = f"{val:.3f}"
+
+        act_mean = action_meaning[act]
+
+        # transform log prob into prob
+        log_prob = rollout.action_log_probs[idx].squeeze().cpu().numpy()
+        log_prob = np.exp(log_prob)
+        log_prob = [f"{p:.3f}, " for p in log_prob]
+
         draw = draws[idx]
-        draw.rectangle(((0, 0), (box_w, box_h)), fill="black")
-        draw.text((0, 0), f"Rew {rew}", font=font, fill=(255, 255, 255))
 
-    states = [np.asarray(state) for state in states]
-    states = np.asarray(states)
-    states = states.transpose((0, 3, 1, 2))
-    return states
+        draw.text((0, 0), f"Return: {ret}", font=font, fill=(255, 255, 255))
+        draw.text((0, 20), f"Value: {val}", font=font, fill=(255, 255, 255))
+        draw.text((0, 40), f"Rew: {rew}", font=font, fill=(255, 255, 255))
+        draw.text((0, 60), f"Action: {act} ({act_mean})", font=font, fill=(255, 255, 255))
+        draw.text((0, 80), f"Prob: [{''.join(log_prob[:2])}", font=font, fill=(255, 255, 255))
+        draw.text((0, 90), f"{''.join(log_prob[2:])}]", font=font, fill=(255, 255, 255))
+
+    # info_img[0].show()
+    info_img = [np.asarray(img) for img in info_img]
+    info_img = np.asarray(info_img)
+    info_img = info_img.transpose((0, 3, 1, 2))
+
+    if state_shape < img_size:
+        diff = img_size - state_shape
+        pad_l = diff // 2
+        pad_r = pad_l
+        if diff % 2 != 0:
+            pad_r += 1
+
+        states = np.pad(states, ((0, 0), (0, 0), (pad_l, pad_r), (pad_l, pad_r)))
+
+    info_img = torch.as_tensor(info_img)
+    states = torch.as_tensor(states)
+
+    grids = []
+    for idx in range(batch_size):
+        grids.append(
+            torchvision.utils.make_grid(
+                torch.stack([states[idx], info_img[idx]])
+            )
+        )
+
+    grids = np.stack(grids)
+    #grids = grids.transpose((0, 2, 3, 1))
+
+    #Image.fromarray(np.asarray(grids[1])).show()
+    return grids
 
 
 def preprocess_logs(learn_output, ppo_wrapper):
@@ -237,9 +289,9 @@ def preprocess_logs(learn_output, ppo_wrapper):
 
     logs = new_logs
     reward_step_strategy, \
-        reward_collision_strategy, \
-        landmark_reset_strategy, \
-        landmark_collision_strategy \
+    reward_collision_strategy, \
+    landmark_reset_strategy, \
+    landmark_collision_strategy \
         = ppo_wrapper.env.get_current_strategy()
 
     strat = ppo_wrapper.env.get_strategies()
