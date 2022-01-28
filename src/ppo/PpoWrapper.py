@@ -140,7 +140,7 @@ class PpoWrapper:
                         # FIXED: NORMALIZED THE STATE
                         with torch.no_grad():
                             value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
-                                obs/255., rollout.masks[step]
+                                obs, rollout.masks[step]
                             )
 
                     # get action with softmax and multimodal (stochastic)
@@ -164,8 +164,7 @@ class PpoWrapper:
                 actions = mas_dict2tensor(action_dict, int)
                 values = mas_dict2tensor(values_dict, float)
                 #recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
-                action_log_probs_list = [elem.unsqueeze(dim=0)
-                                         for _, elem in action_log_dict.items()]
+                action_log_probs_list = [elem.unsqueeze(dim=0) for _, elem in action_log_dict.items()]
                 action_log_probs = torch.cat(action_log_probs_list, 0)
 
                 rollout.insert(

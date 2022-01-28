@@ -20,8 +20,7 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
     TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
     MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
-    MODEL_FREE_LOGGER_FILE = os.path.join(
-        MODEL_FREE_LOG_DIR, "model_free_log.log")
+    MODEL_FREE_LOGGER_FILE = os.path.join(MODEL_FREE_LOG_DIR, "model_free_log.log")
 
     # =============================================================================
     # TRAINING
@@ -33,7 +32,7 @@ class Params:
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description
     guided_learning_prob = 0.0
-    epochs = 1000
+    epochs = 10000
     # number of learning iterations that the algorithm does on the same batch
     # of trajectories (trajectories are shuffled at each iteration)
     batch_epochs = 3
@@ -129,10 +128,11 @@ class Params:
     # =============================================================================
     agents = 1
     landmarks = 2
-    step_reward = -1
-    landmark_reward = 50
-    episodes = 3000
-    horizon = 50
+    step_reward = -0.01
+    landmark_reward = 1
+    episodes = 3
+    horizon = 100
+    landmarks_positions = [[0.0, -1.0], [0.0, 1.0]]  # None
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
@@ -250,6 +250,7 @@ class Params:
             scenario_kwargs=dict(
                 step_reward=self.step_reward,
                 landmark_reward=self.landmark_reward,
+                landmarks_positions=self.landmarks_positions,
                 landmark_penalty=self.landmark_penalty,
                 border_penalty=self.border_penalty,
                 num_agents=self.agents,
