@@ -10,7 +10,6 @@ from torch import nn
 
 from logging_callbacks.CnnViz import CnnViz
 from logging_callbacks.callbacks import WandbLogger
-from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
 from src.ppo.RolloutStorage import RolloutStorage
 
 

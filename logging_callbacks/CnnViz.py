@@ -1,3 +1,4 @@
+import random
 from collections import OrderedDict
 from functools import reduce
 
@@ -6,13 +7,13 @@ import scipy.ndimage as nd
 import torch
 import torchvision
 from PIL import Image, ImageDraw
-from lucent.misc.channel_reducer import ChannelReducer
-from lucent.modelzoo.util import get_model_layers
+from lucent.misc import ChannelReducer
+from lucent.modelzoo import get_model_layers
 from lucent.optvis import param, objectives, render, transform
+from lucent.optvis.render import get_layer_activ
 from torch import nn
-from tqdm import tqdm
 
-from logging_callbacks.prov import LayerNMF
+from logging_callbacks.prov import LayerNMF, conv2d, norm_filter
 
 
 def argmax_nd(x, axes, *, max_rep=np.inf, max_rep_strict=None):
@@ -137,43 +138,6 @@ def zoom_to(img, width):
     return nd.zoom(img, zoom, order=0, mode="nearest")
 
 
-class ModuleHook:
-    def __init__(self, module):
-        self.fw_hook = module.register_forward_hook(self.forward_hook)
-        self.bk_hook = module.register_backward_hook(self.backward_hook)
-        self.module = None
-        self.acts = None
-        self.grads = None
-        self.input = None
-
-    def forward_hook(self, module, input, output):
-        self.module = module
-        self.acts = output.detach().cpu()
-        self.input = input[0]
-
-    def backward_hook(self, module, grad_input, grad_output):
-        self.grads = grad_output[0].detach().cpu()
-
-    def close(self):
-        self.fw_hook.remove()
-        self.bk_hook.remove()
-
-
-def hook_model(model):
-    features = OrderedDict()
-
-    # recursive hooking function
-    def hook_layers(net, prefix=[]):
-        if hasattr(net, "_modules"):
-            for name, layer in net._modules.items():
-                if "conv" in name or "out" in name:
-                    features["_".join(prefix + [name])] = ModuleHook(layer)
-                hook_layers(layer, prefix=prefix + [name])
-
-    hook_layers(model)
-    return features
-
-
 def apply_alpha(image):
     assert image.shape[-1] == 4
     alpha = np.repeat(np.expand_dims(image[..., -1], axis=-1), 3, axis=2)
@@ -197,14 +161,6 @@ def make_grid(img):
     img = np.transpose(img, (0, 3, 1, 2))
     img = torchvision.utils.make_grid(torch.as_tensor(img))
     return img
-
-
-@torch.no_grad()
-def get_layer(model, layer, X):
-    hook = render.ModuleHook(getattr(model, layer))
-    model(X)
-    hook.close()
-    return hook.features
 
 
 @objectives.wrap_objective()
@@ -268,9 +224,9 @@ class CnnViz:
         self.device = device
         self.name = name
 
-        conv_layers=get_model_layers(fe)
-        conv_layers=[x for x in conv_layers if "conv" in x and "activ" not in x]
-        self.conv_layers= conv_layers
+        conv_layers = get_model_layers(fe)
+        conv_layers = [x for x in conv_layers if "conv" in x and "activ" not in x]
+        self.conv_layers = conv_layers
 
     def visualize(self, states):
         # needs device on cuda
@@ -279,7 +235,8 @@ class CnnViz:
 
         images = {}
 
-        img = states[2]
+        idx = random.randint(0, len(states))
+        img = states[idx]
 
         images.update(self.most_active_patch(img))
         images.update(self.linear_optim(img))
@@ -289,20 +246,86 @@ class CnnViz:
         images.update(self.negative_channel_viz())
 
         self.feature_extractor.to(self.device)
+        self.linear.to(self.device)
 
-        images={f"{self.name}/{k}":v for k,v in images.items()}
+        images = {f"{self.name}/{k}": v for k, v in images.items()}
 
         return images
 
+    def complete_model(self):
+        cm = list(self.feature_extractor._modules.items())
+        cm += list(self.linear._modules.items())
+        cm = OrderedDict(cm)
+        cm = nn.Sequential(cm)
+        return cm
+
     def linear_optim(self, img):
 
-        complete_model=nn.Sequential(*[self.feature_extractor, self.linear])
+        complete_model = nn.Sequential(*[self.feature_extractor, self.linear])
         param_f = lambda: param.image(img.shape[-1], batch=3)
 
-        res = render.render_vis(complete_model, "labels:0", param_f, show_inline=False, progress=False, fixed_image_size=img.shape[-1])
-        res=make_grid(res[0])
+        res = render.render_vis(complete_model, "labels:0", param_f, show_inline=False, progress=False,
+                                fixed_image_size=img.shape[-1])
+        res = make_grid(res[0])
 
-        return {f"crit":res}
+        return {f"linear": res}
+
+    def pos_neg(self, img):
+
+        complete_model = self.complete_model()
+        img = torch.as_tensor(img).unsqueeze(dim=0).to("cuda").float()
+        lay= self.conv_layers[-1]
+
+        def objective_func(model):
+            # shape: (batch_size, layer_channels, cell_layer_height, cell_layer_width)
+            pred = model(lay)
+            # use the sampled indices from `sample` to get the corresponding targets
+            target = acts[sample.inds].to(pred.device)
+            # shape: (batch_size, layer_channels, 1, 1)
+            target = target.view(target.shape[0], target.shape[1], 1, 1)
+            dot = (pred * target).sum(dim=1).mean()
+            return -dot
+
+        results = render.render_vis(
+            complete_model,
+            obj,
+            param_f,
+            thresholds=(n_steps,),
+            show_image=False,
+            progress=False,
+            fixed_image_size=cell_image_size,
+        )
+
+        grads = grads.cpu().numpy()
+        acts = acts.cpu().numpy().squeeze()
+        reducer = ChannelReducer(n_components=3, reduction_alg="PCA")
+
+        reducer.fit(grads)
+        channel_dirs = reducer._reducer.components_
+
+        attr_reduced = reducer.transform(np.maximum(grads, 0)) - reducer.transform(
+            np.maximum(-grads, 0))  # transform the positive and negative parts separately
+        nmf_norms = channel_dirs.sum(-1)
+        attr_reduced *= nmf_norms[
+            None, None]  # multiply by the norms of the NMF directions, since the magnitudes of the NMF directions are not relevant
+        attr_reduced /= np.median(attr_reduced.max(axis=(-3, -2,
+                                                         -1)))  # globally normalize by the median max value to make the visualization balanced (a bit of a hack)
+        attr_pos = np.maximum(attr_reduced, 0)
+        attr_pos = conv2d(attr_pos, norm_filter(attr_pos.shape[-1]))
+        nmf.acts_reduced = attr_pos
+        image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
+        image = zoom_to(image, 200)
+        image = apply_alpha(image)
+        images[f"grad/{name}_pos"] = image
+
+        attr_neg = np.maximum(-attr_reduced, 0)
+        attr_neg = conv2d(attr_neg, norm_filter(attr_pos.shape[-1]))
+        nmf.acts_reduced = attr_neg
+        image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
+        image = zoom_to(image, 200)
+        image = apply_alpha(image)
+
+        images[f"grad/{name}_neg"] = image
 
     def feature_inversion(self, img):
 
@@ -343,7 +366,7 @@ class CnnViz:
 
             # Here we compute the activations of the layer `layer` using `img` as input
             # shape: (layer_channels, layer_height, layer_width), the shape depends on the layer
-            acts = get_layer(model, lay, img)[0]
+            acts = get_layer_activ(model, lay, img)[0]
             # shape: (layer_height, layer_width, layer_channels)
             acts = acts.permute(1, 2, 0)
             # shape: (layer_height*layer_width, layer_channels)
@@ -503,7 +526,7 @@ class CnnViz:
         """
         param_f = lambda: param.image(224, batch=2)
         images = {}
-        c=-1
+        c = -1
         for lay in get_model_layers(self.feature_extractor):
 
             if "conv" not in lay or "activ" in lay:
@@ -548,10 +571,10 @@ class CnnViz:
         Get the most active patch in the states
         """
         layers = self.conv_layers
-        model= self.feature_extractor
+        model = self.feature_extractor
 
         img = torch.tensor(img).to("cuda")
-        images={}
+        images = {}
 
         transforms = transform.standard_transforms.copy() + [
             transform.normalize(),
@@ -564,19 +587,19 @@ class CnnViz:
 
         for lay in layers:
             # discard first image which is incomplete
-            acts = get_layer(model, lay, img)[0]
+            acts = get_layer_activ(model, lay, img)[0]
 
             # get most activate batch
             # get max x,y for image
             max_mag = acts.max(-1)[0]
-            max_mag= max_mag.cpu()
+            max_mag = max_mag.cpu()
             max_x = np.argmax(max_mag.max(-1)[0])
             max_y = np.argmax(max_mag[max_x])
 
             # convert states to PIL
-            res_img=img.cpu().squeeze()
+            res_img = img.cpu().squeeze()
             res_img = np.array(res_img).astype(np.uint8)
-            res_img=np.transpose(res_img, (1,2,0))
+            res_img = np.transpose(res_img, (1, 2, 0))
             res_img = Image.fromarray(res_img)
 
             # draw rectangle centered in max x,y
@@ -590,8 +613,8 @@ class CnnViz:
             box_h1 = min(max_y + sprite_dim, res_img.size[1])
 
             draw.rectangle(((box_w0, box_h0), (box_w1, box_h1)), fill=(255, 255, 0, 100))
-            res_img= np.asarray(res_img)
-            images[f"act_patch/{lay}"]=res_img
+            res_img = np.asarray(res_img)
+            images[f"act_patch/{lay}"] = res_img
 
         return images
 
@@ -620,7 +643,6 @@ class CnnViz:
                 acts[acts < 0] = 0
 
             neuron_groups(states, acts, name, self.feature_extractor, n_groups=6, attr_classes=[])
-
 
             nmf = LayerNMF(acts, states, features=3,
                            reduction_alg="PCA", )  # grads=grads)  # , attr_layer_name=value_function_name)
@@ -697,5 +719,3 @@ def neuron_groups(img, acts, layer, model, n_groups=6, attr_classes=[]):
 
     attrs = np.asarray([raw_class_group_attr(img, layer, attr_class, group_vecs)
                         for attr_class in attr_classes])
-
-
