@@ -7,6 +7,7 @@ import torch
 
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
+from .RewNormWrap import NormalizeReward
 from .Scenario import CollectLandmarkScenario
 from ..common.utils import rgb2gray, get_distance
 
@@ -261,4 +262,5 @@ class NavEnv(SimpleEnv):
 def get_env(kwargs: Dict) -> NavEnv:
     """Initialize rawEnv and wrap it in parallel petting zoo."""
     env = NavEnv(**kwargs)
+    env= NormalizeReward(env)
     return env
