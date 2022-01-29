@@ -117,7 +117,8 @@ class PpoWrapper:
                 perc_surr1=[],
                 perc_surr2=[],
                 curr_log_probs=[],
-                old_log_probs=[]
+                old_log_probs=[],
+                values=[],
             ) for ag in self.actor_critic_dict.keys()}
 
             observation = self.env.reset()
