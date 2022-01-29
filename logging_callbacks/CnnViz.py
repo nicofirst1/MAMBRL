@@ -265,6 +265,7 @@ class CnnViz:
         param_f = lambda: param.image(img.shape[-1], batch=3)
 
         res = render.render_vis(complete_model, "labels:0", param_f, show_inline=False, progress=False,
+                                show_image=False,
                                 fixed_image_size=img.shape[-1])
         res = make_grid(res[0])
 
@@ -538,7 +539,7 @@ class CnnViz:
             img = render.render_vis(self.feature_extractor, obj, param_f, show_image=False, thresholds=(32,),
                                     progress=False)
 
-            images[f"ncv/{lay}/{c}"] = make_grid(img[0])
+            images[f"ncv_{lay}_c{c}"] = make_grid(img[0])
         return images
 
     def combined_neurons(self):
@@ -575,12 +576,6 @@ class CnnViz:
 
         img = torch.tensor(img).to("cuda")
         images = {}
-
-        transforms = transform.standard_transforms.copy() + [
-            transform.normalize(),
-            torch.nn.Upsample(size=img.shape[-1], mode="bilinear", align_corners=True),
-        ]
-        transforms_f = transform.compose(transforms)
 
         if img.ndim < 4:
             img = img.unsqueeze(0).float()

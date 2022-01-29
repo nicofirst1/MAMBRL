@@ -138,7 +138,7 @@ class PPOWandb(WandbLogger):
         self.epoch = 0
 
         self.log_behavior_step = 10
-        self.log_heatmap_step = 10
+        self.log_cnn_viz = 100
 
         # Grad cam
         self.cams = cams
@@ -170,7 +170,7 @@ class PPOWandb(WandbLogger):
             logs["mean_reward"] = rewards.mean()
             logs["episode_length"] = done_idx
 
-        if batch_id % self.log_heatmap_step == 0:
+        if batch_id % self.log_cnn_viz == 0:
             images = {}
             for cnn_viz in self.cnn_vizs:
                 imgs = cnn_viz.visualize(states)
