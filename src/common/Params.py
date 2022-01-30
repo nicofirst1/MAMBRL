@@ -165,11 +165,14 @@ class Params:
         (255, 255, 255),  # white -> background
     ]
 
-    action_meanings = {0: "stop", 1: "left", 2: "right", 3: "up", 4: "down"}
+    action_meanings = {0: "stop", 1: "up", 2: "down", 3: "right", 4: "left"}
 
     def __init__(self):
         self.__initialize_dirs()
         self.__parse_args()
+
+        if self.base=="resnet":
+            self.share_weights=True
 
         if self.gray_scale:
             self.frame_shape[0] = 1

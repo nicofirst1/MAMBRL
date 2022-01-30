@@ -1,4 +1,3 @@
-import random
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -122,13 +121,21 @@ class PPOWandb(WandbLogger):
 
         super(PPOWandb, self).__init__(**kwargs)
 
-        idx = 0
+        idx = 1
         for name, mod in models.items():
-            wandb.watch(mod, log_freq=1000, log_graph=True, idx=idx, log="all")
+            wandb.watch(mod, log_freq=2000, log_graph=True, idx=idx, log="all")
             idx += 1
 
-        crit_cnn_viz = CnnViz(models['feature_extractor_critic'], models['critic'], "critic", self.params.device)
-        actor_cnn_viz = CnnViz(models['feature_extractor_actor'], models['actor'], "actor", self.params.device)
+        if self.params.share_weights:
+            crit_fe = act_fe = models['feature_extractor']
+        else:
+            crit_fe = models['feature_extractor_critic']
+            act_fe = models['feature_extractor_actor']
+
+
+
+        crit_cnn_viz = CnnViz(crit_fe, models['critic'], "critic", self.params.device)
+        actor_cnn_viz = CnnViz(act_fe, models['actor'], "actor", self.params.device)
 
         self.cnn_vizs = [crit_cnn_viz, actor_cnn_viz]
         self.train_log_step = train_log_step if train_log_step > 0 else 2
@@ -138,7 +145,7 @@ class PPOWandb(WandbLogger):
         self.epoch = 0
 
         self.log_behavior_step = 10
-        self.log_cnn_viz = 100
+        self.log_cnn_viz = 200
 
         # Grad cam
         self.cams = cams
@@ -268,9 +275,9 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
         )
 
     grids = np.stack(grids)
-    #grids = grids.transpose((0, 2, 3, 1))
+    # grids = grids.transpose((0, 2, 3, 1))
 
-    #Image.fromarray(np.asarray(grids[1])).show()
+    # Image.fromarray(np.asarray(grids[1])).show()
     return grids
 
 

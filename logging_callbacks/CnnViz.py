@@ -2,11 +2,15 @@ import random
 from collections import OrderedDict
 from functools import reduce
 
+import numpy
 import numpy as np
 import scipy.ndimage as nd
 import torch
 import torchvision
 from PIL import Image, ImageDraw
+from torchvision.models import ResNet
+from torchvision.transforms import transforms
+
 from lucent.misc import ChannelReducer
 from lucent.modelzoo import get_model_layers
 from lucent.optvis import param, objectives, render, transform
@@ -224,6 +228,21 @@ class CnnViz:
         self.device = device
         self.name = name
 
+        if isinstance(fe, ResNet):
+
+            self.preprocess = transforms.Compose(
+                [
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                    transforms.Normalize(
+                        mean=[0.485, 0.456, 0.406],
+                        std=[0.229, 0.224, 0.225]
+                    ),
+                ]
+            )
+        else:
+            self.preprocess=nn.Identity()
+
         conv_layers = get_model_layers(fe)
         conv_layers = [x for x in conv_layers if "conv" in x and "activ" not in x]
         self.conv_layers = conv_layers
@@ -236,14 +255,23 @@ class CnnViz:
         images = {}
 
         idx = random.randint(0, len(states))
-        img = states[idx]
+        img = states[idx]/255.
+        img=torch.as_tensor(img)
 
-        images.update(self.most_active_patch(img))
+        img=self.preprocess(img)
+        img=numpy.asarray((img))
+
+        #images.update(self.most_active_patch(img))
         images.update(self.linear_optim(img))
+        #print("Linear optim viz done")
         images.update(self.render_activation_grid(img))
-        images.update(self.aligned_interpolation())
-        images.update(self.combined_neurons())
-        images.update(self.negative_channel_viz())
+        # print("render_activation_gridviz done")
+        #images.update(self.aligned_interpolation())
+        #print("aligned_interpolation viz done")
+        #images.update(self.combined_neurons())
+        # print("combined_neurons viz done")
+        #images.update(self.negative_channel_viz())
+        #print("negative_channel_viz viz done")
 
         self.feature_extractor.to(self.device)
         self.linear.to(self.device)
@@ -335,7 +363,7 @@ class CnnViz:
         for layer in layers:
             print(layer)
             res = feature_inversion(img, model=self.feature_extractor, device="cuda", layer=layer, cossim_pow=1)
-            images[f"fi/{layer}"] = make_grid(res[0])
+            images[f"fi-{layer}"] = make_grid(res[0])
 
         return images
 
@@ -343,12 +371,15 @@ class CnnViz:
 
         model = self.feature_extractor
         device = 'cuda'
-        layers = self.conv_layers
-        cell_image_size = 60
+        layers = self.conv_layers[-1]
+        cell_image_size = 30
         n_groups = 6
-        n_steps = 64
+        n_steps = 16
         batch_size = 64
         images = {}
+
+        if not isinstance(layers, list):
+            layers=[layers]
 
         for lay in layers:
             # First wee need, to normalize and resize the image
@@ -477,14 +508,15 @@ class CnnViz:
             grid = torchvision.utils.make_grid(imgs, nrow=int(np.sqrt(nb_cells)), padding=0)
             grid = grid.permute(1, 2, 0)
             grid = grid.numpy() * 255
-            images[f"act_grid/{lay}"] = grid
+            images[f"act_grid-{lay}"] = grid
 
         return images
 
     def aligned_interpolation(self):
         def full_interpolate_obj(layer1, channel1, layer2, channel2):
+            middle_lay=len(self.conv_layers)//2
             interpolation_objective = objectives.channel_interpolate(layer1, channel1, layer2, channel2)
-            alignment_objective = objectives.alignment('conv_1', decay_ratio=5)  # encourage similarity in this layer
+            alignment_objective = objectives.alignment(self.conv_layers[middle_lay], decay_ratio=5)  # encourage similarity in this layer
             return interpolation_objective + 1e-1 * alignment_objective
 
         def interpolate_param_f():
@@ -519,7 +551,7 @@ class CnnViz:
                                      progress=False)
 
         sequence = np.transpose(sequence[0], (0, 3, 1, 2)) * 255
-        return {"vid/interp": sequence}
+        return {"vid-interp": sequence}
 
     def negative_channel_viz(self):
         """
@@ -528,18 +560,13 @@ class CnnViz:
         param_f = lambda: param.image(224, batch=2)
         images = {}
         c = -1
-        for lay in get_model_layers(self.feature_extractor):
-
-            if "conv" not in lay or "activ" in lay:
-                continue
-            channels = getattr(self.feature_extractor, lay).out_channels
-            print(f"Layer {lay} with {channels} channels\n")
+        for lay in self.conv_layers:
 
             obj = objectives.channel(lay, c, batch=1) - objectives.channel(lay, c, batch=0)
             img = render.render_vis(self.feature_extractor, obj, param_f, show_image=False, thresholds=(32,),
                                     progress=False)
-
-            images[f"ncv_{lay}_c{c}"] = make_grid(img[0])
+            lay=lay.replace("/","_")
+            images[f"ncv-{lay}_c{c}"] = make_grid(img[0])
         return images
 
     def combined_neurons(self):
@@ -549,8 +576,8 @@ class CnnViz:
         # Second image optimizes neuron2
         # Third image optimizes sum of both
 
-        neuron2 = ('conv_0', 0)
-        neuron1 = ('conv_1', 0)
+        neuron2 = (self.conv_layers[-2], 0)
+        neuron1 = (self.conv_layers[-1], 0)
 
         C = lambda neuron1, neuron2: objectives.channel(*neuron1, batch=0) + \
                                      objectives.channel(*neuron2, batch=1) + \
@@ -562,7 +589,7 @@ class CnnViz:
                                 progress=False)
 
         images = {
-            f"cams/comb/{neuron1[0]}c{neuron1[1]}V{neuron2[0]}{neuron2[1]}": make_grid(img[0])
+            f"comb-{neuron1[0]}c{neuron1[1]}V{neuron2[0]}{neuron2[1]}": make_grid(img[0])
         }
 
         return images
@@ -582,7 +609,8 @@ class CnnViz:
 
         for lay in layers:
             # discard first image which is incomplete
-            acts = get_layer_activ(model, lay, img)[0]
+            acts, ret = get_layer_activ(model, lay, img, get_ret=True)
+            acts=acts[0]
 
             # get most activate batch
             # get max x,y for image
@@ -609,7 +637,9 @@ class CnnViz:
 
             draw.rectangle(((box_w0, box_h0), (box_w1, box_h1)), fill=(255, 255, 0, 100))
             res_img = np.asarray(res_img)
-            images[f"act_patch/{lay}"] = res_img
+            images[f"act_patch-{lay}"] = res_img
+
+            img=ret
 
         return images
 

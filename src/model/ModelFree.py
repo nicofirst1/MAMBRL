@@ -1,14 +1,12 @@
-import math
+from collections import OrderedDict
 from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.transforms import transforms
-from collections import OrderedDict
 
-from src.common import FixedCategorical, init
-from src.common.distributions import Categorical
+from src.common import init
 
 
 def tan_init_weights(m: nn):
@@ -303,6 +301,7 @@ class FeatureExtractor(NNBase):
         self.num_frames = num_frames
 
         next_inp = None
+        prev_inp = None
         feature_extractor_layers = OrderedDict()
 
         # if num_frames == 1 we build a 2DConv base, otherwise we build a 3Dconv base
@@ -445,7 +444,7 @@ class Conv2DModelFree(nn.Module):
 
         return self
 
-    def forward(self,  inputs, masks):
+    def forward(self, inputs, masks):
         """forward method.
 
         Return the logit and the values of the Conv2DModelFree.
@@ -532,32 +531,38 @@ class Conv2DModelFree(nn.Module):
                     ]
 
 
-class ResNetBase(NNBase):
+class ResNetBase(nn.Module):
     """ResNetBase class.
 
     Pretrained feature extraction class based on the resnet18 architecture
     """
 
-    def __init__(self, input_shape, recurrent=False, hidden_size=512):
-        super(ResNetBase, self).__init__(recurrent, hidden_size, hidden_size)
+    def __init__(self, obs_shape, share_weights, action_space, conv_layers, fc_layers,
+                 use_recurrent, use_residual, num_frames, base_hidden_size):
+        super(ResNetBase, self).__init__()
+
+        self.name = "ResNetBase"
+        self.num_actions = action_space
+        self.share_weights = share_weights
 
         self.preprocess = transforms.Compose(
             [
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
                 transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406] * 4,
-                    std=[0.229, 0.224, 0.225] * 4
+                    mean=[0.485, 0.456, 0.406] * num_frames,
+                    std=[0.229, 0.224, 0.225] * num_frames
                 ),
             ]
         )
 
-        def init_(m): return init(
-            m,
-            nn.init.orthogonal_,
-            lambda x: nn.init.constant_(x, 0),
-            nn.init.calculate_gain("relu"),
-        )
+        def init_(m):
+            return init(
+                m,
+                nn.init.orthogonal_,
+                lambda x: nn.init.constant_(x, 0),
+                nn.init.calculate_gain("relu"),
+            )
 
         model = torch.hub.load("pytorch/vision:v0.10.0",
                                "resnet18", pretrained=True)
@@ -565,49 +570,87 @@ class ResNetBase(NNBase):
         for param in model.parameters():
             param.requires_grad = False
 
-        # remove last linear layer
-        self.features = (list(model.children())[:-1])
-
         # add initial convolution for stacked frames input
-        num_inputs = input_shape[0]
+        num_channels = obs_shape[0]
 
-        self.conv_0 = init_(
-            nn.Conv2d(num_inputs, 64, kernel_size=(7, 7), stride=(2, 2),
-                      padding=(3, 3))
-        )
-        self.features[0] = self.conv_0
+        if num_channels != 3:
+            # replace initial convolution to support channels!=3
+            self.conv_0 = init_(
+                nn.Conv2d(num_channels, 64, kernel_size=(7, 7), stride=(2, 2),
+                          padding=(3, 3))
+            )
+            model.conv1 = self.conv_0
 
-        end = self.features[-1]
-        # get up to the N+1 layer and discard the rest
-        self.features = self.features[:7]
-        # add average pool as last
-        self.features[-1] = end
-        self.features = torch.nn.Sequential(*self.features)
+        flatten=nn.Sequential(nn.Flatten(), nn.Linear(512, fc_layers[0][0]), nn.LeakyReLU())
+        model.fc= flatten
 
-        self.hidden_layer = init_multi_layer(
-            1, nn.ReLU, 128, hidden_size, hidden_size)
 
-        self.classifier = init_multi_layer(2, nn.ReLU, 64, hidden_size, 1)
+        self.feature_extractor = model
 
-        self.classifier.apply(relu_init_weights)
-        self.hidden_layer.apply(relu_init_weights)
+        # =============================================================================
+        # CRITIC SUBNETS
+        # =============================================================================
+        next_inp = fc_layers[0][0]
+        critic_subnet = OrderedDict()
+        for i, fc in enumerate(fc_layers[0][1:]):
+            critic_subnet["critic_fc_" + str(i)] = nn.Linear(next_inp, fc)
+            critic_subnet["critic_fc_" + str(i) + "_activ"] = nn.Tanh()
+            next_inp = fc
+        critic_subnet["critic_out"] = nn.Linear(next_inp, 1)
+
+        # =============================================================================
+        # ACTOR SUBNETS
+        # =============================================================================
+
+        next_inp = fc_layers[0][0]
+        actor_subnet = OrderedDict()
+        for i, fc in enumerate(fc_layers[1][1:]):
+            actor_subnet["actor_fc_" + str(i)] = nn.Linear(next_inp, fc)
+            actor_subnet["actor_fc_" + str(i) + "_activ"] = nn.Tanh()
+            next_inp = fc
+
+        actor_subnet["actor_out"] = nn.Linear(next_inp, action_space)
+
+        self.actor = nn.Sequential(actor_subnet)
+        self.critic = nn.Sequential(critic_subnet)
 
         self.train()
 
     def get_modules(self):
-        return dict(
-            value=self.classifier,
-            hidden_layer=self.hidden_layer,
-            features=self.features
-        )
 
-    def forward(self, inputs, rnn_hxs, masks):
-        x = self.preprocess(inputs / 255.0)
-        x = self.features(x)
-        x = x.view(x.shape[0], -1)
-        x = self.hidden_layer(x)
+        modules_dict = {}
+        modules_dict['feature_extractor'] = self.feature_extractor
 
-        if self.is_recurrent:
-            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+        modules_dict["actor"] = self.actor
+        modules_dict["critic"] = self.critic
 
-        return self.classifier(x), x, rnn_hxs
+        return modules_dict
+
+    def to(self, device):
+        self.feature_extractor.to(device)
+
+        self.critic.to(device)
+        self.actor.to(device)
+
+        return self
+
+    def get_all_parameters(self):
+        """get_all_parameters method.
+
+        returns all parameters relating to the network
+        Returns
+        -------
+        list
+            DESCRIPTION.
+
+        """
+        return [{'params': self.feature_extractor.parameters()},
+                {'params': self.critic.parameters()},
+                {'params': self.actor.parameters()}]
+
+    def forward(self, inputs, masks):
+        inputs = inputs / 255.
+        inputs = self.preprocess(inputs)
+
+        x = self.feature_extractor.forward(inputs)
+        return self.actor(x), self.critic(x)

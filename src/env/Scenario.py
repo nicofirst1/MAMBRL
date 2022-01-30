@@ -278,7 +278,7 @@ class CollectLandmarkScenario(BaseScenario):
                 time_penalty=f"""The agent get a reward equal to landmark_reward ({self.landmark_reward}) when colliding with a landmark.
                 The collision also resets the previously accumulated negative reward in the landmarks.
                 (Note: the agent receives a negative reward even if it remains in a landmark. To receive a positive reward it must exit and re-enter)""",
-                change_landmark=f"""The agent receives a positive reward when entering a new landmark. 
+                change_landmark=f"""The agent receives a positive reward when entering a new landmark ({self.landmark_reward}). 
                 This means that the agent cannot receive a positive reward by exiting and re-entering the same landmark. 
                 (Note: at least two landmarks are required in this mode). 
                 If self.landmark_penalty is not 0, the agent receive a penalty at each time step (Note: penalty should be much smaller than the reward)""",
