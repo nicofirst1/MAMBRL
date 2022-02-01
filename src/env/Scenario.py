@@ -73,7 +73,6 @@ class CollectLandmarkScenario(BaseScenario):
             num_landmarks: int,
             max_size: int,
             np_random: RandomState,
-            landmarks_positions=None,
             landmark_reward: int = 1,
             max_landmark_counter: int = 4,
             landmark_penalty: int = -2,
@@ -108,11 +107,6 @@ class CollectLandmarkScenario(BaseScenario):
         self.agent_size = agent_size
         self.landmark_size = landmark_size
         self.np_random = np_random
-        if landmarks_positions:
-            assert len(landmarks_positions) == num_landmarks,\
-                f"There are {num_landmarks} of landmark in the Scenario, but {len(landmarks_positions)} positions were given"
-        self.all_landmark_pos = landmarks_positions
-
         self.step_reward = step_reward
 
         self.reward_step_strategy = "simple"
@@ -329,10 +323,7 @@ class CollectLandmarkScenario(BaseScenario):
             landmark.movable = False
             landmark.boundary = False
             pos = landmark.get_random_pos(world)
-            if self.all_landmark_pos:
-                landmark_pos[landmark.name] = self.all_landmark_pos[i]
-            else:
-                landmark_pos[landmark.name] = pos
+            landmark_pos[landmark.name] = pos
 
         self.landmarks = {
             landmark.name: landmark for landmark in world.landmarks}
@@ -362,59 +353,104 @@ class CollectLandmarkScenario(BaseScenario):
 
         return False
 
-    def reset_world(self, world, random):
+    def reset_world(self, world, random, landmarks_positions=None, agents_positions=None):
+        """reset_world method.
 
+        reset agents and landmarks. landmarks positions are reset based on the
+        landmark_reset_strategy, while agents are reset randomly. 
+        If landmarks_positions or agents_position are not None, landmarks and
+        agents are positioned accordingly. 
+        Parameters
+        ----------
+        world :
+        random :
+        landmarks_positions : list, optional
+            positions of landmarks. The default is None.
+        agents_positions : list, optional
+            positions of agents. The default is None.
+
+        Raises
+        ------
+        ValueError
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         self.num_landmarks = len(self.landmarks)
         self.registered_collisions = {agent.name: [] for agent in world.agents}
 
-        # set landmarks randomly in the world
-        for land_id, landmark in self.landmarks.items():
-            if landmark not in world.landmarks:
-                world.landmarks.append(landmark)
+        if landmarks_positions is not None:
+            assert len(landmarks_positions) == len(world.landmarks),\
+                f"{len(landmarks_positions)} positions have been identified but there are {len(world.landmarks)} landmarks"
+            for landmark, landmark_position in zip(world.landmarks, landmarks_positions):
+                landmark.reset(world, position=landmark_position,
+                               size=self.landmark_size)
+        else:
+            # set landmarks randomly in the world
+            for land_id, landmark in self.landmarks.items():
+                if landmark not in world.landmarks:
+                    world.landmarks.append(landmark)
 
-            if self.landmark_reset_strategy == "simple":
-                landmark.reset(
-                    world, position=self.landmark_pos[land_id], size=self.landmark_size)
-            elif self.landmark_reset_strategy == "random_pos":
-                landmark.reset(world, size=self.landmark_size)
-            elif self.landmark_reset_strategy == "random_size":
-                landmark.reset(world, position=self.landmark_pos[land_id])
-            elif self.landmark_reset_strategy == "fully_random":
-                landmark.reset(world)
-            else:
-                raise ValueError(
-                    f"Value '{self.landmark_reset_strategy}' has not been implemented for landmark reset"
-                )
+                if self.landmark_reset_strategy == "simple":
+                    landmark.reset(
+                        world, position=self.landmark_pos[land_id], size=self.landmark_size)
+                elif self.landmark_reset_strategy == "random_pos":
+                    landmark.reset(world, size=self.landmark_size)
+                elif self.landmark_reset_strategy == "random_size":
+                    landmark.reset(world, position=self.landmark_pos[land_id])
+                elif self.landmark_reset_strategy == "fully_random":
+                    landmark.reset(world)
+                else:
+                    raise ValueError(
+                        f"Value '{self.landmark_reset_strategy}' has not been implemented for landmark reset"
+                    )
 
         collide = True
         eta = 0.2
         # set random initial states
-        for agent in world.agents:
-            agent.color = np.array([0, 0, 1])
-            while collide:
-                agent.state.p_pos = self.np_random.uniform(
-                    -world.max_size + eta,
-                    world.max_size - eta,
-                    world.dim_p)
+        if agents_positions is not None:
+            assert len(agents_positions) == len(world.agents),\
+                f"{len(agents_positions)} positions have been identified but there are {len(world.agents)} agents"
+            for agent, agent_position in zip(world.agents, agents_positions):
+                agent.color = np.array([0, 0, 1])
+                agent.state.p_pos = agent_position.copy()
+                agent.state.p_vel = np.zeros(world.dim_p)
+                agent.state.c = np.zeros(world.dim_c)
+        else:
+            for agent in world.agents:
+                agent.color = np.array([0, 0, 1])
+                while collide:
+                    # agent.state.p_pos = self.np_random.uniform(
+                    #     -world.max_size + eta,
+                    #     world.max_size - eta,
+                    #     world.dim_p)
+                    length = np.sqrt(np.random.uniform(0, 1))
+                    angle = np.pi * np.random.uniform(0, 2)
+                    x = length * np.cos(angle)
+                    y = length * np.sin(angle)
+                    agent.state.p_pos = np.array([x, y])
 
-                collide = any([is_collision(agent, land)
-                              for land in self.landmarks.values()])
+                    collide = any([is_collision(agent, land)
+                                  for land in self.landmarks.values()])
 
-            agent.state.p_vel = np.zeros(world.dim_p)
-            agent.state.c = np.zeros(world.dim_c)
+                agent.state.p_vel = np.zeros(world.dim_p)
+                agent.state.c = np.zeros(world.dim_c)
 
     # return all agents that are not adversaries
     @staticmethod
     def get_agents(world):
         return [agent for agent in world.agents]
 
-    def set_landmarks_pos(world, landmarks_positions: List):
+    def set_landmarks_pos(self, world, landmarks_positions: List):
         assert len(landmarks_positions) == len(world.landmarks),\
             f"{len(landmarks_positions)} positions have been identified but there are {len(world.landmarks)} landmarks"
         for landmark, landmark_position in zip(world.landmarks, landmarks_positions):
             landmark.set_pos(world, landmark_position)
 
-    def set_agents_pos(world, agents_positions: List):
+    def set_agents_pos(self, world, agents_positions: List):
         assert len(agents_positions) == len(world.agents),\
             f"{len(agents_positions)} positions have been identified but there are {len(world.agents)} agents"
         for agent, agent_position in zip(world.agents, agents_positions):

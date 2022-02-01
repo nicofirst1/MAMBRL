@@ -61,7 +61,11 @@ class NavEnv(SimpleEnv):
         self.scenario.set_strategy(**kwargs)
 
     def set_landmarks_pos(self, landmarks_pos):
-        self.scenario.set_landmarks_pos(self.world, landmarks_pos)
+        self.scenario.set_landmarks_pos(
+            world=self.world, landmarks_positions=landmarks_pos)
+
+    def set_agents_pos(self, *agents_pos):
+        self.scenario.set_agents_pos(self.world, agents_pos)
 
     def get_current_strategy(self) -> Tuple[str, str, str, str]:
         return self.scenario.get_current_strategy()
@@ -69,8 +73,8 @@ class NavEnv(SimpleEnv):
     def get_strategies(self):
         return self.scenario.get_descriptive_strategy()
 
-    def reset(self):
-        super(NavEnv, self).reset()
+    def reset(self, landmarks_positions=None, agents_positions=None):
+        super(NavEnv, self).reset(landmarks_positions, agents_positions)
         for lndmrk_id in self.scenario.landmarks.values():
             lndmrk_id.reset_counter()
 

@@ -462,6 +462,7 @@ class Conv2DModelFree(nn.Module):
             [batch_size, value]
 
         """
+
         # TODO check how to use the rnn
         inputs = inputs / 255.
         if self.share_weights:

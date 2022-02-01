@@ -17,11 +17,14 @@ class PpoWrapper:
         self.obs_shape = env.obs_shape
         self.action_space = env.action_space
         self.num_agents = config.agents
+        self.landmarks_positions = config.landmarks_positions
+        self.agents_positions = config.agents_positions
 
         self.gamma = config.gamma
         self.device = config.device
 
         self.num_steps = config.horizon
+        self.num_episodes = config.episodes
         self.num_minibatch = config.minibatch
 
         self.guided_learning_prob = config.guided_learning_prob
@@ -80,7 +83,7 @@ class PpoWrapper:
 
     def learn(self, epochs):
         rollout = RolloutStorage(
-            num_steps=self.num_steps,
+            num_steps=self.num_steps*self.num_episodes,
             obs_shape=self.obs_shape,
             num_actions=self.action_space,
             num_agents=self.num_agents,
@@ -102,6 +105,9 @@ class PpoWrapper:
         action_log_dict = {agent_id: False for agent_id in self.env.agents}
         #recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
 
+        # =============================================================================
+        # FULL TRAINING ITERATION
+        # =============================================================================
         for epoch in trange(epochs, desc="Training model free"):
             self.ppo_agent.eval()
 
@@ -117,68 +123,72 @@ class PpoWrapper:
                 perc_surr1=[],
                 perc_surr2=[],
                 curr_log_probs=[],
-                old_log_probs=[]
+                old_log_probs=[],
+                values=[]
             ) for ag in self.actor_critic_dict.keys()}
 
-            observation = self.env.reset()
-            rollout.states[0] = observation.unsqueeze(dim=0)
+            # =============================================================================
+            # COLLECT TRAJECTORIES
+            # =============================================================================
+            for episode in range(self.num_episodes):
+                observation = self.env.reset(self.landmarks_positions, self.agents_positions)
+                rollout.states[episode * self.num_steps] = observation.unsqueeze(dim=0)
 
-            for step in range(self.num_steps):
-                obs = observation.to(self.device).unsqueeze(dim=0)
-                guided_learning = {
-                    agent_id: False for agent_id in self.env.agents}
+                for step in range(self.num_steps):
+                    obs = observation.to(self.device).unsqueeze(dim=0)
+                    guided_learning = {
+                        agent_id: False for agent_id in self.env.agents}
 
-                for agent_id in self.env.agents:
-                    # perform guided learning with scheduler
-                    # todo: remove optimal end generalize with policy
-                    if self.guided_learning_prob > random.uniform(0, 1):
-                        action, action_log_prob = self.env.optimal_action(
-                            agent_id)
-                        guided_learning[agent_id] = True
-                        value = -1
-                    else:
-                        # FIXED: NORMALIZED THE STATE
-                        with torch.no_grad():
-                            value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
-                                obs, rollout.masks[step]
-                            )
+                    for agent_id in self.env.agents:
+                        # perform guided learning with scheduler
+                        # todo: remove optimal end generalize with policy
+                        if self.guided_learning_prob > random.uniform(0, 1):
+                            action, action_log_prob = self.env.optimal_action(agent_id)
+                            guided_learning[agent_id] = True
+                            value = -1
+                        else:
+                            # FIX: the mask of the rollout is a different thing
+                            # from the mask of the rnn
+                            with torch.no_grad():
+                                value, action, action_log_prob = self.actor_critic_dict[agent_id].act(
+                                    obs, rollout.masks[step]
+                                )
 
-                    # get action with softmax and multimodal (stochastic)
-                    action_dict[agent_id] = action
-                    values_dict[agent_id] = value
-                    action_log_dict[agent_id] = action_log_prob
-                    #recurrent_hs_dict[agent_id] = recurrent_hs[0]
+                        # get action with softmax and multimodal (stochastic)
+                        action_dict[agent_id] = action
+                        values_dict[agent_id] = value
+                        action_log_dict[agent_id] = action_log_prob
+                        #recurrent_hs_dict[agent_id] = recurrent_hs[0]
 
-                # Obser reward and next obs
-                # fixme: questo con multi agent non funziona, bisogna capire come impostarlo
-                observation, rewards, done, infos = self.env.step(action_dict)
+                    # fixme: questo con multi agent non funziona, bisogna capire come impostarlo
+                    observation, rewards, done, infos = self.env.step(action_dict)
 
-                # if guided then use actual reward as predicted value
-                for agent_id, b in guided_learning.items():
-                    if b:
-                        values_dict[agent_id] = rewards[agent_id]
+                    # if guided then use actual reward as predicted value
+                    for agent_id, b in guided_learning.items():
+                        if b:
+                            values_dict[agent_id] = rewards[agent_id]
 
-                # FIXME mask dovrebbe avere un valore per ogni agente
-                masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
-                rewards = mas_dict2tensor(rewards, float)
-                actions = mas_dict2tensor(action_dict, int)
-                values = mas_dict2tensor(values_dict, float)
-                #recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
-                action_log_probs_list = [elem.unsqueeze(dim=0) for _, elem in action_log_dict.items()]
-                action_log_probs = torch.cat(action_log_probs_list, 0)
+                    # FIXME mask dovrebbe avere un valore per ogni agente
+                    masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
+                    rewards = mas_dict2tensor(rewards, float)
+                    actions = mas_dict2tensor(action_dict, int)
+                    values = mas_dict2tensor(values_dict, float)
+                    #recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
+                    action_log_probs_list = [elem.unsqueeze(dim=0) for _, elem in action_log_dict.items()]
+                    action_log_probs = torch.cat(action_log_probs_list, 0)
 
-                rollout.insert(
-                    state=observation,
-                    # recurrent_hs=recurrent_hs,
-                    action=actions,
-                    action_log_probs=action_log_probs,
-                    value_preds=values,
-                    reward=rewards,
-                    mask=masks
-                )
+                    rollout.insert(
+                        state=observation,
+                        # recurrent_hs=recurrent_hs,
+                        action=actions,
+                        action_log_probs=action_log_probs,
+                        value_preds=values,
+                        reward=rewards,
+                        mask=masks
+                    )
 
-                if done["__all__"]:
-                    observation = self.env.reset()
+                    if done["__all__"]:
+                        observation = self.env.reset(self.landmarks_positions, self.agents_positions)
 
             # fixme: qui bisogna come farlo per multi agent
             with torch.no_grad():
