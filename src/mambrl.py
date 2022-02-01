@@ -109,7 +109,7 @@ class MAMBRL:
 
     def train_model_free(self):
 
-        self.real_env.set_strategy(reward_step_strategy="time_penalty", reward_collision_strategy="change_landmark_avoid_borders")
+        self.real_env.set_strategy(reward_step_strategy="change_landmark", reward_collision_strategy="time_penalty")
         self.ppo_wrapper.set_env(self.real_env)
         self.ppo_wrapper.learn(epochs=self.config.epochs)
 

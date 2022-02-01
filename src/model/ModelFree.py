@@ -301,7 +301,6 @@ class FeatureExtractor(NNBase):
         self.num_frames = num_frames
 
         next_inp = self.num_channels
-        prev_inp = None
         feature_extractor_layers = OrderedDict()
 
         # if num_frames == 1 we build a 2DConv base, otherwise we build a 3Dconv base
@@ -309,12 +308,7 @@ class FeatureExtractor(NNBase):
             for i, cnn in enumerate(conv_layers):
 
                 feature_extractor_layers[f"conv_{i}"] = nn.Conv2d(
-                        self.num_channels, cnn[0], kernel_size=cnn[1], stride=cnn[2])
-                    feature_extractor_layers["conv_0_activ"] = nn.LeakyReLU()
-                else:
-                    feature_extractor_layers["conv_" + str(i)] = nn.Conv2d(
                     next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
-                    feature_extractor_layers["conv_" +
                 feature_extractor_layers[f"conv_{i}_activ"] = nn.LeakyReLU()
                 next_inp = cnn[0]
 
