@@ -54,7 +54,7 @@ class LearningRateScheduler:
         self.schedulers = [base_scheduler(
             optim, **scheduler_kwargs) for optim in optimizer_dict.values()]
 
-    def update_step(self, step):
+    def update_step(self, step=None):
         for sc in self.schedulers:
             sc.step()
 

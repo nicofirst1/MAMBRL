@@ -4,7 +4,9 @@ import torch
 import torch.nn as nn
 from torch import optim
 from .RolloutStorage import RolloutStorage
-from typing import Dict
+from typing import Dict, Optional
+
+from ..common import LearningRateScheduler
 
 
 class PPO:
@@ -71,7 +73,7 @@ class PPO:
         for model in self.actor_critic_dict.values():
             model.eval()
 
-    def update(self, rollout: RolloutStorage, logs: Dict[str, Dict[str, list]]):
+    def update(self, rollout: RolloutStorage, logs: Dict[str, Dict[str, list]], lr_scheduler:Optional[LearningRateScheduler]=None):
         """update method.
 
         update the models parameters inside the self.actor_critic_dict
@@ -188,6 +190,8 @@ class PPO:
                     agents_action_losses[agent_index] += action_loss.item()
                     agents_entropies[agent_index] += entropy.item()
 
+                if lr_scheduler is not None:
+                    lr_scheduler.update_step()
         num_updates = self.ppo_epochs * int(math.ceil(rollout.rewards.size(0) / self.num_minibatch))
 
         agents_value_losses /= num_updates

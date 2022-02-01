@@ -1,12 +1,14 @@
 import random
 
 import torch
+from torch.optim.lr_scheduler import ExponentialLR
 from tqdm import trange
 
 from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import mas_dict2tensor, Params
 from .PPO import PPO
 from .RolloutStorage import RolloutStorage
+from ..common.schedulers import LearningRateScheduler
 from ..model.ModelFree import ModelFree
 
 
@@ -14,6 +16,7 @@ class PpoWrapper:
     def __init__(self, env, config: Params):
 
         self.env = env
+        self.config=config
         self.obs_shape = env.obs_shape
         self.action_space = env.action_space
         self.num_agents = config.agents
@@ -48,7 +51,6 @@ class PpoWrapper:
 
         self.use_wandb = config.use_wandb
         if self.use_wandb:
-
             cams = []
 
             from logging_callbacks import PPOWandb
@@ -92,7 +94,7 @@ class PpoWrapper:
             epochs,
             use_curriculum=False,
             use_guided_learning=False,
-            use_learning_rate=False,
+            use_learning_rate=True,
             use_entropy_reg=False
         )
 
@@ -100,13 +102,10 @@ class PpoWrapper:
         action_dict = {agent_id: False for agent_id in self.env.agents}
         values_dict = {agent_id: False for agent_id in self.env.agents}
         action_log_dict = {agent_id: False for agent_id in self.env.agents}
-        #recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
+        # recurrent_hs_dict = {agent_id: False for agent_id in self.env.agents}
 
         for epoch in trange(epochs, desc="Training model free"):
             self.ppo_agent.eval()
-
-            for s in schedulers:
-                s.update_step(epoch)
 
             logs = {ag: dict(
                 ratio=[],
@@ -148,7 +147,7 @@ class PpoWrapper:
                     action_dict[agent_id] = action
                     values_dict[agent_id] = value
                     action_log_dict[agent_id] = action_log_prob
-                    #recurrent_hs_dict[agent_id] = recurrent_hs[0]
+                    # recurrent_hs_dict[agent_id] = recurrent_hs[0]
 
                 # Obser reward and next obs
                 # fixme: questo con multi agent non funziona, bisogna capire come impostarlo
@@ -164,7 +163,7 @@ class PpoWrapper:
                 rewards = mas_dict2tensor(rewards, float)
                 actions = mas_dict2tensor(action_dict, int)
                 values = mas_dict2tensor(values_dict, float)
-                #recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
+                # recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
                 action_log_probs_list = [elem.unsqueeze(dim=0) for _, elem in action_log_dict.items()]
                 action_log_probs = torch.cat(action_log_probs_list, 0)
 
@@ -192,7 +191,7 @@ class PpoWrapper:
             self.ppo_agent.train()
             with torch.enable_grad():
                 value_loss, action_loss, entropy = self.ppo_agent.update(
-                    rollout, logs)
+                    rollout, logs, lr_scheduler=schedulers['lr'])
 
             if self.use_wandb:
                 logs = preprocess_logs(
@@ -202,6 +201,11 @@ class PpoWrapper:
 
             rollout.after_update()
 
+            for k,s in schedulers.items():
+                if s is not None:
+                    if k !="lr":
+                        s.update_step(epoch)
+
         return
 
     def set_env(self, env):
@@ -209,10 +213,16 @@ class PpoWrapper:
 
     def init_schedulers(self, epochs, use_curriculum: bool = True, use_guided_learning: bool = True,
                         use_learning_rate: bool = True, use_entropy_reg: bool = True):
-        schedulers = []
+        schedulers = {
+            "curriculum": None,
+            "guided": None,
+            "lr": None,
+            "entropy": None,
+
+        }
 
         if use_curriculum:
-            from common.schedulers import CurriculumScheduler
+            from src.common import CurriculumScheduler
 
             curriculum = {
                 400: dict(reward=0, landmark=1),
@@ -230,10 +240,10 @@ class PpoWrapper:
                 step_list=list(curriculum.keys()),
                 get_curriculum_fn=self.env.get_curriculum
             )
-            schedulers.append(cs)
+            schedulers['curriculum']=cs
 
         if use_guided_learning:
-            from common.schedulers import linear_decay, StepScheduler
+            from src.common import linear_decay, StepScheduler
 
             guided_learning = {
                 100: 0.8,
@@ -256,22 +266,25 @@ class PpoWrapper:
                 values_list=guided_learning,
                 set_fn=self.set_guided_learning_prob
             )
-            schedulers.append(gls)
+            schedulers['guided'] = gls
 
         if use_learning_rate:
-            from torch.optim.lr_scheduler import ExponentialLR
-            from common.schedulers import LearningRateScheduler
+            from torch.optim.lr_scheduler import ExponentialLR, OneCycleLR
+            from src.common import LearningRateScheduler
 
-            kwargs = dict(gamma=0.997)
+            #kwargs = dict(gamma=0.997)
+            total_steps= self.num_steps / self.config.minibatch * self.config.batch_epochs * self.config.epochs
+            total_steps=int(total_steps)
+            kwargs = {"max_lr":5e-3, "total_steps":total_steps}
             lrs = LearningRateScheduler(
-                base_scheduler=ExponentialLR,
+                base_scheduler=OneCycleLR,
                 optimizer_dict=self.ppo_agent.optimizers,
                 scheduler_kwargs=kwargs
             )
-            schedulers.append(lrs)
+            schedulers['lr'] = lrs
 
         if use_entropy_reg:
-            from common.schedulers import exponential_decay, StepScheduler
+            from src.common import exponential_decay, StepScheduler
 
             values = exponential_decay(
                 Params().entropy_coef, epochs, gamma=0.999)
@@ -280,6 +293,7 @@ class PpoWrapper:
                 values_list=values,
                 set_fn=self.set_entropy_coeff
             )
-            schedulers.append(es)
+            schedulers['entropy'] = es
+
 
         return schedulers

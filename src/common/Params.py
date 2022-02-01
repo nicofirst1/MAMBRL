@@ -32,14 +32,19 @@ class Params:
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description
     guided_learning_prob = 0.0
-    epochs = 10000
+    epochs = 2000
     # number of learning iterations that the algorithm does on the same batch
     # of trajectories (trajectories are shuffled at each iteration)
     batch_epochs = 3
     # number of elements on which the algorithm performs a learning step
     minibatch = 32  # 64
-    batch_size = 4
+    batch_size = 100
     framework = "torch"
+
+    # =============================================================================
+    # SCHEDULERS
+    # =============================================================================
+    use_lr_sched=True
 
     # =============================================================================
     # MULTIAGENT
@@ -144,7 +149,7 @@ class Params:
     visible = False
     max_landmark_counter = 4
     landmark_penalty = -0.01  # -0.01   # -1
-    border_penalty = -0.01
+    border_penalty = -0.1
     # 0 don't move, 1 left, 2 right,  3 down, 4 top
     num_actions = 5
 
@@ -176,6 +181,9 @@ class Params:
 
         if self.gray_scale:
             self.frame_shape[0] = 1
+
+        if not self.debug:
+            torch.backends.cudnn.benchmark = True
 
         self.obs_shape = (
             self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])

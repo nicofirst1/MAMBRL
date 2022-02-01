@@ -300,22 +300,22 @@ class FeatureExtractor(NNBase):
         self.num_channels = input_shape[0]
         self.num_frames = num_frames
 
-        next_inp = None
+        next_inp = self.num_channels
         prev_inp = None
         feature_extractor_layers = OrderedDict()
 
         # if num_frames == 1 we build a 2DConv base, otherwise we build a 3Dconv base
         if self.num_frames == 1:
             for i, cnn in enumerate(conv_layers):
-                if i == 0:
-                    feature_extractor_layers["conv_0"] = nn.Conv2d(
+
+                feature_extractor_layers[f"conv_{i}"] = nn.Conv2d(
                         self.num_channels, cnn[0], kernel_size=cnn[1], stride=cnn[2])
                     feature_extractor_layers["conv_0_activ"] = nn.LeakyReLU()
                 else:
                     feature_extractor_layers["conv_" + str(i)] = nn.Conv2d(
-                        next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
+                    next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
                     feature_extractor_layers["conv_" +
-                                             str(i) + "_activ"] = nn.LeakyReLU()
+                feature_extractor_layers[f"conv_{i}_activ"] = nn.LeakyReLU()
                 next_inp = cnn[0]
 
             # TODO: replace with right calculation after last conv
@@ -395,8 +395,9 @@ class Conv2DModelFree(nn.Module):
         next_inp = fc_layers[0][0]
         critic_subnet = OrderedDict()
         for i, fc in enumerate(fc_layers[0][1:]):
-            critic_subnet["critic_fc_" + str(i)] = nn.Linear(next_inp, fc)
-            critic_subnet["critic_fc_" + str(i) + "_activ"] = nn.Tanh()
+            critic_subnet[f"critic_fc_{i}"] = nn.Linear(next_inp, fc)
+            #critic_subnet[f"critic_fc_{i}_btcnorm"] = nn.BatchNorm1d(fc)
+            critic_subnet[f"critic_fc_{i}_activ"] = nn.Tanh()
             next_inp = fc
         critic_subnet["critic_out"] = nn.Linear(next_inp, 1)
 
@@ -409,8 +410,9 @@ class Conv2DModelFree(nn.Module):
             next_inp = fc_layers[1][0]
         actor_subnet = OrderedDict()
         for i, fc in enumerate(fc_layers[1][1:]):
-            actor_subnet["actor_fc_" + str(i)] = nn.Linear(next_inp, fc)
-            actor_subnet["actor_fc_" + str(i) + "_activ"] = nn.Tanh()
+            actor_subnet[f"actor_fc_{i}"] = nn.Linear(next_inp, fc)
+            #actor_subnet[f"actor_fc_{i}_btcnorm"] = nn.BatchNorm1d(fc)
+            actor_subnet[f"actor_fc_{i}_activ"] = nn.Tanh()
             next_inp = fc
 
         actor_subnet["actor_out"] = nn.Linear(next_inp, action_space)
