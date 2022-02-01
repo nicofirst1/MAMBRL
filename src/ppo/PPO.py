@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch import optim
 from .RolloutStorage import RolloutStorage
 from typing import Dict
+from torchviz import make_dot
 
 
 class PPO:
@@ -91,7 +92,7 @@ class PPO:
         entropy_loss: float
 
         """
-        advantages = rollout.returns[:-1] - rollout.value_preds[:-1]
+        advantages = rollout.returns - rollout.value_preds
         # advantages = (advantages - advantages.mean()) / \
         #     (advantages.std() + 1e-10)
 
@@ -121,9 +122,8 @@ class PPO:
                     agent_returns = return_batch[:, agent_index]
                     agent_adv_targ = adv_targ[:, agent_index]
 
-                    # FIXED: NORMALIZE THE STATE
                     values, curr_log_probs, entropy = self.actor_critic_dict[agent_id].evaluate_actions(
-                        states_batch/255., masks_batch, agent_actions
+                        states_batch, masks_batch
                     )
 
                     logs[agent_id]["curr_log_probs"].append(
@@ -148,18 +148,15 @@ class PPO:
                         * agent_adv_targ
                     )
 
+                    action_loss = -torch.min(surr1, surr2).mean()
+
                     logs[agent_id]["ratio"].append(mean_fn(ratio))
                     logs[agent_id]["surr1"].append(mean_fn(surr1))
                     logs[agent_id]["surr2"].append(mean_fn(surr2))
-
-                    action_loss = torch.min(surr1, surr2)
-
                     logs[agent_id]["perc_surr1"].append(
-                        mean_fn((action_loss == surr1).float()))
+                        mean_fn((surr1 <= surr2).float()))
                     logs[agent_id]["perc_surr2"].append(
-                        mean_fn((action_loss == surr2).float()))
-
-                    action_loss = -action_loss.mean()
+                        mean_fn((surr1 < surr2).float()))
 
                     if self.use_clipped_value_loss:
                         value_pred_clipped = agent_values + (values - agent_values).clamp(
@@ -191,10 +188,11 @@ class PPO:
                     # TO PRINT THE WHOLE COMPUTATIONAL GRAPH (FOR THE ACTOR, CRITIC AND BOTHS)
                     # =============================================================================
                     # getBack(loss.grad_fn)
-                    # params_dict = dict(self.actor_critic_dict["agent_0"].named_parameters())
+                    # params_dict = dict(
+                    #     self.actor_critic_dict["agent_0"].named_parameters())
                     # make_dot(loss, params=params_dict,
                     #          show_attrs=True, show_saved=True).render("model_backward_graph", format="png")
-                    # =============================================================================
+                    # # =============================================================================
 
                     nn.utils.clip_grad_norm_(
                         self.actor_critic_dict[agent_id].parameters(

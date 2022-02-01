@@ -166,7 +166,7 @@ class ModelFree(nn.Module):
     def get_value(self, inputs, masks):
         return self.base(inputs, masks)[1]
 
-    def evaluate_actions(self, inputs: torch.Tensor, masks, actions):
+    def evaluate_actions(self, inputs: torch.Tensor, masks):
         """evaluate_actions method.
 
         compute the actions logit, value and actions probability by passing
@@ -462,8 +462,8 @@ class Conv2DModelFree(nn.Module):
             [batch_size, value]
 
         """
+        inputs = inputs/255.0
         # TODO check how to use the rnn
-        inputs = inputs / 255
         if self.share_weights:
             x = self.feature_extractor.forward(inputs, masks)
             return self.critic(x), self.actor(x)
