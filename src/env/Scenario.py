@@ -309,8 +309,7 @@ class CollectLandmarkScenario(BaseScenario):
             agent.color = np.array([0, 0, 1])
 
             # add agents collisions
-            self.registered_collisions = {agent.name: []
-                                          for agent in world.agents}
+            self.registered_collisions = {agent.name: [] for agent in world.agents}
 
         # add landmarks
         world.landmarks = [
@@ -338,17 +337,17 @@ class CollectLandmarkScenario(BaseScenario):
         if self.landmark_collision_strategy == "remove":
             # get visited landmarks ids
             visited_landmarks = list(self.registered_collisions.values())
-            visited_landmarks = [
-                item for sublist in visited_landmarks for item in sublist]
-
-            # remove duplicates
-            visited_landmarks = list(set(visited_landmarks))
-            self.num_landmarks -= len(visited_landmarks)
-            for lndmrk_id in visited_landmarks:
-                landmark = self.landmarks[lndmrk_id]
-                world.entities.remove(landmark)
-                world.landmarks.remove(landmark)
+            visited_landmarks = [item for sublist in visited_landmarks for item in sublist]
             if len(visited_landmarks) > 0:
+                # remove duplicates
+                visited_landmarks = list(set(visited_landmarks))
+                self.num_landmarks -= len(visited_landmarks)
+                for lndmrk_id in visited_landmarks:
+                    landmark = self.landmarks[lndmrk_id]
+                    world.entities.remove(landmark)
+                    world.landmarks.remove(landmark)
+
+                self.registered_collisions = {agent.name: [] for agent in world.agents}
                 return True
 
         return False
@@ -382,12 +381,17 @@ class CollectLandmarkScenario(BaseScenario):
         self.num_landmarks = len(self.landmarks)
         self.registered_collisions = {agent.name: [] for agent in world.agents}
 
+        ## TODO Optimiza this, is repeated to many times
+        for land_id, landmark in self.landmarks.items():
+            if landmark not in world.landmarks:
+                world.landmarks.append(landmark)
+
         if landmarks_positions is not None:
+            ## fixme: spostarlo nell'inizializzazione
             assert len(landmarks_positions) == len(world.landmarks),\
                 f"{len(landmarks_positions)} positions have been identified but there are {len(world.landmarks)} landmarks"
             for landmark, landmark_position in zip(world.landmarks, landmarks_positions):
-                landmark.reset(world, position=landmark_position,
-                               size=self.landmark_size)
+                landmark.reset(world, position=landmark_position, size=self.landmark_size)
         else:
             # set landmarks randomly in the world
             for land_id, landmark in self.landmarks.items():
@@ -395,8 +399,7 @@ class CollectLandmarkScenario(BaseScenario):
                     world.landmarks.append(landmark)
 
                 if self.landmark_reset_strategy == "simple":
-                    landmark.reset(
-                        world, position=self.landmark_pos[land_id], size=self.landmark_size)
+                    landmark.reset(world, position=self.landmark_pos[land_id], size=self.landmark_size)
                 elif self.landmark_reset_strategy == "random_pos":
                     landmark.reset(world, size=self.landmark_size)
                 elif self.landmark_reset_strategy == "random_size":
@@ -433,8 +436,7 @@ class CollectLandmarkScenario(BaseScenario):
                     y = length * np.sin(angle)
                     agent.state.p_pos = np.array([x, y])
 
-                    collide = any([is_collision(agent, land)
-                                  for land in self.landmarks.values()])
+                    collide = any([is_collision(agent, land) for land in self.landmarks.values()])
 
                 agent.state.p_vel = np.zeros(world.dim_p)
                 agent.state.c = np.zeros(world.dim_c)
@@ -444,13 +446,15 @@ class CollectLandmarkScenario(BaseScenario):
     def get_agents(world):
         return [agent for agent in world.agents]
 
-    def set_landmarks_pos(self, world, landmarks_positions: List):
+    @staticmethod
+    def set_landmarks_pos(world, landmarks_positions: List):
         assert len(landmarks_positions) == len(world.landmarks),\
             f"{len(landmarks_positions)} positions have been identified but there are {len(world.landmarks)} landmarks"
         for landmark, landmark_position in zip(world.landmarks, landmarks_positions):
             landmark.set_pos(world, landmark_position)
 
-    def set_agents_pos(self, world, agents_positions: List):
+    @staticmethod
+    def set_agents_pos(world, agents_positions: List):
         assert len(agents_positions) == len(world.agents),\
             f"{len(agents_positions)} positions have been identified but there are {len(world.agents)} agents"
         for agent, agent_position in zip(world.agents, agents_positions):
@@ -478,9 +482,9 @@ class CollectLandmarkScenario(BaseScenario):
 
         rew = 0
 
-        if self.reward_collision_strategy in ["change_landmark", "all_landmarks"]:
-            assert self.num_landmarks > 1, "At least 2 landmarks are " \
-                                           + f"needed for the task '{self.reward_collision_strategy}'"
+        ## fixme: spostare il controllo nell'iniziallizazione anziche qua
+        #if self.reward_collision_strategy in ["change_landmark", "all_landmarks", "change_landmark_avoid_borders"]:
+        #    assert self.num_landmarks > 1, "At least 2 landmarks are " + f"needed for the task '{self.reward_collision_strategy}'"
 
         # check for every landmark
         for landmark in world.landmarks:
@@ -500,24 +504,20 @@ class CollectLandmarkScenario(BaseScenario):
                 if self.reward_collision_strategy in ["simple", "time_penalty"]:
                     # if not on landmark and remove registered collision
                     self.registered_collisions[agent.name] += [landmark.name]
-                elif self.reward_collision_strategy in ["change_landmark", "change_landmark_avoid_borders",
-                                                        "all_landmarks"]:
+                elif self.reward_collision_strategy in ["change_landmark", "change_landmark_avoid_borders", "all_landmarks"]:
                     # reset all the other landmark collisions
                     self.registered_collisions[agent.name] = [landmark.name]
 
             if self.reward_collision_strategy in ["simple", "time_penalty"]:
-
                 # if not on landmark and remove registered collision
                 if already_collided and not had_collided:
-                    self.registered_collisions[agent.name].remove(
-                        landmark.name)
+                    self.registered_collisions[agent.name].remove(landmark.name)
 
         if self.reward_collision_strategy == "change_landmark_avoid_borders":
             for border in world.borders:
-                had_collided = is_collision_border(border, agent)
-
-                if had_collided:
+                if is_collision_border(border, agent):
                     rew += self.border_penalty
+                    break
 
         ##############################################
         # STEP REWARD
@@ -533,28 +533,16 @@ class CollectLandmarkScenario(BaseScenario):
                 dist = get_distance(agent, landmark)
                 min_dist = min(min_dist, dist)
 
-            if is_positive:
-                rew = world.max_size * 2 - min_dist
-            else:
-                rew = - min_dist
-
+            rew = world.max_size * 2 - min_dist if is_positive else -min_dist
             return rew
 
         if rew == 0:
-
             if self.reward_step_strategy == "time_penalty":
-
                 counters = [land.counter for land in world.landmarks]
                 counters = max(counters)
-
-                rew += self.landmark_penalty * min(
-                    counters, self.max_landmark_counter
-                )
-
+                rew += self.landmark_penalty * min(counters, self.max_landmark_counter)
             elif self.reward_step_strategy == "change_landmark":
-
-                # if an agent doesn't collide with any landmark, it receive
-                # negative a reward
+                # if an agent doesn't collide with any landmark, it receives negative a reward
                 rew += self.landmark_penalty
             elif self.reward_step_strategy == "positive_distance":
                 rew += dist_reward(is_positive=True)

@@ -5,8 +5,6 @@ import torch.nn as nn
 from torch import optim
 from .RolloutStorage import RolloutStorage
 from typing import Dict
-from torchviz import make_dot
-
 
 class PPO:
     def __init__(

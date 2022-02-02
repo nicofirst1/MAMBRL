@@ -136,8 +136,7 @@ class PpoWrapper:
 
                 for step in range(self.num_steps):
                     obs = observation.to(self.device).unsqueeze(dim=0)
-                    guided_learning = {
-                        agent_id: False for agent_id in self.env.agents}
+                    guided_learning = {agent_id: False for agent_id in self.env.agents}
 
                     for agent_id in self.env.agents:
                         # perform guided learning with scheduler
@@ -200,14 +199,11 @@ class PpoWrapper:
 
             self.ppo_agent.train()
             with torch.enable_grad():
-                value_loss, action_loss, entropy = self.ppo_agent.update(
-                    rollout, logs)
+                value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
 
             if self.use_wandb:
-                logs = preprocess_logs(
-                    [value_loss, action_loss, entropy, logs], self)
-                self.logger.on_batch_end(
-                    logs=logs, batch_id=epoch, rollout=rollout)
+                logs = preprocess_logs([value_loss, action_loss, entropy, logs], self)
+                self.logger.on_batch_end(logs=logs, batch_id=epoch, rollout=rollout)
 
             rollout.after_update()
 

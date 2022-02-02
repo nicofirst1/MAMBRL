@@ -1,14 +1,9 @@
 import torch
-import numpy as np
 from rich.progress import track
-from torch.optim.lr_scheduler import ExponentialLR
 from tqdm import trange
 import keyboard
 
-from logging_callbacks.wandbLogger import preprocess_logs
 from src.common import Params
-from src.common.schedulers import CurriculumScheduler, LearningRateScheduler, StepScheduler, \
-    linear_decay, exponential_decay
 from src.env import get_env, EnvWrapper
 from src.model import EnvModelTrainer, NextFramePredictor
 from src.ppo.PpoWrapper import PpoWrapper
@@ -94,7 +89,7 @@ class MAMBRL:
     def train_agent_sim_env(self, epoch):
         self.ppo_wrapper.set_env(self.simulated_env)
         self.simulated_env.frames = self.simulated_env.get_initial_frame()
-        self.ppo_wrapper.learn(episodes=self.config.episodes)
+        self.ppo_wrapper.learn()
 
     def train(self):
         for epoch in trange(self.config.epochs, desc="Epoch"):
@@ -109,10 +104,13 @@ class MAMBRL:
             self.trainer.train(step, self.real_env)
 
     def train_model_free(self):
-        strategy = dict(reward_step_strategy="change_landmark",
-                        reward_collision_strategy="change_landmark_avoid_borders",
-                        landmark_reset_strategy="simple",
-                        landmark_collision_strategy="stay")
+        strategy = dict(
+            reward_step_strategy="change_landmark",
+            reward_collision_strategy="change_landmark_avoid_borders",
+            landmark_reset_strategy="simple",
+            landmark_collision_strategy="remove"
+        )
+
         # self.real_env.set_strategy(reward_step_strategy="positive_distance")
         self.real_env.set_strategy(**strategy)
         self.ppo_wrapper.set_env(self.real_env)

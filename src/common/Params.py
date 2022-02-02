@@ -33,7 +33,7 @@ class Params:
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description
     guided_learning_prob = 0.0
-    epochs = 1000
+    epochs = 3000
     # number of learning iterations that the algorithm does on the same batch
     # of trajectories (trajectories are shuffled at each iteration)
     batch_epochs = 3
@@ -146,7 +146,7 @@ class Params:
     visible = False
     max_landmark_counter = 4
     landmark_penalty = -0.01  # -0.01   # -1
-    border_penalty = -0.01
+    border_penalty = -0.1
     # 0 don't move, 1 left, 2 right,  3 down, 4 top
     num_actions = 5
 
