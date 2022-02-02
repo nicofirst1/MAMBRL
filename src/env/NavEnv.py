@@ -20,6 +20,9 @@ class NavEnv(SimpleEnv):
             gray_scale=False,
             frame_shape=None,
             visible=False,
+            agents_positions=None,
+            landmarks_positions=None,
+
     ):
         """
         This class has to manage the interaction between the agents in an environment.
@@ -34,10 +37,9 @@ class NavEnv(SimpleEnv):
         """
 
         self.seed()
+        scenario = CollectLandmarkScenario(**scenario_kwargs, np_random=self.np_random)
+        world = scenario.make_world(landmarks_positions, agents_positions)
 
-        scenario = CollectLandmarkScenario(
-            **scenario_kwargs, np_random=self.np_random)
-        world = scenario.make_world()
         super().__init__(
             scenario,
             world,
@@ -53,16 +55,14 @@ class NavEnv(SimpleEnv):
         self.agent_selection = None
         self.agents_dict = {agent.name: agent for agent in world.agents}
 
-        self.viewer = rendering.Viewer(
-            frame_shape[1], frame_shape[2], visible=visible)
+        self.viewer = rendering.Viewer(frame_shape[1], frame_shape[2], visible=visible)
         self.viewer.set_max_size(scenario_kwargs["max_size"])
 
     def set_strategy(self, **kwargs):
         self.scenario.set_strategy(**kwargs)
 
     def set_landmarks_pos(self, landmarks_pos):
-        self.scenario.set_landmarks_pos(
-            world=self.world, landmarks_positions=landmarks_pos)
+        self.scenario.set_landmarks_pos(world=self.world, landmarks_positions=landmarks_pos)
 
     def set_agents_pos(self, *agents_pos):
         self.scenario.set_agents_pos(self.world, agents_pos)
@@ -73,11 +73,8 @@ class NavEnv(SimpleEnv):
     def get_strategies(self):
         return self.scenario.get_descriptive_strategy()
 
-    def reset(self, landmarks_positions=None, agents_positions=None):
-        super(NavEnv, self).reset(landmarks_positions, agents_positions)
-        for lndmrk_id in self.scenario.landmarks.values():
-            lndmrk_id.reset_counter()
-
+    def reset(self):
+        super(NavEnv, self).reset()
         return self.observe()
 
     @property
@@ -111,9 +108,7 @@ class NavEnv(SimpleEnv):
 
         return observation
 
-    def step(
-            self, actions: Dict[str, int]
-    ) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
+    def step(self, actions: Dict[str, int]) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
         """
         Takes a step in the environment.
         All the agents act simultaneously and the observation are collected
@@ -133,8 +128,10 @@ class NavEnv(SimpleEnv):
             super(NavEnv, self).step(action)
 
         self.steps += 1
+
         # perform a landmark step
         [land.step() for land in self.world.landmarks]
+
         self.dones["__all__"] = False
         if self.steps >= self.max_cycles:
             self.dones["__all__"] = True
@@ -154,48 +151,6 @@ class NavEnv(SimpleEnv):
 
         observation = self.observe()
         return observation, self.rewards, self.dones, self.infos
-
-    def step_francesco(
-            self, actions: Dict[str, int]
-    ) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
-        """
-                Takes a step in the environment.
-                All the agents act simultaneously and the the observation are collected
-                Args:
-                    actions: dictionary mapping angent name to an action
-
-                Returns: all returns are dict mapping agent string to a value
-                    observation : the observed window as a torch.Tensor
-                    rewards: a reward as an int
-                    dones: if the agent is done or not
-                    infos: additional infos on the agent, such as its position
-
-                """
-
-        for agent_id, action in actions.items():
-            self.agent_selection = agent_id
-            super(NavEnv, self).step(action)
-
-        # update landmarks status
-        visited_landmarks = list(self.scenario.registered_collisions.values())
-        visited_landmarks = set(itertools.chain(*visited_landmarks))
-
-        not_visited = set(self.scenario.landmarks.keys()) - visited_landmarks
-
-        for lndmrk_id in visited_landmarks:
-            self.scenario.landmarks[lndmrk_id].reset_counter()
-        for lndmrk_id in not_visited:
-            self.scenario.landmarks[lndmrk_id].step()
-
-        observation = self.observe()
-        # copy done so __all__ is not appended
-        dones = copy(self.dones)
-        dones["__all__"] = all(dones.values())
-
-        # add agent state to infos
-        self.infos = {k: self.agents_dict[k].state for k in self.infos.keys()}
-
-        return observation, self.rewards, dones, self.infos
 
     def optimal_action(self, agent):
         """

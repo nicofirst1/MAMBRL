@@ -17,8 +17,6 @@ class PpoWrapper:
         self.obs_shape = env.obs_shape
         self.action_space = env.action_space
         self.num_agents = config.agents
-        self.landmarks_positions = config.landmarks_positions
-        self.agents_positions = config.agents_positions
 
         self.gamma = config.gamma
         self.device = config.device
@@ -35,7 +33,7 @@ class PpoWrapper:
         self.actor_critic_dict = {
             agent_id: ModelFree(**policy_configs).to(self.device) for agent_id in self.env.agents
         }
-        # epochs = config.epochs,
+
         self.ppo_agent = PPO(
             actor_critic_dict=self.actor_critic_dict,
             ppo_epochs=config.batch_epochs,
@@ -51,10 +49,8 @@ class PpoWrapper:
 
         self.use_wandb = config.use_wandb
         if self.use_wandb:
-
-            cams = []
-
             from logging_callbacks import PPOWandb
+            cams = []
 
             self.logger = PPOWandb(
                 train_log_step=5,
@@ -131,7 +127,7 @@ class PpoWrapper:
             # COLLECT TRAJECTORIES
             # =============================================================================
             for episode in range(self.num_episodes):
-                observation = self.env.reset(self.landmarks_positions, self.agents_positions)
+                observation = self.env.reset()
                 rollout.states[episode * self.num_steps] = observation.unsqueeze(dim=0)
 
                 for step in range(self.num_steps):
@@ -187,7 +183,7 @@ class PpoWrapper:
                     )
 
                     if done["__all__"]:
-                        observation = self.env.reset(self.landmarks_positions, self.agents_positions)
+                        observation = self.env.reset()
 
             # fixme: qui bisogna come farlo per multi agent
             with torch.no_grad():

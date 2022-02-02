@@ -20,8 +20,7 @@ class MAMBRL:
     def __init__(self, config: Params):
         """__init__ method.
 
-        config is a Params object which class is defined in
-        src/common/Params.py
+        config is a Params object which class is defined in src/common/Params.py
         """
         self.config = config
         self.logger = None
@@ -89,7 +88,7 @@ class MAMBRL:
     def train_agent_sim_env(self, epoch):
         self.ppo_wrapper.set_env(self.simulated_env)
         self.simulated_env.frames = self.simulated_env.get_initial_frame()
-        self.ppo_wrapper.learn()
+        self.ppo_wrapper.learn(epochs=self.config.epochs)
 
     def train(self):
         for epoch in trange(self.config.epochs, desc="Epoch"):
@@ -104,15 +103,9 @@ class MAMBRL:
             self.trainer.train(step, self.real_env)
 
     def train_model_free(self):
-        strategy = dict(
-            reward_step_strategy="change_landmark",
-            reward_collision_strategy="change_landmark_avoid_borders",
-            landmark_reset_strategy="simple",
-            landmark_collision_strategy="remove"
-        )
 
         # self.real_env.set_strategy(reward_step_strategy="positive_distance")
-        self.real_env.set_strategy(**strategy)
+        self.real_env.set_strategy(**self.config.strategy)
         self.ppo_wrapper.set_env(self.real_env)
         self.ppo_wrapper.learn(epochs=self.config.epochs)
 

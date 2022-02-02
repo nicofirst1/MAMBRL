@@ -8,10 +8,12 @@ import wandb
 from PIL import Image, ImageDraw, ImageFont
 from torch import nn
 
+from common import Params
 from logging_callbacks.callbacks import WandbLogger
 from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
 from src.ppo.RolloutStorage import RolloutStorage
 
+params = Params()
 
 class EnvModelWandb(WandbLogger):
     def __init__(
@@ -288,19 +290,17 @@ def preprocess_logs(learn_output, ppo_wrapper):
             new_logs[f"{new_key}_{k}"] = np.asarray(v).mean()
 
     logs = new_logs
-    reward_step_strategy, \
-    reward_collision_strategy, \
-    landmark_reset_strategy, \
-    landmark_collision_strategy \
-        = ppo_wrapper.env.get_current_strategy()
 
-    strat = ppo_wrapper.env.get_strategies()
+    strat = params.get_descriptive_strategy()
+    reward_step_strategy, reward_collision_strategy, \
+        landmark_reset_strategy, landmark_collision_strategy = ppo_wrapper.env.get_current_strategy()
+
     tbl = wandb.Table(columns=["list", "current strategy", "description"])
 
     tbl.add_data("reward_step", reward_step_strategy,
                  strat["reward_step_strategy"][reward_step_strategy])
     tbl.add_data("reward_collision", reward_collision_strategy,
-                 strat["reward_collision_strategy"][reward_collision_strategy])
+                strat["reward_collision_strategy"][reward_collision_strategy])
     tbl.add_data("landmark_reset", landmark_reset_strategy,
                  strat["landmark_reset_strategy"][landmark_reset_strategy])
     tbl.add_data("landmark_collision", landmark_collision_strategy,
@@ -318,7 +318,6 @@ def preprocess_logs(learn_output, ppo_wrapper):
     }
 
     logs.update(general_logs)
-
     return logs
 
 

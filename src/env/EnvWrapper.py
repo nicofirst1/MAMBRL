@@ -62,8 +62,8 @@ class EnvWrapper:
         """
         return self.env.get_strategies()
 
-    def reset(self, landmarks_positions=None, agents_positions=None):
-        observation = self.env.reset(landmarks_positions, agents_positions)
+    def reset(self):
+        observation = self.env.reset()
 
         num_frames = self.stacked_frames.shape[0] // self.channel_size
         obs = observation.repeat(num_frames, 1, 1)

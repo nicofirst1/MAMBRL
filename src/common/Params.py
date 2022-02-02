@@ -29,7 +29,6 @@ class Params:
     debug = False
     use_wandb = True
     device = torch.device("cuda")
-    resize = True
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description
     guided_learning_prob = 0.0
@@ -111,8 +110,10 @@ class Params:
     # conv_layers = ([(64, (2, 3, 3), 1), (64, (1, 3, 3), 1), (32, 2, 1)],)
 
     # Conv2D kernel_size and stride can be int or a 2-ple
-    conv_layers = ([(64, 4, 2), (32, 2, 2), (32, 2, 2)],
-                   [(32, 4, 2), (32, 3, 2)])
+    conv_layers = (
+        [(64, 4, 2), (32, 2, 2), (32, 2, 2)],
+        [(32, 4, 2), (32, 3, 2)]
+    )
 
     # same as the conv_layers
     fc_layers = ([128, 64, 32], [64, 32])
@@ -161,6 +162,28 @@ class Params:
     resume_training = False
     max_checkpoint_keep = 10
 
+    ## STRATEGIES ##
+    possible_strategies = dict(
+        reward_step_strategies = [
+            "simple", "time_penalty", "positive_distance", "negative_distance"
+        ],
+        reward_collision_strategies = [
+            "simple", "time_penalty", "change_landmark", "all_landmarks"
+        ],
+        landmark_reset_strategies = [
+            "simple", "random_pos", "random_size", "fully_random"
+        ],
+        landmark_collision_strategies = [
+            "stay", "remove"
+        ]
+    )
+
+    reward_step_strategy = "simple"
+    reward_collision_strategy = "change_landmark"
+    landmark_reset_strategy = "simple"
+    landmark_collision_strategy = "remove"
+    avoid_borders = True
+
     color_index = [  # map index to RGB colors
         (0, 255, 0),  # green -> landmarks
         (0, 0, 255),  # blue -> agents
@@ -178,6 +201,16 @@ class Params:
 
         self.obs_shape = (
             self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
+
+        self.strategy = dict(
+            reward_step_strategy=self.reward_step_strategy,
+            reward_collision_strategy=self.reward_collision_strategy,
+            landmark_reset_strategy=self.landmark_reset_strategy,
+            landmark_collision_strategy=self.landmark_collision_strategy,
+            avoid_borders=self.avoid_borders
+        )
+
+        self.check_parameters()
 
     def __initialize_dirs(self):
         """
@@ -249,6 +282,8 @@ class Params:
             gray_scale=self.gray_scale,
             frame_shape=self.frame_shape,
             visible=self.visible,
+            agents_positions=self.agents_positions,
+            landmarks_positions=self.landmarks_positions,
             scenario_kwargs=dict(
                 step_reward=self.step_reward,
                 landmark_reward=self.landmark_reward,
@@ -296,3 +331,79 @@ class Params:
             device=self.device,
             gamma=self.gamma,
         )
+
+    def check_parameters(self):
+        assert self.reward_step_strategy in self.possible_strategies["reward_step_strategies"], \
+            f"Reward step strategy '{self.reward_step_strategy}' is not valid." \
+            f"\nValid options are {self.possible_strategies['reward_step_strategies']}"
+
+        assert self.reward_collision_strategy in self.possible_strategies["reward_collision_strategies"], \
+            f"Reward step strategy '{self.reward_collision_strategy}' is not valid." \
+            f"\nValid options are {self.possible_strategies['reward_collision_strategies']}"
+
+        assert self.landmark_reset_strategy in self.possible_strategies["landmark_reset_strategies"], \
+            f"Landmark reset strategy '{self.landmark_reset_strategy}' is not valid." \
+            f"\nValid options are {self.possible_strategies['landmark_reset_strategies']}"
+
+        assert self.landmark_collision_strategy in self.possible_strategies["landmark_collision_strategies"], \
+            f"Landmark collision strategy '{self.landmark_collision_strategy}' is not valid." \
+            f"\nValid options are {self.possible_strategies['landmark_collision_strategies']}"
+
+        if self.reward_collision_strategy in ["change_landmark", "all_landmarks"]:
+            assert self.landmarks > 1, "At least 2 landmarks are " + f"needed for the task '{self.reward_collision_strategy}'"
+
+        if self.landmarks_positions is not None:
+            assert len(self.landmarks_positions) == self.landmarks, \
+            f"{len(self.landmarks_positions)} positions have been identified but there are {self.landmarks} landmarks"
+
+        if self.agents_positions is not None:
+            assert len(self.agents_positions) == self.agents, \
+                f"{len(self.agents_positions)} positions have been identified but there are {self.agents} agents"
+
+    def get_descriptive_strategy(self):
+        """get_descriptive_strategy method.
+
+        returns a dictionary containing customizable elements within the
+        environment. Each of the elements is represented with a dictionary
+        having as keys the possible selectable options and as values some
+        descriptions on their behavior
+        Returns
+        -------
+        doc : dict
+
+
+        """
+        doc = dict(
+            landmark_reset_strategy = dict(
+                simple="Landmark have static dimension and positions",
+                random_pos="Landmark have static dimension and random positions",
+                random_size="Landmark have random dimension and static positions",
+                fully_random=" Landmark have random dimension and positions",
+            ),
+
+            landmark_collision_strategy = dict(
+                stay="Does nothing",
+                remove="Landmark is removed on collision"
+            ),
+
+            reward_step_strategy = dict(
+                simple=f"Reward at each step is landmark_penalty (setted to {self.landmark_penalty})",
+                time_penalty=""" If the agent does not enter a landmark, it receives a negative reward that increases with each step.""",
+                positive_distance="""Reward at each step is positive and increases when getting closer to a landmark. """,
+                negative_distance="""Reward at each step is negative and increases when getting closer to a landmark. """
+            ),
+
+            reward_collision_strategy = dict(
+                simple=f"The agent get a reward equal to landmark_reward ({self.landmark_reward}) when colliding with a landmark",
+                time_penalty=f"""The agent get a reward equal to landmark_reward ({self.landmark_reward}) when colliding with a landmark.
+                    The collision also resets the previously accumulated negative reward in the landmarks.
+                    (Note: the agent receives a negative reward even if it remains in a landmark. To receive a positive reward it must exit and re-enter)""",
+                change_landmark=f"""The agent receives a positive reward when entering a new landmark. 
+                        This means that the agent cannot receive a positive reward by exiting and re-entering the same landmark. 
+                        (Note: at least two landmarks are required in this mode).""",
+                all_landmarks=f"""The agent receives a equal to landmark_reward ({self.landmark_reward}) only when it enters a new landmark. 
+                So to maximize the reward of the episode it must reach all points of reference in the environment"""
+            )
+        )
+
+        return doc
