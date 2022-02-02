@@ -8,16 +8,17 @@ import scipy.ndimage as nd
 import torch
 import torchvision
 from PIL import Image, ImageDraw
-from lucent.misc import ChannelReducer
-from lucent.modelzoo import get_model_layers
-from lucent.optvis import param, objectives, render, transform
-from lucent.optvis.render import get_layer_activ
+from sklearn.decomposition import NMF
 from torch import nn
 from torchvision.models import ResNet
 from torchvision.transforms import transforms
 
-from logging_callbacks.prov import LayerNMF, conv2d, norm_filter
-from optvis.param import to_valid_rgb
+from logging_callbacks.prov import VanillaBackprop
+from lucent.misc import ChannelReducer
+from lucent.modelzoo import get_model_layers
+from lucent.optvis import param, objectives, render, transform
+from lucent.optvis.render import get_layer_activ
+from src.ppo import RolloutStorage
 
 
 def argmax_nd(x, axes, *, max_rep=np.inf, max_rep_strict=None):
@@ -228,6 +229,8 @@ class CnnViz:
         self.device = device
         self.name = name
 
+        self.vanilla_back = VanillaBackprop(self.complete_model())
+
         if isinstance(fe, ResNet):
 
             self.preprocess = transforms.Compose(
@@ -247,25 +250,36 @@ class CnnViz:
         conv_layers = [x for x in conv_layers if "conv" in x and "activ" not in x]
         self.conv_layers = conv_layers
 
-    def visualize(self, states):
+    def visualize(self, rollout: RolloutStorage):
         # needs device on cuda
         self.feature_extractor.to("cuda").eval()
         self.linear.to("cuda").eval()
 
         images = {}
 
+        states = rollout.states
+
         idx = random.randint(0, len(states) - 1)
+
+        action = rollout.actions[idx]
+        values = rollout.value_preds[idx]
+
+        target = action if "actor" in self.name else 0
+
         img = states[idx] / 255.
         img = torch.as_tensor(img)
 
         img = self.preprocess(img)
-        img = numpy.asarray((img))
+        img = numpy.asarray(img.cpu())
 
         # images.update(self.most_active_patch(img))
         images.update(self.linear_optim(img))
         # print("Linear optim viz done")
         images.update(self.render_activation_grid(img))
         # print("render_activation_gridviz done")
+
+        images.update(self.salency(img, target))
+
         # images.update(self.aligned_interpolation())
         # print("aligned_interpolation viz done")
         # images.update(self.combined_neurons())
@@ -280,6 +294,30 @@ class CnnViz:
 
         return images
 
+    def salency(self, img, target):
+
+        res={}
+        img = torch.as_tensor(img).unsqueeze(dim=0).to("cuda")
+
+        grads = self.vanilla_back.generate_gradients(img, target_class=target)
+        channel_reducer = ChannelReducer(n_components=3)
+
+        for name, grad in grads.items():
+
+            grad=grad[0]
+
+            if grad.ndim<2:
+                continue
+
+            grad=grad.cpu()
+            if grad.shape[-1]!=3:
+                grad=channel_reducer.fit_transform(grad)
+
+
+            res[f"grad-cam-{name}"]=grad
+
+        return res
+
     def complete_model(self):
         cm = list(self.feature_extractor._modules.items())
         cm += list(self.linear._modules.items())
@@ -292,10 +330,10 @@ class CnnViz:
         complete_model = nn.Sequential(*[self.feature_extractor, self.linear])
 
         sd = 0.01
-        img=torch.as_tensor(img).unsqueeze(dim=0).float()
+        img = torch.as_tensor(img).unsqueeze(dim=0).float()
         tensor = (img * sd).to("cuda").requires_grad_(True)
 
-        param_f= lambda :([tensor], lambda: tensor)
+        param_f = lambda: ([tensor], lambda: tensor)
 
         # image_f=lambda :tensor
         # param_f = lambda : (param, to_valid_rgb(image_f, decorrelate=False))
@@ -308,63 +346,6 @@ class CnnViz:
         res = make_grid(res[0])
 
         return {f"linear": res}
-
-    def pos_neg(self, img):
-
-        complete_model = self.complete_model()
-        img = torch.as_tensor(img).unsqueeze(dim=0).to("cuda").float()
-        lay = self.conv_layers[-1]
-
-        def objective_func(model):
-            # shape: (batch_size, layer_channels, cell_layer_height, cell_layer_width)
-            pred = model(lay)
-            # use the sampled indices from `sample` to get the corresponding targets
-            target = acts[sample.inds].to(pred.device)
-            # shape: (batch_size, layer_channels, 1, 1)
-            target = target.view(target.shape[0], target.shape[1], 1, 1)
-            dot = (pred * target).sum(dim=1).mean()
-            return -dot
-
-        results = render.render_vis(
-            complete_model,
-            obj,
-            param_f,
-            thresholds=(n_steps,),
-            show_image=False,
-            progress=False,
-            fixed_image_size=cell_image_size,
-        )
-
-        grads = grads.cpu().numpy()
-        acts = acts.cpu().numpy().squeeze()
-        reducer = ChannelReducer(n_components=3, reduction_alg="PCA")
-
-        reducer.fit(grads)
-        channel_dirs = reducer._reducer.components_
-
-        attr_reduced = reducer.transform(np.maximum(grads, 0)) - reducer.transform(
-            np.maximum(-grads, 0))  # transform the positive and negative parts separately
-        nmf_norms = channel_dirs.sum(-1)
-        attr_reduced *= nmf_norms[
-            None, None]  # multiply by the norms of the NMF directions, since the magnitudes of the NMF directions are not relevant
-        attr_reduced /= np.median(attr_reduced.max(axis=(-3, -2,
-                                                         -1)))  # globally normalize by the median max value to make the visualization balanced (a bit of a hack)
-        attr_pos = np.maximum(attr_reduced, 0)
-        attr_pos = conv2d(attr_pos, norm_filter(attr_pos.shape[-1]))
-        nmf.acts_reduced = attr_pos
-        image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
-        image = zoom_to(image, 200)
-        image = apply_alpha(image)
-        images[f"grad/{name}_pos"] = image
-
-        attr_neg = np.maximum(-attr_reduced, 0)
-        attr_neg = conv2d(attr_neg, norm_filter(attr_pos.shape[-1]))
-        nmf.acts_reduced = attr_neg
-        image = nmf.vis_dataset(1, subdiv_mult=1, expand_mult=4)[0]
-        image = zoom_to(image, 200)
-        image = apply_alpha(image)
-
-        images[f"grad/{name}_neg"] = image
 
     def feature_inversion(self, img):
 

@@ -504,7 +504,7 @@ class CollectLandmarkScenario(BaseScenario):
 
             return rew
 
-        if rew == 0:
+        if rew >= 0:
 
             if self.reward_step_strategy == "time_penalty":
 

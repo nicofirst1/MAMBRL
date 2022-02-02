@@ -180,7 +180,7 @@ class PPOWandb(WandbLogger):
         if batch_id % self.log_cnn_viz == 0:
             images = {}
             for cnn_viz in self.cnn_vizs:
-                imgs = cnn_viz.visualize(states)
+                imgs = cnn_viz.visualize(rollout)
                 images.update(imgs)
 
             for name, vid in images.items():
