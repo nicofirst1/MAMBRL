@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from rich.progress import track
 from torch.optim.lr_scheduler import ExponentialLR
 from tqdm import trange
@@ -108,8 +109,12 @@ class MAMBRL:
             self.trainer.train(step, self.real_env)
 
     def train_model_free(self):
-
-        self.real_env.set_strategy(reward_step_strategy="change_landmark", reward_collision_strategy="time_penalty")
+        strategy = dict(reward_step_strategy="change_landmark",
+                        reward_collision_strategy="change_landmark_avoid_borders",
+                        landmark_reset_strategy="simple",
+                        landmark_collision_strategy="stay")
+        # self.real_env.set_strategy(reward_step_strategy="positive_distance")
+        self.real_env.set_strategy(**strategy)
         self.ppo_wrapper.set_env(self.real_env)
         self.ppo_wrapper.learn(epochs=self.config.epochs)
 
