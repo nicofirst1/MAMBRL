@@ -309,11 +309,14 @@ class CnnViz:
             if grad.ndim<2:
                 continue
 
-            grad=grad.cpu()
+            grad=grad.cpu().numpy()
+            where_are_NaNs = np.isnan(grad)
+            grad[where_are_NaNs] = 0
+
             if grad.shape[-1]!=3:
                 grad=channel_reducer.fit_transform(grad)
 
-
+            grad=(grad*255).astype(np.uint8)
             res[f"grad-cam-{name}"]=grad
 
         return res
@@ -343,7 +346,12 @@ class CnnViz:
         res = render.render_vis(complete_model, "labels:0", param_f, show_inline=False, progress=False,
                                 show_image=False,
                                 fixed_image_size=img.shape[-1])
-        res = make_grid(res[0])
+
+        res=res[0]
+        if len(res)!=1:
+            res = make_grid(res[0])
+        else:
+            res=res[0]
 
         return {f"linear": res}
 

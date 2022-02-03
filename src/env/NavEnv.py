@@ -266,5 +266,5 @@ class NavEnv(SimpleEnv):
 def get_env(kwargs: Dict) -> NavEnv:
     """Initialize rawEnv and wrap it in parallel petting zoo."""
     env = NavEnv(**kwargs)
-    env= NormalizeReward(env)
+    #env= NormalizeReward(env)
     return env

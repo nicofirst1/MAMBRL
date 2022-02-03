@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 from torch import optim
 from .RolloutStorage import RolloutStorage
-from typing import Dict
-from torchviz import make_dot
+from typing import Dict, Optional
+#from torchviz import make_dot
 
 from ..common import LearningRateScheduler
 
