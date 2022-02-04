@@ -55,7 +55,7 @@ def test_episodes():
 
                 else:
                     action_dict[agent] = random.randint(0, 4)
-                    # action_dict[agent] = 4
+                    action_dict[agent] = 4
 
             obs, reward, done, info = env.step(action_dict)
 

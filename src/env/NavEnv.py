@@ -1,9 +1,11 @@
-import itertools
-from copy import copy
+import math
 from typing import Dict, Tuple
 
 import numpy as np
 import torch
+from kornia import get_gaussian_kernel2d
+from torch import nn, conv2d
+from torchvision.utils import draw_bounding_boxes
 
 from PettingZoo.pettingzoo.mpe._mpe_utils import rendering
 from PettingZoo.pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
@@ -22,6 +24,9 @@ class NavEnv(SimpleEnv):
             visible=False,
             agents_positions=None,
             landmarks_positions=None,
+            observation_radius=1,
+            smooth_obs_mask=False,
+
 
     ):
         """
@@ -52,6 +57,9 @@ class NavEnv(SimpleEnv):
         self.render_geoms = None
         self.gray_scale = gray_scale
 
+        self.observation_radius = observation_radius
+        self.smooth_obs_mask = smooth_obs_mask
+
         self.agent_selection = None
         self.agents_dict = {agent.name: agent for agent in world.agents}
 
@@ -81,24 +89,25 @@ class NavEnv(SimpleEnv):
     def action_meaning_dict(self):
         return {0: "stop", 1: "left", 2: "right", 3: "up", 4: "down"}
 
-    def observe(self, agent="") -> torch.Tensor:
+    def observe(self, agent="") -> Dict[str, torch.Tensor]:
         """
         Get an image of the game
         Args:
             agent: All observation are the same here
 
-        Returns: returns an image as a torch tensor of size [channels, width, height]
+        Returns: returns a dict of images, one for each agent, as a torch tensor of size [channels, width, height]
 
         """
-
+        obs_dict = {}
         observation = self.render()
         if observation is not None:
+
             observation = torch.from_numpy(observation.copy())
             observation = observation.float()
 
             # move channel on second dimension if present, else add 1
             if len(observation.shape) == 3:
-                observation = observation.permute(2, 1, 0)
+                observation = observation.permute(2, 0, 1)
             else:
                 observation = observation.unsqueeze(dim=0)
 
@@ -106,7 +115,14 @@ class NavEnv(SimpleEnv):
                 observation = rgb2gray(observation)
                 observation = np.expand_dims(observation, axis=0)
 
-        return observation
+            for agent_id in self.agents:
+                idx = self.agents.index(agent_id)
+                agent_pos = self.world.agents[idx].state.p_pos.copy()
+                obs_dict[agent_id] = mask_observation(observation, agent_pos, world_size=self.world.max_size,
+                                                      radius_perc=self.observation_radius,
+                                                      use_conv=self.smooth_obs_mask)
+
+        return obs_dict["agent_0"]
 
     def step(self, actions: Dict[str, int]) -> Tuple[torch.Tensor, Dict[str, int], Dict[str, bool], Dict[str, Dict]]:
         """
@@ -221,3 +237,140 @@ def get_env(kwargs: Dict) -> NavEnv:
     """Initialize rawEnv and wrap it in parallel petting zoo."""
     env = NavEnv(**kwargs)
     return env
+
+
+def gaus_filter(image_size):
+    # Set these to whatever you want for your gaussian filter
+    kernel_size = 31
+    if kernel_size % 2 == 0: kernel_size += 1
+    padding = kernel_size // 2
+    stride = 1
+    sigma = 1
+    channels = 3
+
+    # Create a x, y coordinate grid of shape (kernel_size, kernel_size, 2)
+    x_cord = torch.arange(kernel_size)
+    x_grid = x_cord.repeat(kernel_size).view(kernel_size, kernel_size)
+    y_grid = x_grid.t()
+    xy_grid = torch.stack([x_grid, y_grid], dim=-1)
+
+    mean = (kernel_size - 1) / 2.
+    variance = sigma ** 2.
+
+    # Calculate the 2-dimensional gaussian kernel which is
+    # the product of two gaussian distributions for two different
+    # variables (in this case called x and y)
+    gaussian_kernel = (1. / (2. * math.pi * variance)) * \
+                      torch.exp(
+                          -torch.sum((xy_grid - mean) ** 2., dim=-1) / \
+                          (2 * variance)
+                      )
+    # Make sure sum of values in gaussian kernel equals 1.
+    gaussian_kernel = gaussian_kernel / torch.sum(gaussian_kernel)
+
+    # Reshape to 2d depthwise convolutional weight
+    gaussian_kernel = gaussian_kernel.view(1, 1, kernel_size, kernel_size)
+    gaussian_kernel = gaussian_kernel.repeat(channels, 1, 1, 1)
+
+    gaussian_filter = nn.Conv2d(in_channels=channels, out_channels=channels,
+                                kernel_size=kernel_size, groups=channels, bias=False, padding=padding,
+                                stride=stride)
+
+    gaussian_filter.weight.data = gaussian_kernel
+    gaussian_filter.weight.requires_grad = False
+
+    return gaussian_filter
+
+
+def norm_filter(length, norm_ord=2, norm_func=lambda n: np.exp(-n), clip=True):
+    arr = np.indices((length, length)) - ((length - 1) / 2)
+    func1d = lambda x: norm_func(np.linalg.norm(x, ord=norm_ord))
+    result = np.apply_along_axis(func1d, axis=0, arr=arr)
+    if clip:
+        bound = np.amax(np.amin(result, axis=0), axis=0)
+        result *= np.logical_or(result >= bound, np.isclose(result, bound, atol=0))
+    return result
+
+
+def mask_observation(observation: torch.Tensor, agent_pos, world_size: int, radius_perc=0.4, use_conv=False,
+                     use_cuda=True):
+    """
+    Apply limited field of view for world observation and agent position
+    @param observation: an image of [channels, w, h]
+    @param agent_pos: a vector of size 2, describing the agent position [y,x]
+    @param world_size: the max world size
+    @param radius_perc: percentage of field of view, 0 is none, 1 is whole world
+    @param use_conv: if to use gaussian smoothing on image, for a fog of war effect
+    @param use_cuda: should be true if use_conv is true, speed up conv operation.
+    @return: masked observation of size [c,w,h]
+    """
+
+    assert 0 <= radius_perc or radius_perc <=1, f"Radius observation perc should be in range [0,1], got {radius_perc}"
+
+    if radius_perc == 1:
+        # if radius is 1, then no need to apply mask
+        return observation
+
+    # ratio is used to estimate agent position in image
+    ratio = observation.shape[1] / (2 * world_size)
+
+    # invert y axis and translate to have min (0,0)
+    agent_pos[1] *= -1
+    agent_pos += world_size
+
+    # estimate radius and mask
+    radius = world_size * radius_perc
+    bbox = [
+        agent_pos[0] - radius, agent_pos[1] - radius,
+        agent_pos[0] + radius, agent_pos[1] + radius
+    ]
+
+    bbox = torch.as_tensor(bbox)
+    bbox *= ratio
+    bbox = bbox.unsqueeze(dim=0).long()
+
+    # use torch draw bounding box to drow rectangle around agent view
+    mask = draw_bounding_boxes(
+        torch.zeros(observation.shape).to(torch.uint8),
+        bbox,
+        colors=(255, 255, 255),
+        fill=True,
+        width=0)
+
+    if use_conv:
+
+        # use a convolutional pass with a gaussian filter to simulate fog around field of view
+        mask = mask.unsqueeze(dim=0).float()
+
+        # the kernel size must be at least half of the image, this becomes computationally intensive for big images
+        kernel_size = observation.shape[1] // 2
+        sigma = 1e2
+
+        # kernel must be odd
+        if kernel_size % 2 == 0: kernel_size += 1
+
+        filter = get_gaussian_kernel2d((kernel_size, kernel_size), (sigma, sigma))
+        # Reshape to 2d depthwise convolutional weight
+        filter = filter.view(1, 1, kernel_size, kernel_size)
+        filter = filter.repeat(3, 3, 1, 1)
+
+        if use_cuda:
+            # speed up computation with cuda
+            filter = filter.to("cuda")
+            mask = mask.to("cuda")
+
+        mask = conv2d(mask, filter, padding="same")
+        mask = mask.squeeze().cpu() / 255.
+
+
+    else:
+        # use bool mask
+        mask = mask.to(torch.bool)
+    res = mask * observation
+
+    # # visualize
+    # from PIL import Image
+    # p=res.permute(1,2,0).to(torch.uint8).numpy()
+    # Image.fromarray(p).show()
+
+    return res
