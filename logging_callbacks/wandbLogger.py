@@ -11,9 +11,10 @@ from torch import nn
 from common import Params
 from logging_callbacks.callbacks import WandbLogger
 from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
-from src.ppo.RolloutStorage import RolloutStorage
+from src.agent.RolloutStorage import RolloutStorage
 
 params = Params()
+
 
 class EnvModelWandb(WandbLogger):
     def __init__(
@@ -151,7 +152,7 @@ class PPOWandb(WandbLogger):
 
             states = (
                 rollout.states[:done_idx][:, -3:, :,
-                :].cpu().numpy().astype(np.uint8)
+                                          :].cpu().numpy().astype(np.uint8)
             )
 
             actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
@@ -215,7 +216,8 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
     info_img = [Image.fromarray(info_img[i]) for i in range(batch_size)]
     draws = [ImageDraw.Draw(img) for img in info_img]
 
-    font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", font_size)
+    font = ImageFont.truetype(
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf", font_size)
 
     # if rewards.size == 1:
     #     rewards = np.expand_dims(rewards, 0)
@@ -242,9 +244,12 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
         draw.text((0, 0), f"Return: {ret}", font=font, fill=(255, 255, 255))
         draw.text((0, 20), f"Value: {val}", font=font, fill=(255, 255, 255))
         draw.text((0, 40), f"Rew: {rew}", font=font, fill=(255, 255, 255))
-        draw.text((0, 60), f"Action: {act} ({act_mean})", font=font, fill=(255, 255, 255))
-        draw.text((0, 80), f"Prob: [{''.join(log_prob[:2])}", font=font, fill=(255, 255, 255))
-        draw.text((0, 90), f"{''.join(log_prob[2:])}]", font=font, fill=(255, 255, 255))
+        draw.text((0, 60), f"Action: {act} ({act_mean})",
+                  font=font, fill=(255, 255, 255))
+        draw.text(
+            (0, 80), f"Prob: [{''.join(log_prob[:2])}", font=font, fill=(255, 255, 255))
+        draw.text(
+            (0, 90), f"{''.join(log_prob[2:])}]", font=font, fill=(255, 255, 255))
 
     # info_img[0].show()
     info_img = [np.asarray(img) for img in info_img]
@@ -258,7 +263,8 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
         if diff % 2 != 0:
             pad_r += 1
 
-        states = np.pad(states, ((0, 0), (0, 0), (pad_l, pad_r), (pad_l, pad_r)))
+        states = np.pad(
+            states, ((0, 0), (0, 0), (pad_l, pad_r), (pad_l, pad_r)))
 
     info_img = torch.as_tensor(info_img)
     states = torch.as_tensor(states)
@@ -274,7 +280,7 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
     grids = np.stack(grids)
     #grids = grids.transpose((0, 2, 3, 1))
 
-    #Image.fromarray(np.asarray(grids[1])).show()
+    # Image.fromarray(np.asarray(grids[1])).show()
     return grids
 
 
@@ -300,7 +306,7 @@ def preprocess_logs(learn_output, ppo_wrapper):
     tbl.add_data("reward_step", reward_step_strategy,
                  strat["reward_step_strategy"][reward_step_strategy])
     tbl.add_data("reward_collision", reward_collision_strategy,
-                strat["reward_collision_strategy"][reward_collision_strategy])
+                 strat["reward_collision_strategy"][reward_collision_strategy])
     tbl.add_data("landmark_reset", landmark_reset_strategy,
                  strat["landmark_reset_strategy"][landmark_reset_strategy])
     tbl.add_data("landmark_collision", landmark_collision_strategy,

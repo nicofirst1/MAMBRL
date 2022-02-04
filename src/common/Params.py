@@ -21,18 +21,20 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
     TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
     MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
-    MODEL_FREE_LOGGER_FILE = os.path.join(MODEL_FREE_LOG_DIR, "model_free_log.log")
+    MODEL_FREE_LOGGER_FILE = os.path.join(
+        MODEL_FREE_LOG_DIR, "model_free_log.log")
 
     # =============================================================================
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = True
+    use_wandb = False
     device = torch.device("cuda")
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description
     guided_learning_prob = 0.0
     epochs = 3000
+    env_model_epochs = 4000
     # number of learning iterations that the algorithm does on the same batch
     # of trajectories (trajectories are shuffled at each iteration)
     batch_epochs = 3
@@ -139,7 +141,7 @@ class Params:
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
-    num_frames = 1
+    num_frames = 4
     num_steps = horizon // num_frames
     gray_scale = False
     normalize_reward = True
@@ -164,16 +166,16 @@ class Params:
 
     ## STRATEGIES ##
     possible_strategies = dict(
-        reward_step_strategies = [
+        reward_step_strategies=[
             "simple", "time_penalty", "positive_distance", "negative_distance"
         ],
-        reward_collision_strategies = [
+        reward_collision_strategies=[
             "simple", "time_penalty", "change_landmark", "all_landmarks"
         ],
-        landmark_reset_strategies = [
+        landmark_reset_strategies=[
             "simple", "random_pos", "random_size", "fully_random"
         ],
-        landmark_collision_strategies = [
+        landmark_collision_strategies=[
             "stay", "remove"
         ]
     )
@@ -350,11 +352,12 @@ class Params:
             f"\nValid options are {self.possible_strategies['landmark_collision_strategies']}"
 
         if self.reward_collision_strategy in ["change_landmark", "all_landmarks"]:
-            assert self.landmarks > 1, "At least 2 landmarks are " + f"needed for the task '{self.reward_collision_strategy}'"
+            assert self.landmarks > 1, "At least 2 landmarks are " + \
+                f"needed for the task '{self.reward_collision_strategy}'"
 
         if self.landmarks_positions is not None:
             assert len(self.landmarks_positions) == self.landmarks, \
-            f"{len(self.landmarks_positions)} positions have been identified but there are {self.landmarks} landmarks"
+                f"{len(self.landmarks_positions)} positions have been identified but there are {self.landmarks} landmarks"
 
         if self.agents_positions is not None:
             assert len(self.agents_positions) == self.agents, \
@@ -374,26 +377,26 @@ class Params:
 
         """
         doc = dict(
-            landmark_reset_strategy = dict(
+            landmark_reset_strategy=dict(
                 simple="Landmark have static dimension and positions",
                 random_pos="Landmark have static dimension and random positions",
                 random_size="Landmark have random dimension and static positions",
                 fully_random=" Landmark have random dimension and positions",
             ),
 
-            landmark_collision_strategy = dict(
+            landmark_collision_strategy=dict(
                 stay="Does nothing",
                 remove="Landmark is removed on collision"
             ),
 
-            reward_step_strategy = dict(
+            reward_step_strategy=dict(
                 simple=f"Reward at each step is landmark_penalty (setted to {self.landmark_penalty})",
                 time_penalty=""" If the agent does not enter a landmark, it receives a negative reward that increases with each step.""",
                 positive_distance="""Reward at each step is positive and increases when getting closer to a landmark. """,
                 negative_distance="""Reward at each step is negative and increases when getting closer to a landmark. """
             ),
 
-            reward_collision_strategy = dict(
+            reward_collision_strategy=dict(
                 simple=f"The agent get a reward equal to landmark_reward ({self.landmark_reward}) when colliding with a landmark",
                 time_penalty=f"""The agent get a reward equal to landmark_reward ({self.landmark_reward}) when colliding with a landmark.
                     The collision also resets the previously accumulated negative reward in the landmarks.
