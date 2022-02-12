@@ -416,5 +416,5 @@ class NextFramePredictor(Container):
 
         x = self.logits(x)
         x = x.view((-1, 256, *self.config.frame_shape))
-
+        #todo: add argmax on dim=1
         return x, reward_pred, value_pred

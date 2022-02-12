@@ -9,8 +9,10 @@ from torch.nn.utils import clip_grad_norm_
 from tqdm import trange
 
 from src.common import Params
+from src.env import EnvWrapper
 from src.model import NextFramePredictor
-from .BaseTrainer import BaseTrainer
+from src.trainer.BaseTrainer import BaseTrainer
+from src.trainer.Policies import OptimalAction
 
 
 class EnvModelTrainer(BaseTrainer):
@@ -111,7 +113,7 @@ class EnvModelTrainer(BaseTrainer):
             state = state * noise_mask + torch.median(state) * (1 - noise_mask)
             return state
 
-        self.model.train()
+        self.env_model.train()
         reward_criterion = nn.MSELoss()
 
         iterator = trange(
@@ -143,7 +145,7 @@ class EnvModelTrainer(BaseTrainer):
             losses = torch.empty((rollout_len, n_losses))
 
             if self.config.stack_internal_states:
-                self.model.init_internal_states(self.config.batch_size)
+                self.env_model.init_internal_states(self.config.batch_size)
 
             actual_states = []
             predicted_frames = []
@@ -168,7 +170,7 @@ class EnvModelTrainer(BaseTrainer):
                     values[k] = env.buffer[indices[k] + j][5]
 
                 new_states_input = new_states.float() / 255
-                frames_pred, reward_pred, values_pred = self.model(
+                frames_pred, reward_pred, values_pred = self.env_model(
                     frames, actions, new_states_input, epsilon
                 )
 
@@ -204,12 +206,12 @@ class EnvModelTrainer(BaseTrainer):
                 loss = loss_reconstruct + loss_value + loss_reward
 
                 if self.config.use_stochastic_model:
-                    loss_lstm = self.model.stochastic_model.get_lstm_loss()
+                    loss_lstm = self.env_model.stochastic_model.get_lstm_loss()
                     loss = loss + loss_lstm
 
                 self.optimizer.zero_grad()
                 loss.backward()
-                clip_grad_norm_(self.model.parameters(),
+                clip_grad_norm_(self.env_model.parameters(),
                                 self.config.clip_grad_norm)
                 self.optimizer.step()
 
@@ -244,7 +246,7 @@ class EnvModelTrainer(BaseTrainer):
 
         empty_cache()
         if self.config.save_models:
-            torch.save(self.model.state_dict(), os.path.join(
+            torch.save(self.env_model.state_dict(), os.path.join(
                 self.config.LOG_DIR, "env_model.pt"))
 
     def collect_trajectories(self, policy):
@@ -289,3 +291,17 @@ class EnvModelTrainer(BaseTrainer):
                 observation, _, done, _ = self.real_env.step(action_dict)
                 if done["__all__"]:
                     break
+
+
+if __name__ == "__main__":
+    params = Params()
+    # uncomment the following 2 lines to train the model free
+    # trainer = ModelFreeTrainer(ModelFree, PpoWrapper, EnvWrapper, params)
+    # trainer.train()
+    trainer = EnvModelTrainer(NextFramePredictor, EnvWrapper, params)
+    epochs = 3000
+    for step in trange(epochs, desc="Training env model"):
+        trainer.collect_trajectories(OptimalAction)
+        trainer.train(step, trainer.real_env)
+
+    trainer.train()

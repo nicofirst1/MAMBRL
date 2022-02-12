@@ -62,7 +62,7 @@ class Params:
     stack_internal_states = True
     recurrent_state_size = 64
     hidden_size = 96
-    compress_steps = 5
+    compress_steps = 2
     filter_double_steps = 3
     hidden_layers = 2
     bottleneck_bits = 128
