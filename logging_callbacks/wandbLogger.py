@@ -11,7 +11,7 @@ from torch import nn
 from common import Params
 from logging_callbacks.callbacks import WandbLogger
 from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
-from src.ppo.RolloutStorage import RolloutStorage
+from src.agent.RolloutStorage import RolloutStorage
 
 params = Params()
 
@@ -300,7 +300,7 @@ def preprocess_logs(learn_output, ppo_wrapper):
     tbl.add_data("reward_step", reward_step_strategy,
                  strat["reward_step_strategy"][reward_step_strategy])
     tbl.add_data("reward_collision", reward_collision_strategy,
-                strat["reward_collision_strategy"][reward_collision_strategy])
+                 strat["reward_collision_strategy"][reward_collision_strategy])
     tbl.add_data("landmark_reset", landmark_reset_strategy,
                  strat["landmark_reset_strategy"][landmark_reset_strategy])
     tbl.add_data("landmark_collision", landmark_collision_strategy,

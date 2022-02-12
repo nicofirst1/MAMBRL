@@ -11,8 +11,27 @@ from ..model.ModelFree import ModelFree
 
 
 class PpoWrapper:
-    def __init__(self, env, config: Params):
+    """PpoWrapper class.
 
+    wrapper for the PPO agent. It allows to train a ppo agent
+    """
+
+    def __init__(self, env, model: ModelFree, config: Params):
+        """__init__ method.
+
+        Parameters
+        ----------
+        env : env class
+            one of the env classes defined in the src.env directory
+        model : ModelFree class
+            one of the ModelFree classes defined in the src.model directory
+        config : Params
+            instance of the class Params defined in src.common.Params
+
+        Returns
+        -------
+        None.
+        """
         self.env = env
         self.obs_shape = env.obs_shape
         self.action_space = env.action_space
@@ -31,7 +50,7 @@ class PpoWrapper:
         self.base_hidden_size = config.base_hidden_size
 
         self.actor_critic_dict = {
-            agent_id: ModelFree(**policy_configs).to(self.device) for agent_id in self.env.agents
+            agent_id: model(**policy_configs).to(self.device) for agent_id in self.env.agents
         }
 
         self.ppo_agent = PPO(
@@ -128,17 +147,20 @@ class PpoWrapper:
             # =============================================================================
             for episode in range(self.num_episodes):
                 observation = self.env.reset()
-                rollout.states[episode * self.num_steps] = observation.unsqueeze(dim=0)
+                rollout.states[episode *
+                               self.num_steps] = observation.unsqueeze(dim=0)
 
                 for step in range(self.num_steps):
                     obs = observation.to(self.device).unsqueeze(dim=0)
-                    guided_learning = {agent_id: False for agent_id in self.env.agents}
+                    guided_learning = {
+                        agent_id: False for agent_id in self.env.agents}
 
                     for agent_id in self.env.agents:
                         # perform guided learning with scheduler
                         # todo: remove optimal end generalize with policy
                         if self.guided_learning_prob > random.uniform(0, 1):
-                            action, action_log_prob = self.env.optimal_action(agent_id)
+                            action, action_log_prob = self.env.optimal_action(
+                                agent_id)
                             guided_learning[agent_id] = True
                             value = -1
                         else:
@@ -156,7 +178,8 @@ class PpoWrapper:
                         #recurrent_hs_dict[agent_id] = recurrent_hs[0]
 
                     # fixme: questo con multi agent non funziona, bisogna capire come impostarlo
-                    observation, rewards, done, infos = self.env.step(action_dict)
+                    observation, rewards, done, infos = self.env.step(
+                        action_dict)
 
                     # if guided then use actual reward as predicted value
                     for agent_id, b in guided_learning.items():
@@ -164,12 +187,14 @@ class PpoWrapper:
                             values_dict[agent_id] = rewards[agent_id]
 
                     # FIXME mask dovrebbe avere un valore per ogni agente
-                    masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
+                    masks = (~torch.tensor(
+                        done["__all__"])).float().unsqueeze(0)
                     rewards = mas_dict2tensor(rewards, float)
                     actions = mas_dict2tensor(action_dict, int)
                     values = mas_dict2tensor(values_dict, float)
                     #recurrent_hs = mas_dict2tensor(recurrent_hs_dict, list)
-                    action_log_probs_list = [elem.unsqueeze(dim=0) for _, elem in action_log_dict.items()]
+                    action_log_probs_list = [elem.unsqueeze(
+                        dim=0) for _, elem in action_log_dict.items()]
                     action_log_probs = torch.cat(action_log_probs_list, 0)
 
                     rollout.insert(
@@ -195,11 +220,14 @@ class PpoWrapper:
 
             self.ppo_agent.train()
             with torch.enable_grad():
-                value_loss, action_loss, entropy = self.ppo_agent.update(rollout, logs)
+                value_loss, action_loss, entropy = self.ppo_agent.update(
+                    rollout, logs)
 
             if self.use_wandb:
-                logs = preprocess_logs([value_loss, action_loss, entropy, logs], self)
-                self.logger.on_batch_end(logs=logs, batch_id=epoch, rollout=rollout)
+                logs = preprocess_logs(
+                    [value_loss, action_loss, entropy, logs], self)
+                self.logger.on_batch_end(
+                    logs=logs, batch_id=epoch, rollout=rollout)
 
             rollout.after_update()
 
