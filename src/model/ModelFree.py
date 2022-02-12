@@ -467,7 +467,7 @@ class Conv2DModelFree(nn.Module):
         inputs = inputs / 255.
         if self.share_weights:
             x = self.feature_extractor.forward(inputs, masks)
-            return self.critic(x), self.actor(x)
+            return self.actor(x), self.critic(x)
         else:
             x = self.feature_extractor_critic.forward(inputs, masks)
             value = self.critic(x)

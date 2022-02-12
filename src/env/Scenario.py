@@ -315,15 +315,16 @@ class CollectLandmarkScenario(BaseScenario):
         for agent in world.agents:
             agent.color = np.array([0, 0, 1])
             while collide:
-                # agent.state.p_pos = self.np_random.uniform(
-                #     -world.max_size + eta,
-                #     world.max_size - eta,
-                #     world.dim_p)
-                length = np.sqrt(np.random.uniform(0, 1))
-                angle = np.pi * np.random.uniform(0, 2)
-                x = length * np.cos(angle)
-                y = length * np.sin(angle)
-                agent.state.p_pos = np.array([x, y])
+                agent.state.p_pos = self.np_random.uniform(
+                    -world.max_size + eta,
+                    world.max_size - eta,
+                    world.dim_p
+                )
+                # length = np.sqrt(np.random.uniform(0, 1))
+                # angle = np.pi * np.random.uniform(0, 2)
+                # x = length * np.cos(angle)
+                # y = length * np.sin(angle)
+                # agent.state.p_pos = np.array([x, y])
 
                 collide = any([is_collision(agent, land) for land in self.landmarks.values()])
 

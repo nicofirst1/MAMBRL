@@ -144,18 +144,17 @@ class PPOWandb(WandbLogger):
         logs["epoch"] = batch_id
 
         if batch_id % self.log_behavior_step == 0:
-            done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
-
-            if len(done_idx) > 1:
-                done_idx = done_idx[0]
+            # done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
+            #
+            # if len(done_idx) > 1:
+            #     done_idx = done_idx[0]
 
             states = (
-                rollout.states[:done_idx][:, -3:, :,
-                :].cpu().numpy().astype(np.uint8)
+                rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
             )
 
-            actions = rollout.actions[:done_idx].squeeze().cpu().numpy()
-            rewards = rollout.rewards[:done_idx].squeeze().cpu().numpy()
+            actions = rollout.actions[:rollout.step].squeeze().cpu().numpy()
+            rewards = rollout.rewards[:rollout.step].squeeze().cpu().numpy()
 
             grids = write_infos(states, rollout, self.params.action_meanings)
 
@@ -164,12 +163,13 @@ class PPOWandb(WandbLogger):
             logs["hist/actions"] = actions
             logs["hist/rewards"] = rewards
             logs["mean_reward"] = rewards.mean()
-            logs["episode_length"] = done_idx
+            logs["episode_length"] = rollout.step
 
         if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
 
             # map heatmap on image
-            idx = random.choice(range(done_idx))
+            #idx = random.choice(range(done_idx))
+            idx = rollout.step
             img = rollout.states[idx]
             reprs = []
             for c in self.cams:
