@@ -1,13 +1,16 @@
+import keyboard
 import torch
+
 from rich.progress import track
 from tqdm import trange
-import keyboard
 
+from src.agent.PpoWrapper import PpoWrapper
 from src.common import Params
 from src.env import get_env, EnvWrapper
-from src.model import EnvModelTrainer, NextFramePredictor
-from src.ppo.PpoWrapper import PpoWrapper
-from src.train.Policies import OptimalAction
+from src.model import NextFramePredictor
+from src.model.ModelFree import ModelFree
+from src.trainer.EnvModelTrainer import EnvModelTrainer
+from src.trainer.Policies import OptimalAction
 
 params = Params()
 
@@ -43,13 +46,13 @@ class MAMBRL:
         self.env_model = NextFramePredictor(config)
         self.env_model = self.env_model.to(self.config.device)
 
-        self.trainer = EnvModelTrainer(self.env_model, config)
+        self.trainer = EnvModelTrainer(self.env_model, self.real_env, config)
 
         # fixme: anche qua bisogna capire se ne serve uno o uno per ogni agente
         self.simulated_env = None
         # self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
 
-        self.ppo_wrapper = PpoWrapper(env=self.real_env, config=config)
+        self.ppo_wrapper = PpoWrapper(env=self.real_env, model=ModelFree, config=config)
 
     def collect_trajectories(self):
         # FIXME: perché settiamo di nuovo l'env del PPOWrapper, non dovrebbe già
@@ -103,7 +106,6 @@ class MAMBRL:
             self.trainer.train(step, self.real_env)
 
     def train_model_free(self):
-
         # self.real_env.set_strategy(reward_step_strategy="positive_distance")
         self.real_env.set_strategy(**self.config.strategy)
         self.ppo_wrapper.set_env(self.real_env)
