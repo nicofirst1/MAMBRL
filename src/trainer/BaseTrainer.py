@@ -18,10 +18,7 @@ class BaseTrainer:
         # visible,
         # scenario_kwargs = step_reward, landmark_reward, landmark_penalty,
         # border_penalty, num_agents, num_landmarks, max_size
-        self.real_env = env(
-            env=get_env(self.config.get_env_configs()),
-            **wrapper_configs,
-        )
+        self.real_env = env
 
         self.obs_shape = self.real_env.obs_shape
         self.action_space = self.real_env.action_space

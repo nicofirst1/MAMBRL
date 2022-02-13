@@ -2,7 +2,6 @@ import os
 
 import torch
 import torch.nn as nn
-from tqdm import trange
 from torch import optim
 from torch.cuda import empty_cache
 from torch.nn.utils import clip_grad_norm_
@@ -36,7 +35,7 @@ class EnvModelTrainer(BaseTrainer):
         super(EnvModelTrainer, self).__init__(env, config)
 
         # fixme: per ora c'è solo un env_model, bisogna capire come gestire il multi agent
-        self.env_model = model(config)
+        self.env_model = model
         self.env_model = self.env_model.to(self.config.device)
 
         self.config = config
