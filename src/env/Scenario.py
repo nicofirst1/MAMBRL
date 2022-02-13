@@ -109,13 +109,18 @@ class CollectLandmarkScenario(BaseScenario):
         self.np_random = np_random
         self.step_reward = step_reward
 
+        self.agent_position_strategy = "fixed"
         self.reward_step_strategy = "simple"
         self.reward_collision_strategy = "simple"
         self.landmark_reset_strategy = "simple"
         self.landmark_collision_strategy = "stay"
         self.avoid_borders = True
 
+        self.agents_pos = {}
+        self.landmarks_pos = {}
+
     def set_strategy(self,
+            agent_position_strategy: str = "fixed",
             reward_step_strategy: str = "simple",
             reward_collision_strategy: str = "simple",
             landmark_reset_strategy: str = "simple",
@@ -174,6 +179,7 @@ class CollectLandmarkScenario(BaseScenario):
 
         """
 
+        self.agent_position_strategy = agent_position_strategy
         self.reward_step_strategy = reward_step_strategy
         self.reward_collision_strategy = reward_collision_strategy
         self.landmark_reset_strategy = landmark_reset_strategy
@@ -219,6 +225,7 @@ class CollectLandmarkScenario(BaseScenario):
             agent.accel = 4.0
             agent.max_speed = 1.3
             agent.color = np.array([0, 0, 1])
+            self.agents_pos[agent] = None if agents_positions is None else agents_positions[i]
 
         ## todo: handle agents_position as it is done for landmarks
 
@@ -236,11 +243,10 @@ class CollectLandmarkScenario(BaseScenario):
             landmark.collide = False
             landmark.movable = False
             landmark.boundary = False
-            landmark_pos[landmark.name] = \
+            self.landmarks_pos[landmark.name] = \
                 landmark.get_random_pos(world) if landmarks_positions is None else landmarks_positions[i]
 
         self.landmarks = {landmark.name: landmark for landmark in world.landmarks}
-        self.landmark_pos = landmark_pos
 
         return world
 
@@ -297,11 +303,11 @@ class CollectLandmarkScenario(BaseScenario):
                 world.landmarks.append(landmark)
 
             if self.landmark_reset_strategy == "simple":
-                landmark.reset(world, position=self.landmark_pos[land_id], size=self.landmark_size)
+                landmark.reset(world, position=self.landmarks_pos[land_id], size=self.landmark_size)
             elif self.landmark_reset_strategy == "random_pos":
                 landmark.reset(world, size=self.landmark_size)
             elif self.landmark_reset_strategy == "random_size":
-                    landmark.reset(world, position=self.landmark_pos[land_id])
+                    landmark.reset(world, position=self.landmarks_pos[land_id])
             elif self.landmark_reset_strategy == "fully_random":
                     landmark.reset(world)
             else:
@@ -314,22 +320,26 @@ class CollectLandmarkScenario(BaseScenario):
         # set random initial states
         for agent in world.agents:
             agent.color = np.array([0, 0, 1])
-            while collide:
-                agent.state.p_pos = self.np_random.uniform(
-                    -world.max_size + eta,
-                    world.max_size - eta,
-                    world.dim_p
-                )
-                # length = np.sqrt(np.random.uniform(0, 1))
-                # angle = np.pi * np.random.uniform(0, 2)
-                # x = length * np.cos(angle)
-                # y = length * np.sin(angle)
-                # agent.state.p_pos = np.array([x, y])
 
-                collide = any([is_collision(agent, land) for land in self.landmarks.values()])
+            if self.agent_position_strategy == "fixed":
+                agent.state.p_pos = np.array(self.agents_pos[agent])
+            elif self.agent_position_strategy == "random":
+                while collide:
+                    agent.state.p_pos = self.np_random.uniform(
+                        -world.max_size + eta,
+                        world.max_size - eta,
+                        world.dim_p
+                    )
+                    # length = np.sqrt(np.random.uniform(0, 1))
+                    # angle = np.pi * np.random.uniform(0, 2)
+                    # x = length * np.cos(angle)
+                    # y = length * np.sin(angle)
+                    # agent.state.p_pos = np.array([x, y])
 
-            agent.state.p_vel = np.zeros(world.dim_p)
+                    collide = any([is_collision(agent, land) for land in self.landmarks.values()])
+
             agent.state.c = np.zeros(world.dim_c)
+            agent.state.p_vel = np.zeros(world.dim_p)
 
     # return all agents that are not adversaries
     @staticmethod

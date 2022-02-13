@@ -21,14 +21,14 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
     TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
     MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
-    MODEL_FREE_LOGGER_FILE = os.path.join(
-        MODEL_FREE_LOG_DIR, "model_free_log.log")
+    MODEL_FREE_LOGGER_FILE = os.path.join(MODEL_FREE_LOG_DIR, "model_free_log.log")
 
     # =============================================================================
     # TRAINING
     # =============================================================================
     debug = False
     use_wandb = False
+    visible = False
     device = torch.device("cuda")
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description
@@ -137,16 +137,15 @@ class Params:
     episodes = 3   # 3
     horizon = 100    # 100
     landmarks_positions = np.array([[0.0, -1.0], [0.0, 1.0]])  # None
-    agents_positions = None  # np.array([[0.0, 0.0]])
+    agents_positions = np.array([[0.0, 0.0]])  # np.array([[0.0, 0.0]])
     env_name = "collab_nav"
     model_name = f"{env_name}_model"
     obs_type = "image"  # or "states"
-    num_frames = 4
+    num_frames = 1
     num_steps = horizon // num_frames
     gray_scale = False
     normalize_reward = True
     world_max_size = 3
-    visible = False
     max_landmark_counter = 4
     landmark_penalty = -0.01  # -0.01   # -1
     border_penalty = -0.1
@@ -166,6 +165,9 @@ class Params:
 
     ## STRATEGIES ##
     possible_strategies = dict(
+        agent_positions_strategies=[
+            "fixed", "random"
+        ],
         reward_step_strategies=[
             "simple", "time_penalty", "positive_distance", "negative_distance"
         ],
@@ -180,6 +182,7 @@ class Params:
         ]
     )
 
+    agent_position_stategy = "fixed"
     reward_step_strategy = "simple"
     reward_collision_strategy = "change_landmark"
     landmark_reset_strategy = "simple"
@@ -205,6 +208,7 @@ class Params:
             self.frame_shape[0] * self.num_frames, *self.frame_shape[1:])
 
         self.strategy = dict(
+            agent_position_strategy=self.agent_position_stategy,
             reward_step_strategy=self.reward_step_strategy,
             reward_collision_strategy=self.reward_collision_strategy,
             landmark_reset_strategy=self.landmark_reset_strategy,
@@ -335,6 +339,10 @@ class Params:
         )
 
     def check_parameters(self):
+        assert self.agent_position_stategy in self.possible_strategies["agent_positions_strategies"], \
+            f"Agent stategy '{self.agent_position_stategy}' is not valid.\n" \
+            f"Valid options are {self.possible_strategies['agent_positions_strategies']}"
+
         assert self.reward_step_strategy in self.possible_strategies["reward_step_strategies"], \
             f"Reward step strategy '{self.reward_step_strategy}' is not valid." \
             f"\nValid options are {self.possible_strategies['reward_step_strategies']}"

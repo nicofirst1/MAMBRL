@@ -2,7 +2,6 @@ import os
 
 import torch
 import torch.nn as nn
-from rich.progress import track
 from torch import optim
 from torch.cuda import empty_cache
 from torch.nn.utils import clip_grad_norm_
@@ -13,7 +12,7 @@ from src.model import NextFramePredictor
 
 
 class EnvModelTrainer:
-    def __init__(self, model: NextFramePredictor, config : Params):
+    def __init__(self, model: NextFramePredictor, config: Params):
         self.model = model
         self.config = config
 
