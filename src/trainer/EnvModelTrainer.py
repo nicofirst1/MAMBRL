@@ -8,7 +8,7 @@ from torch.nn.utils import clip_grad_norm_
 from tqdm import trange
 
 from src.common import Params
-from src.env import EnvWrapper
+from src.env.EnvWrapper import get_env_wrapper
 from src.model import NextFramePredictor
 from src.trainer.BaseTrainer import BaseTrainer
 from src.trainer.Policies import OptimalAction
@@ -21,7 +21,7 @@ class EnvModelTrainer(BaseTrainer):
         Parameters
         ----------
         model : NextFramePredictor
-            model in src.model.EnvModel 
+            model in src.model.EnvModel
         env : env class
             one of the env classes defined in the src.env directory
         config : Params
@@ -34,8 +34,11 @@ class EnvModelTrainer(BaseTrainer):
         """
         super(EnvModelTrainer, self).__init__(env, config)
 
+        self.policy= OptimalAction(self.cur_env, config.num_actions, config.device)
+
+
         # fixme: per ora c'è solo un env_model, bisogna capire come gestire il multi agent
-        self.env_model = model
+        self.env_model = model(config)
         self.env_model = self.env_model.to(self.config.device)
 
         self.config = config
@@ -174,7 +177,6 @@ class EnvModelTrainer(BaseTrainer):
                 )
 
                 actual_states.append(new_states[0].detach().cpu())
-                # todo: why argmax?
                 predicted_frames.append(torch.argmax(
                     frames_pred[0], dim=0).detach().cpu())
 
@@ -248,59 +250,14 @@ class EnvModelTrainer(BaseTrainer):
             torch.save(self.env_model.state_dict(), os.path.join(
                 self.config.LOG_DIR, "env_model.pt"))
 
-    def collect_trajectories(self, policy):
-        """collect_trajectories method.
-
-        collect trajectories given a policy
-        Parameters
-        ----------
-        policy : 
-            policy should have a act method
-        Returns
-        -------
-        None.
-
-        """
-        agent = policy(
-            self.real_env, self.config.num_actions, self.config.device)
-        # fixme: qui impostasto sempre con doppio ciclo, ma l'altro codice usa un ciclo solo!
-        for _ in trange(self.config.episodes, desc="Collecting trajectories.."):
-            # init dicts and reset env
-            action_dict = {
-                agent_id: False for agent_id in self.real_env.agents}
-            done = {agent_id: False for agent_id in self.real_env.env.agents}
-            done["__all__"] = False
-            observation = self.real_env.reset()
-
-            for step in range(self.config.horizon):
-                observation = observation.unsqueeze(
-                    dim=0).to(self.config.device)
-
-                for agent_id in self.real_env.agents:
-                    with torch.no_grad():
-                        action, _, _ = agent.act(
-                            agent_id, observation, full_log_prob=True)
-                        action_dict[agent_id] = action
-
-                    if done[agent_id]:
-                        action_dict[agent_id] = None
-                    if done["__all__"]:
-                        break
-
-                observation, _, done, _ = self.real_env.step(action_dict)
-                if done["__all__"]:
-                    break
-
 
 if __name__ == "__main__":
     params = Params()
-    # uncomment the following 2 lines to train the model free
-    # trainer = ModelFreeTrainer(ModelFree, PpoWrapper, EnvWrapper, params)
-    # trainer.train()
-    trainer = EnvModelTrainer(NextFramePredictor, EnvWrapper, params)
+    env = get_env_wrapper(params)
+
+    trainer = EnvModelTrainer(NextFramePredictor,env, params)
     epochs = 3000
     for step in trange(epochs, desc="Training env model"):
-        trainer.collect_trajectories(OptimalAction)
-        trainer.train(step, trainer.real_env)
+        trainer.collect_trajectories()
+        trainer.train(step, trainer.cur_env)
 
-    trainer.train()

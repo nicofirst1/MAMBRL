@@ -50,7 +50,7 @@ class MAMBRL:
 
         # fixme: anche qua bisogna capire se ne serve uno o uno per ogni agente
         self.simulated_env = None
-        # self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
+        self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
 
         self.ppo_wrapper = PpoWrapper(env=self.real_env, model=ModelFree, config=config)
 
@@ -96,7 +96,7 @@ class MAMBRL:
     def train(self):
         for epoch in trange(self.config.epochs, desc="Epoch"):
             self.collect_trajectories()
-            # self.trainer.train(epoch, self.real_env)
+            self.trainer.train(epoch, self.real_env)
             self.train_agent_sim_env(epoch)
 
     def train_env_model(self):

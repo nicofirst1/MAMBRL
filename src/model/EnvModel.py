@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from scipy.stats import truncnorm
 
+from src.common.utils import one_hot_encode
 from .utils import (
     ActionInjector,
     Container,
@@ -14,7 +15,6 @@ from .utils import (
     sample_with_temperature,
     standardize_frame,
 )
-from src.common.utils import one_hot_encode
 
 
 class RewardEstimator(nn.Module):
@@ -73,7 +73,7 @@ class MiddleNetwork(nn.Module):
 
 class BitsPredictor(nn.Module):
     def __init__(
-        self, config, input_size, state_size, total_number_bits, bits_at_once=8
+            self, config, input_size, state_size, total_number_bits, bits_at_once=8
     ):
         super().__init__()
         self.config = config
@@ -235,6 +235,7 @@ class StochasticModel(nn.Module):
 
 class NextFramePredictor(Container):
     def __init__(self, config):
+        # fixme: remove config and use custom dict
         super().__init__()
         self.config = config
         filters = self.config.hidden_size
@@ -342,6 +343,20 @@ class NextFramePredictor(Container):
         if self.config.stack_internal_states:
             self.init_internal_states(self.config.agents)
 
+    def to(self, device):
+        self.action_injectors = self.action_injectors.to(device)
+        self.downscale_layers = self.downscale_layers.to(device)
+        self.gate = self.gate.to(device)
+        self.input_embedding = self.input_embedding.to(device)
+        self.logits = self.logits.to(device)
+        self.middle_network = self.middle_network.to(device)
+        self.reward_estimator = self.reward_estimator.to(device)
+        self.stochastic_model = self.stochastic_model.to(device)
+        self.upscale_layers = self.upscale_layers.to(device)
+        self.value_estimator = self.value_estimator.to(device)
+
+        return self
+
     def init_internal_states(self, batch_size):
         self.internal_states = torch.zeros(
             (batch_size, self.config.recurrent_state_size, *self.config.obs_shape[1:])
@@ -416,5 +431,4 @@ class NextFramePredictor(Container):
 
         x = self.logits(x)
         x = x.view((-1, 256, *self.config.frame_shape))
-        #todo: add argmax on dim=1
         return x, reward_pred, value_pred
