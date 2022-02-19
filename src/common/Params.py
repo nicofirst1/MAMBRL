@@ -42,6 +42,8 @@ class Params:
     # number of elements on which the algorithm performs a learning step
     minibatch = 32  # 64
     batch_size = 4
+    # number of future frames that the EnvModel will predict
+    future_frame_horizon = 3
     framework = "torch"
 
     # =============================================================================
@@ -109,7 +111,6 @@ class Params:
     # A single conv layer is a 3-ple (Channel_out, kernel_size, stride)
     # Conv3D kernel_size and stride can be int or a 3-ple
     # NOTE: for a single element tuple use the comma, e.g conv_layers = (list1,)
-
     # conv_layers = ([(64, (2, 3, 3), 1), (64, (1, 3, 3), 1), (32, 2, 1)],)
 
     # Conv2D kernel_size and stride can be int or a 2-ple
@@ -129,10 +130,22 @@ class Params:
     base_hidden_size = 64
 
     # =============================================================================
+    # ROLLOUT ENCODER NETWORK PARAMETERS
+    # =============================================================================
+    # conv_layers are defined as the model free conv layers.
+    re_conv_layers = (
+        [(16, 3, 1), (16, 3, 2)]
+    )
+    # hidden size of the recurrent layer
+    re_recurrent_layers = 256
+
+    # =============================================================================
     # ENVIRONMENT
     # =============================================================================
     agents = 1
     landmarks = 2
+    # len_reward is 1 since we are using continuous reward
+    len_reward = 1
     step_reward = -0.01
     landmark_reward = 2
     episodes = 3   # 3
@@ -337,6 +350,14 @@ class Params:
             num_stacked_frames=self.num_frames,
             device=self.device,
             gamma=self.gamma,
+        )
+
+    def get_rollout_encoder_configs(self):
+        return dict(
+            in_shape=self.frame_shape,
+            len_rewards=self.len_reward,
+            conv_layers=self.re_conv_layers,
+            hidden_size=self.re_recurrent_layers
         )
 
     def check_parameters(self):

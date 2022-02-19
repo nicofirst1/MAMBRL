@@ -8,10 +8,10 @@ import wandb
 from PIL import Image, ImageDraw, ImageFont
 from torch import nn
 
-from common import Params
 from logging_callbacks.callbacks import WandbLogger
 from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
 from src.agent.RolloutStorage import RolloutStorage
+from src.common import Params
 
 params = Params()
 
@@ -293,7 +293,7 @@ def preprocess_logs(learn_output, ppo_wrapper):
 
     strat = params.get_descriptive_strategy()
     reward_step_strategy, reward_collision_strategy, \
-        landmark_reset_strategy, landmark_collision_strategy = ppo_wrapper.env.get_current_strategy()
+        landmark_reset_strategy, landmark_collision_strategy = ppo_wrapper.cur_env.get_current_strategy()
 
     tbl = wandb.Table(columns=["list", "current strategy", "description"])
 

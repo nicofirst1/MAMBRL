@@ -1,8 +1,9 @@
+from typing import Tuple
+
 import torch
 
-from typing import Tuple
-from .NavEnv import NavEnv
 from src.common.utils import one_hot_encode
+from .NavEnv import NavEnv, get_env
 
 
 class EnvWrapper:
@@ -13,7 +14,7 @@ class EnvWrapper:
     """
 
     def __init__(
-        self, env: NavEnv, frame_shape, num_stacked_frames, device, gamma
+            self, env: NavEnv, frame_shape, num_stacked_frames, device, gamma
     ):
 
         self.env = env
@@ -110,3 +111,20 @@ class EnvWrapper:
         new_obs = new_obs.squeeze().byte().cpu()
         done = torch.tensor(done, dtype=torch.uint8).cpu()
         self.buffer.append([current_obs, action, reward, new_obs, done, None])
+
+
+def get_env_wrapper(params):
+    """
+    Initialize env wrapper and set strategies
+    @param params:
+    @return: EnvWrapper
+    """
+    wrapper_configs = params.get_env_wrapper_configs()
+
+    env = EnvWrapper(
+        env=get_env(params.get_env_configs()),
+        **wrapper_configs,
+    )
+    env.set_strategy(**params.strategy)
+
+    return env

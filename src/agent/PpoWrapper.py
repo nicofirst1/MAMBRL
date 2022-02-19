@@ -78,7 +78,7 @@ class PpoWrapper:
                 opts={},
                 models=self.actor_critic_dict["agent_0"].get_modules(),
                 horizon=config.horizon,
-                action_meaning=self.env.env.action_meaning_dict,
+                action_meaning=self.env.cur_env.action_meaning_dict,
                 cams=cams,
             )
 

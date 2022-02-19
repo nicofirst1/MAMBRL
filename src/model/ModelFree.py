@@ -135,7 +135,7 @@ class ModelFree(nn.Module):
         the values
         Parameters
         ----------
-        input : torch.Tensor
+        inputs : torch.Tensor
         Returns
         -------
             action_logits : a torch tensor of size [batch_size, num_actions]

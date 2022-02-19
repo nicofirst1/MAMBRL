@@ -32,7 +32,7 @@ def user_game(env, config):
     real_env.reset()
     while finish_game is False:
         while True:
-            real_env.env.render()
+            real_env.cur_env.render()
             if keyboard.is_pressed("w"):
                 user_move = 4
                 break
@@ -57,7 +57,7 @@ def user_game(env, config):
                 )
                 if exit_input == "n":
                     finish_game = True
-                    real_env.env.close()
+                    real_env.cur_env.close()
                     break
                 elif exit_input == "y":
                     game_reward = 0
@@ -74,6 +74,6 @@ if __name__ == "__main__":
     epochs = 3000
     for step in trange(epochs, desc="Training env model"):
         trainer.collect_trajectories(OptimalAction)
-        trainer.train(step, trainer.real_env)
+        trainer.train(step, trainer.cur_env)
 
     trainer.train()

@@ -103,30 +103,14 @@ class EpsilonGreedy(TrajCollectionPolicy):
 
 class MultimodalMAS(TrajCollectionPolicy):
 
-    def __init__(self, ac_dict, cr_dict=None, share_weights=True):
-        self.share_weights = share_weights
-        if self.share_weights:
-            self.ac_dict = ac_dict
-        else:
-            assert cr_dict is not None, f"{cr_dict} is invalid. You need to specify a valid model for the critic"
-            self.ac_dict = ac_dict
-            self.cr_dict = cr_dict
+    def __init__(self, ac_dict):
+        self.ac_dict = ac_dict
+
 
     def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, float, torch.Tensor]:
 
-        if self.share_weights:
-            action_logit, value_logit = self.ac_dict[agent_id](observation)
-        else:
-            action_logit = self.ac_dict[agent_id](observation)
-            value_logit = self.cr_dict[agent_id](observation)
-
-        action_probs = F.softmax(action_logit, dim=1)
-        action = action_probs.multinomial(1)
-
-        log_actions_prob = F.log_softmax(action_logit, dim=1).squeeze()
-
-        value = float(value_logit)
-        action = int(action)
+        masks=torch.ones(1).to(observation.device)
+        value, action, log_actions_prob= self.ac_dict[agent_id].act(observation, masks)
 
         return action, value, log_actions_prob
 
@@ -138,8 +122,7 @@ class OptimalAction(TrajCollectionPolicy):
         self.num_actions = num_actions
 
     def act(
-            self, agent_id: str, observation: torch.Tensor, full_log_prob: bool
-    ) -> Tuple[int, int, torch.Tensor]:
+            self, agent_id: str, observation: torch.Tensor) -> Tuple[int, int, torch.Tensor]:
         action, _ = self.env.optimal_action(agent_id)
         value = 0
         action_probs = torch.ones(self.num_actions)
