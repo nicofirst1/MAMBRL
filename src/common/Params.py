@@ -33,7 +33,8 @@ class Params:
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description
     guided_learning_prob = 0.0
-    epochs = 3000
+    model_free_epochs = 3000
+    env_model_steps = 1000
     env_model_epochs = 4000
     # number of learning iterations that the algorithm does on the same batch
     # of trajectories (trajectories are shuffled at each iteration)

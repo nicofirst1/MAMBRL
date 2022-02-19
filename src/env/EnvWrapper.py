@@ -76,11 +76,12 @@ class EnvWrapper:
 
     def step(self, actions):
         new_obs, rewards, done, infos = self.env.step(actions)
-        self.add_interaction(actions["agent_0"], torch.tensor(rewards["agent_0"]), new_obs, done["__all__"])
-        self.stacked_frames = torch.cat(
-            (self.stacked_frames[self.channel_size:], new_obs), dim=0)
+        if self.train_env:
+            self.add_interaction(actions["agent_0"], torch.tensor(rewards["agent_0"]), new_obs, done["__all__"])
 
-        if done["__all__"]:
+        self.stacked_frames = torch.cat((self.stacked_frames[self.channel_size:], new_obs), dim=0)
+
+        if self.train_env and done["__all__"]:
             value = torch.tensor(0.).to(self.device)
             self.buffer[-1][5] = value
             index = len(self.buffer) - 2
@@ -105,7 +106,6 @@ class EnvWrapper:
             actions = -1
 
         action = one_hot_encode(actions, self.action_space).cpu()
-        # reward = (rewards.squeeze() + 1).byte().cpu() ## fixme: perché c'è il +1?
         reward = (rewards.squeeze() + 1).byte().cpu()
         new_obs = new_obs.squeeze().byte().cpu()
         done = torch.tensor(done, dtype=torch.uint8).cpu()

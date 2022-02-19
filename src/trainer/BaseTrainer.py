@@ -27,7 +27,7 @@ class BaseTrainer:
         self.simulated_env = None
         # self.simulated_env = SimulatedEnvironment(self.real_env, self.env_model, self.action_space, self.config.device)
 
-    def train(self):
+    def train(self, agent):
         raise NotImplementedError("Subclasses should implement this method!!")
 
     def checkpoint(self):

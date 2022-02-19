@@ -147,8 +147,7 @@ class PpoWrapper:
             # =============================================================================
             for episode in range(self.num_episodes):
                 observation = self.env.reset()
-                rollout.states[episode *
-                               self.num_steps] = observation.unsqueeze(dim=0)
+                rollout.states[episode * self.num_steps] = observation.unsqueeze(dim=0)
 
                 for step in range(self.num_steps):
                     obs = observation.to(self.device).unsqueeze(dim=0)
@@ -187,8 +186,7 @@ class PpoWrapper:
                             values_dict[agent_id] = rewards[agent_id]
 
                     # FIXME mask dovrebbe avere un valore per ogni agente
-                    masks = (~torch.tensor(
-                        done["__all__"])).float().unsqueeze(0)
+                    masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
                     rewards = mas_dict2tensor(rewards, float)
                     actions = mas_dict2tensor(action_dict, int)
                     values = mas_dict2tensor(values_dict, float)

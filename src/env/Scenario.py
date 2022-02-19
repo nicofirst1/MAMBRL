@@ -5,9 +5,9 @@ from numpy.random import RandomState
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.core import Agent, Entity, World
 from PettingZoo.pettingzoo.mpe._mpe_utils.scenario import BaseScenario
+from common.utils import is_collision_border
 from src.common import is_collision, get_distance
 from .TimerLandmark import TimerLandmark
-from ..common.utils import is_collision_border
 
 
 class Border(Entity):
@@ -237,7 +237,6 @@ class CollectLandmarkScenario(BaseScenario):
             TimerLandmark(self.np_random) for _ in range(self.num_landmarks)
         ]
 
-        landmark_pos = {}
         for i, landmark in enumerate(world.landmarks):
             landmark.name = f"landmark_{i}"
             landmark.collide = False
