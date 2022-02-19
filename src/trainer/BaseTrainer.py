@@ -72,7 +72,7 @@ class BaseTrainer:
                 if done["__all__"]:
                     break
 
-    def train(self, agent):
+    def train(self):
         raise NotImplementedError("Subclasses should implement this method!!")
 
     def checkpoint(self):

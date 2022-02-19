@@ -77,23 +77,22 @@ class EnvWrapper:
 
     def step(self, actions):
         new_obs, rewards, done, infos = self.env.step(actions)
-        if self.train_env:
-            self.add_interaction(actions["agent_0"], torch.tensor(rewards["agent_0"]), new_obs, done["__all__"])
+        #self.add_interaction(actions["agent_0"], torch.tensor(rewards["agent_0"]), new_obs, done["__all__"])
 
         self.stacked_frames = torch.cat((self.stacked_frames[self.channel_size:], new_obs), dim=0)
 
-        if self.train_env and done["__all__"]:
-            value = torch.tensor(0.).to(self.device)
-            self.buffer[-1][5] = value
-            index = len(self.buffer) - 2
-            while reversed(range(len(self.buffer) - 1)):
-                # value = (self.buffer[index][2] - 1).to(self.device) + 0.998 * value
-                value = self.buffer[index][2] + self.gamma * value
-                self.buffer[index][5] = value
-                index -= 1
-
-                if self.buffer[index][4] == 1:
-                    break
+        # if done["__all__"]:
+        #     value = torch.tensor(0.).to(self.device)
+        #     self.buffer[-1][5] = value
+        #     index = len(self.buffer) - 2
+        #     while reversed(range(len(self.buffer) - 1)):
+        #         # value = (self.buffer[index][2] - 1).to(self.device) + 0.998 * value
+        #         value = self.buffer[index][2] + self.gamma * value
+        #         self.buffer[index][5] = value
+        #         index -= 1
+        #
+        #         if self.buffer[index][4] == 1:
+        #             break
 
         return self.stacked_frames, rewards, done, infos
 

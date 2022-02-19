@@ -6,13 +6,12 @@ class RolloutStorage(object):
         self.num_channels = obs_shape[0]
         self.num_actions = num_actions
 
-        # todo: togli stati RNN
-        self.states = torch.zeros(num_steps + 1, *obs_shape)
-        self.next_state = torch.zeros(num_steps, *frame_shape)
-        self.rewards = torch.zeros(num_steps, num_agents, 1)
-        self.value_preds = torch.zeros(num_steps + 1, num_agents, 1)
-        self.returns = torch.zeros(num_steps + 1, num_agents, 1)
-        self.actions = torch.zeros(num_steps, num_agents, 1).long()
+        self.states = torch.zeros(num_steps + 1, *obs_shape, dtype=torch.uint8)
+        self.next_state = torch.zeros(num_steps, *frame_shape, dtype=torch.uint8)
+        self.rewards = torch.zeros(num_steps, num_agents, 1, dtype=torch.float32)
+        self.value_preds = torch.zeros(num_steps + 1, num_agents, 1, dtype=torch.float32)
+        self.returns = torch.zeros(num_steps + 1, num_agents, 1, dtype=torch.float32)
+        self.actions = torch.zeros(num_steps, num_agents, 1, dtype=torch.uint8)
         self.action_log_probs = torch.zeros(num_steps, num_agents, num_actions)
         self.masks = torch.ones(num_steps + 1, 1)
 
@@ -26,12 +25,18 @@ class RolloutStorage(object):
         self.action_log_probs = self.action_log_probs.to(device)
         self.masks = self.masks.to(device)
 
+    def get(self, index):
+        return self.states[index], self.actions[index], self.rewards[index], \
+               self.next_state[index], self.masks[index], self.value_preds[index]
+
     def insert(self, state, next_state, action, action_log_probs, value_preds, reward, mask):
         self.states[self.step + 1].copy_(state)
         self.next_state[self.step].copy_(next_state)
         self.actions[self.step].copy_(action)
-        self.action_log_probs[self.step].copy_(action_log_probs)
-        self.value_preds[self.step].copy_(value_preds)
+        if action_log_probs is not None:
+            self.action_log_probs[self.step].copy_(action_log_probs)
+        if value_preds is not None:
+            self.value_preds[self.step].copy_(value_preds)
         self.rewards[self.step].copy_(reward)
         self.masks[self.step + 1].copy_(mask)
 
@@ -60,6 +65,15 @@ class RolloutStorage(object):
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = self.returns[step + 1] * \
                     gamma * self.masks[step + 1] + self.rewards[step]
+
+    def compute_value_world_model(self, step, gamma):
+        index = step - 1
+        while reversed(range(self.step)):
+            self.value_preds[index] =  self.rewards[index] + gamma * self.value_preds[index+1]
+            index -= 1
+
+            if not self.masks[index] or index == -1:
+                break
 
     def recurrent_generator(self, advantages, minibatch_frames):
         """
