@@ -18,7 +18,6 @@ class EnvWrapper:
     ):
 
         self.env = env
-        self.buffer = []
         self.gamma = gamma
         self.initial_frame = None
         self.channel_size = frame_shape[0]
@@ -77,40 +76,11 @@ class EnvWrapper:
 
     def step(self, actions):
         new_obs, rewards, done, infos = self.env.step(actions)
-        #self.add_interaction(actions["agent_0"], torch.tensor(rewards["agent_0"]), new_obs, done["__all__"])
-
         self.stacked_frames = torch.cat((self.stacked_frames[self.channel_size:], new_obs), dim=0)
-
-        # if done["__all__"]:
-        #     value = torch.tensor(0.).to(self.device)
-        #     self.buffer[-1][5] = value
-        #     index = len(self.buffer) - 2
-        #     while reversed(range(len(self.buffer) - 1)):
-        #         # value = (self.buffer[index][2] - 1).to(self.device) + 0.998 * value
-        #         value = self.buffer[index][2] + self.gamma * value
-        #         self.buffer[index][5] = value
-        #         index -= 1
-        #
-        #         if self.buffer[index][4] == 1:
-        #             break
-
         return self.stacked_frames, rewards, done, infos
 
     def optimal_action(self, agent):
         return self.env.optimal_action(agent)
-
-    def add_interaction(self, actions, rewards, new_obs, done):
-        current_obs = self.stacked_frames.squeeze().byte().cpu()
-
-        if actions is None:
-            actions = -1
-
-        action = one_hot_encode(actions, self.action_space).cpu()
-        reward = (rewards.squeeze() + 1).byte().cpu()
-        new_obs = new_obs.squeeze().byte().cpu()
-        done = torch.tensor(done, dtype=torch.uint8).cpu()
-        self.buffer.append([current_obs, action, reward, new_obs, done, None])
-
 
 def get_env_wrapper(params):
     """
