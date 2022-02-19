@@ -293,7 +293,7 @@ def preprocess_logs(learn_output, ppo_wrapper):
 
     strat = params.get_descriptive_strategy()
     reward_step_strategy, reward_collision_strategy, \
-        landmark_reset_strategy, landmark_collision_strategy = ppo_wrapper.cur_env.get_current_strategy()
+        landmark_reset_strategy, landmark_collision_strategy = ppo_wrapper.env.get_current_strategy()
 
     tbl = wandb.Table(columns=["list", "current strategy", "description"])
 

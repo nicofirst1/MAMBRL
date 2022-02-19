@@ -11,7 +11,7 @@ class RolloutStorage(object):
         self.rewards = torch.zeros(num_steps, num_agents, 1, dtype=torch.float32)
         self.value_preds = torch.zeros(num_steps + 1, num_agents, 1, dtype=torch.float32)
         self.returns = torch.zeros(num_steps + 1, num_agents, 1, dtype=torch.float32)
-        self.actions = torch.zeros(num_steps, num_agents, 1, dtype=torch.uint8)
+        self.actions = torch.zeros(num_steps, num_agents, 1, dtype=torch.int64)
         self.action_log_probs = torch.zeros(num_steps, num_agents, num_actions)
         self.masks = torch.ones(num_steps + 1, 1)
 
@@ -31,7 +31,8 @@ class RolloutStorage(object):
 
     def insert(self, state, next_state, action, action_log_probs, value_preds, reward, mask):
         self.states[self.step + 1].copy_(state)
-        self.next_state[self.step].copy_(next_state)
+        if next_state is not None:
+            self.next_state[self.step].copy_(next_state)
         self.actions[self.step].copy_(action)
         if action_log_probs is not None:
             self.action_log_probs[self.step].copy_(action_log_probs)

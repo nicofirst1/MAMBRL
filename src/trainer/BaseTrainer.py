@@ -23,7 +23,7 @@ class BaseTrainer:
         # scenario_kwargs = step_reward, landmark_reward, landmark_penalty,
         # border_penalty, num_agents, num_landmarks, max_size
         self.cur_env = env
-
+        self.cur_env.set_strategy(**config.strategy)
         # self.obs_shape = self.real_env.obs_shape
         # self.action_space = self.real_env.action_space
 

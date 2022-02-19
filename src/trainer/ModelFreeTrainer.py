@@ -27,7 +27,6 @@ class ModelFreeTrainer(BaseTrainer):
 
         """
         super(ModelFreeTrainer, self).__init__(env, config)
-
         self.agent = agent(env=self.cur_env, model=model, config=config)
 
     def set_env(self, new_env):
@@ -35,7 +34,7 @@ class ModelFreeTrainer(BaseTrainer):
 
     def train(self):
         self.agent.set_env(self.cur_env)
-        self.agent.learn(epochs=self.config.epochs)
+        self.agent.learn(epochs=self.config.model_free_epochs)
 
     # def checkpoint(self):
     # torch.save({
@@ -52,7 +51,6 @@ class ModelFreeTrainer(BaseTrainer):
 
 if __name__ == '__main__':
     params = Params()
-
     env = get_env_wrapper(params)
 
     trainer = ModelFreeTrainer(ModelFree, PpoWrapper, env, params)

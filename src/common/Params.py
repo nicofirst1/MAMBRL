@@ -196,10 +196,10 @@ class Params:
         ]
     )
 
-    agent_position_stategy = "random"
+    agent_position_stategy = "fixed"
     reward_step_strategy = "simple"
     reward_collision_strategy = "change_landmark"
-    landmark_reset_strategy = "random_pos"
+    landmark_reset_strategy = "simple"
     landmark_collision_strategy = "remove"
     avoid_borders = True
 

@@ -34,6 +34,7 @@ class PpoWrapper:
         """
         self.env = env
         self.obs_shape = env.obs_shape
+        self.frame_shape = config.frame_shape
         self.action_space = env.action_space
         self.num_agents = config.agents
 
@@ -78,7 +79,7 @@ class PpoWrapper:
                 opts={},
                 models=self.actor_critic_dict["agent_0"].get_modules(),
                 horizon=config.horizon,
-                action_meaning=self.env.cur_env.action_meaning_dict,
+                action_meaning=self.env.env.action_meaning_dict,
                 cams=cams,
             )
 
@@ -99,6 +100,7 @@ class PpoWrapper:
     def learn(self, epochs):
         rollout = RolloutStorage(
             num_steps=self.num_steps*self.num_episodes,
+            frame_shape=self.frame_shape,
             obs_shape=self.obs_shape,
             num_actions=self.action_space,
             num_agents=self.num_agents,
@@ -197,7 +199,7 @@ class PpoWrapper:
 
                     rollout.insert(
                         state=observation,
-                        # recurrent_hs=recurrent_hs,
+                        next_state=None,
                         action=actions,
                         action_log_probs=action_log_probs,
                         value_preds=values,

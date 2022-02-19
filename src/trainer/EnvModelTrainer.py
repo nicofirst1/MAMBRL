@@ -137,7 +137,7 @@ class EnvModelTrainer(BaseTrainer):
             )
 
         assert states.dtype == torch.uint8
-        assert actions.dtype == torch.uint8
+        assert actions.dtype == torch.int64
         assert rewards.dtype == torch.float32
         assert new_states.dtype == torch.uint8
         assert values.dtype == torch.float32
@@ -293,7 +293,6 @@ class EnvModelTrainer(BaseTrainer):
 if __name__ == "__main__":
     params = Params()
     env = get_env_wrapper(params)
-    env.set_strategy(**params.strategy)
 
     trainer = EnvModelTrainer(NextFramePredictor, env, params)
     for step in trange(params.env_model_epochs, desc="Training env model"):
