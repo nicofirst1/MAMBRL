@@ -1,14 +1,12 @@
-import math
+from collections import OrderedDict
 from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.transforms import transforms
-from collections import OrderedDict
 
-from src.common import FixedCategorical, init
-from src.common.distributions import Categorical
+from src.common import init
 
 
 def tan_init_weights(m: nn):
@@ -127,6 +125,9 @@ class ModelFree(nn.Module):
     def recurrent_hidden_state_size(self):
         """Size of rnn_hx."""
         return self.base.recurrent_hidden_state_size
+
+    def feature_extraction(self, inputs, masks):
+        return self.base.feature_extractor(inputs, masks)
 
     def forward(self, inputs, masks) -> Tuple[torch.Tensor, torch.Tensor]:
         """forward method.
@@ -445,7 +446,7 @@ class Conv2DModelFree(nn.Module):
 
         return self
 
-    def forward(self,  inputs, masks):
+    def forward(self, inputs, masks):
         """forward method.
 
         Return the logit and the values of the Conv2DModelFree.
@@ -531,6 +532,18 @@ class Conv2DModelFree(nn.Module):
                     {'params': self.critic.parameters()},
                     {'params': self.actor.parameters()}
                     ]
+
+    def feature_extractor(self, inputs, masks):
+        inputs = inputs / 255.
+        if self.share_weights:
+            x = self.feature_extractor.forward(inputs, masks)
+        else:
+            x1 = self.feature_extractor_critic.forward(inputs, masks)
+
+            x2 = self.feature_extractor_actor.forward(inputs, masks)
+            x = torch.cat((x1, x2), dim=-1)
+
+        return x
 
 
 class ResNetBase(NNBase):

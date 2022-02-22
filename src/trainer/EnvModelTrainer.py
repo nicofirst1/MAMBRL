@@ -7,9 +7,8 @@ from torch.cuda import empty_cache
 from torch.nn.utils import clip_grad_norm_
 from tqdm import trange
 
-from agent.RolloutStorage import RolloutStorage
-from common import mas_dict2tensor
-from src.common import Params
+from src.agent.RolloutStorage import RolloutStorage
+from src.common import Params, mas_dict2tensor
 from src.env.EnvWrapper import get_env_wrapper
 from src.model import NextFramePredictor
 from src.trainer.BaseTrainer import BaseTrainer

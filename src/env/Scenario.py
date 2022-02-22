@@ -5,9 +5,9 @@ from numpy.random import RandomState
 
 from PettingZoo.pettingzoo.mpe._mpe_utils.core import Agent, Entity, World
 from PettingZoo.pettingzoo.mpe._mpe_utils.scenario import BaseScenario
-from common.utils import is_collision_border
 from src.common import is_collision, get_distance
 from .TimerLandmark import TimerLandmark
+from ..common.utils import is_collision_border
 
 
 class Border(Entity):
