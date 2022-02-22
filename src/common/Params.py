@@ -34,7 +34,7 @@ class Params:
     # TODO: add description
     guided_learning_prob = 0.0
     model_free_epochs = 3000
-    env_model_steps = 500
+    env_model_steps = 100
     env_model_epochs = 1500
     # number of learning iterations that the algorithm does on the same batch
     # of trajectories (trajectories are shuffled at each iteration)
@@ -45,6 +45,7 @@ class Params:
     # number of future frames that the EnvModel will predict
     future_frame_horizon = 3
     framework = "torch"
+    epochs=10
 
     # =============================================================================
     # MULTIAGENT
@@ -148,7 +149,7 @@ class Params:
     len_reward = 1
     step_reward = -0.01
     landmark_reward = 2
-    episodes = 3   # 3
+    episodes = 1   # 3
     horizon = 128  # 100
     landmarks_positions = np.array([[0.0, -1.0], [0.0, 1.0]])  # None
     agents_positions = np.array([[0.0, 0.0]])  # np.array([[0.0, 0.0]])

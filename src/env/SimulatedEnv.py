@@ -36,6 +36,16 @@ class SimulatedEnvironment:
 
         return self.__dict__[item]
 
+    def get_actions(self, agent, obs):
+
+        if obs.ndim < 4:
+            obs = obs.unsqueeze(dim=0)
+
+        obs = obs.to(self.device)
+        action, _, _ = self.policy.act(agent, obs)
+
+        return action
+
     def step(self, actions):
 
         stacked_frames, rewards, done, infos = self.env.step(actions)
@@ -77,11 +87,11 @@ class SimulatedEnvironment:
             new_action = one_hot_encode(new_action, self.num_actions)
             new_action = new_action.to(self.device).unsqueeze(dim=0)
 
-        pred_obs = torch.stack(pred_obs)/255
+        pred_obs = torch.stack(pred_obs) / 255
         pred_rews = torch.stack(pred_rews)
         features = self.encoder(pred_obs, pred_rews)
 
-        return stacked_frames, rewards, done, {}
+        return stacked_frames, rewards, done, features
 
     def reset(self):
         observation = self.env.reset()
