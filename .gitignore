@@ -12,6 +12,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+### spyder project
+.spyproject
+
 ### Log dir
 log_dir/**
 
