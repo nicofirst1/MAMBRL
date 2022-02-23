@@ -1,9 +1,7 @@
+import torch
 from tqdm import trange
 
-from src.env import get_env
-from rich.progress import track
-import torch
-
+from agent.RolloutStorage import RolloutStorage
 from src.trainer.Policies import TrajCollectionPolicy
 
 
@@ -27,7 +25,7 @@ class BaseTrainer:
         # self.obs_shape = self.real_env.obs_shape
         # self.action_space = self.real_env.action_space
 
-        self.policy= TrajCollectionPolicy()
+        self.policy = TrajCollectionPolicy()
 
     def collect_trajectories(self):
         """collect_trajectories method.
@@ -72,7 +70,7 @@ class BaseTrainer:
                 if done["__all__"]:
                     break
 
-    def train(self):
+    def train(self, rollout: RolloutStorage):
         raise NotImplementedError("Subclasses should implement this method!!")
 
     def checkpoint(self):
