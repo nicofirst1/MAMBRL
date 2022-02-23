@@ -341,7 +341,7 @@ class NextFramePredictor(Container):
         )
 
         if self.config.stack_internal_states:
-            self.init_internal_states(self.config.agents)
+            self.init_internal_states(self.config.batch_size)
 
     def to(self, device):
         self.action_injectors = self.action_injectors.to(device)
