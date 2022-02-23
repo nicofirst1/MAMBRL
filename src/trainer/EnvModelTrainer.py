@@ -1,9 +1,6 @@
-import os
-
 import torch
 import torch.nn as nn
 from torch import optim
-from torch.cuda import empty_cache
 from torch.nn.utils import clip_grad_norm_
 from tqdm import trange
 
@@ -16,32 +13,73 @@ from src.trainer.BaseTrainer import BaseTrainer
 from src.trainer.Policies import OptimalAction
 
 
-class EnvModelContainer():
+def preprocess_state(state, input_noise):
+    state = state.float() / 255
+    noise_prob = torch.tensor([[input_noise, 1 - input_noise]])
+    noise_prob = torch.softmax(torch.log(noise_prob), dim=-1)
+    noise_mask = torch.multinomial(noise_prob, state.numel(), replacement=True).view(state.shape)
+    noise_mask = noise_mask.to(state)
+    state = state * noise_mask + torch.median(state) * (1 - noise_mask)
+    return state
 
-    def __init__(self, model, config):
+
+def get_indices(rollout, batch_size, rollout_len):
+    def get_index():
+        index = -1
+        while index == -1:
+            index = int(torch.randint(rollout.rewards.size(0) - rollout_len, size=(1,)))
+            for i in range(rollout_len):
+                ## fixme: controllo sul value che va rivisto sempre perché non può essere None
+                # if not rollout.masks[index + 1] or rollout.value_preds[index + i] is None:
+                if not rollout.masks[index + 1]:
+                    index = -1
+                    break
+        return index
+
+    return [get_index() for _ in range(batch_size)]
+
+
+class EnvModelContainer:
+    """
+    Container for an env model with its own optimizer
+    it has both the standard trainig loop with loss function and an unsupervised rollout step
+    """
+
+    def __init__(self, agent_id: str, model: NextFramePredictor, config: Params, logging_fn=None):
+        """
+        @param agent_id: the agent id associated with the model
+        @param model: type of model to use
+        @param config:
+        @param logging_fn: the "on_batch_end" function of the envLogger, used to log batches
+        """
+        self.agent_id = agent_id
         self.config = config
-        self.device=config.device
+        self.device = config.device
         self.env_model = model(config)
-        self.to(self.config.device)
+        self.to(self.device)
+        self.logging_fn = logging_fn
+
         self.optimizer = optim.RMSprop(
             self.env_model.parameters(),
             lr=config.lr, eps=config.eps, alpha=config.alpha, )
 
     def to(self, device):
         self.env_model.to(device)
-        self.device=device
+        self.device = device
         return self
 
-
-    def train(self, rollout):
+    def train(self, rollout: RolloutStorage):
+        """
+        Training loop with supervised rollout steps
+        @param rollout:
+        @return:
+        """
         c, h, w = self.config.frame_shape
         rollout_len = self.config.rollout_len
         states, actions, rewards, new_states, _, values = rollout.get(0)
 
         action_shape = self.config.num_actions
-        reward_shape = 1
         new_state_shape = new_states.shape
-        value_shape = 1
 
         ## fixme: nel rollout non può mai verificarsi questa situazione
         if values is None:
@@ -54,30 +92,6 @@ class EnvModelContainer():
         assert rewards.dtype == torch.float32
         assert new_states.dtype == torch.uint8
         assert values.dtype == torch.float32
-
-        def get_index():
-            index = -1
-            while index == -1:
-                index = int(torch.randint(rollout.rewards.size(0) - rollout_len, size=(1,)))
-                for i in range(rollout_len):
-                    ## fixme: controllo sul value che va rivisto sempre perché non può essere None
-                    # if not rollout.masks[index + 1] or rollout.value_preds[index + i] is None:
-                    if not rollout.masks[index + 1]:
-                        index = -1
-                        break
-            return index
-
-        def get_indices():
-            return [get_index() for _ in range(self.config.batch_size)]
-
-        def preprocess_state(state):
-            state = state.float() / 255
-            noise_prob = torch.tensor([[self.config.input_noise, 1 - self.config.input_noise]])
-            noise_prob = torch.softmax(torch.log(noise_prob), dim=-1)
-            noise_mask = torch.multinomial(noise_prob, state.numel(), replacement=True).view(state.shape)
-            noise_mask = noise_mask.to(state)
-            state = state * noise_mask + torch.median(state) * (1 - noise_mask)
-            return state
 
         self.env_model.train()
 
@@ -93,13 +107,13 @@ class EnvModelContainer():
             epsilon *= progress
             epsilon = 1 - epsilon
 
-            indices = get_indices()
+            indices = get_indices(rollout, self.config.batch_size, rollout_len)
             frames = torch.zeros((self.config.batch_size, c * self.config.num_frames, h, w))
             frames = frames.to(self.config.device)
 
             for j in range(self.config.batch_size):
                 frames[j] = rollout.states[indices[j]].clone()
-            frames = preprocess_state(frames)
+            frames = preprocess_state(frames, self.config.input_noise)
 
             n_losses = 5 if self.config.use_stochastic_model else 4
             losses = torch.empty((rollout_len, n_losses))
@@ -137,7 +151,7 @@ class EnvModelContainer():
                         else:
                             frame = torch.argmax(frames_pred[k], dim=0)
 
-                        frame = preprocess_state(frame)
+                        frame = preprocess_state(frame, self.config.input_noise)
                         frames[k] = torch.cat((frames[k, c:], frame), dim=0)
 
                 # given prediction and values performa a backward pass on loss
@@ -158,21 +172,23 @@ class EnvModelContainer():
             if self.config.use_stochastic_model:
                 metrics.update({"loss_lstm": float(losses[4])})
 
+            if self.logging_fn is not None:
+                metrics = {self.agent_id: metrics}
+                self.logging_fn(metrics, batch_id=i, is_training=True)
 
-
-    def loss_step(self, frames_pred, reward_pred, values_pred, new_states, rewards, values):
+    def loss_step(self, frames_pred, reward_pred, values_pred, frames, rewards, values):
         """
         Perform a single loss backward step given the predicted and real values
         @param frames_pred:
         @param reward_pred:
         @param values_pred:
-        @param new_states:
+        @param frames:
         @param rewards:
         @param values:
         @return: list of loss values used for logs
         """
         loss_reconstruct = nn.CrossEntropyLoss(reduction="none")(
-            frames_pred, new_states.long()
+            frames_pred, frames.long()
         )
 
         clip = torch.tensor(self.config.target_loss_clipping).to(
@@ -189,15 +205,7 @@ class EnvModelContainer():
         loss_reward = nn.MSELoss()(reward_pred, rewards)
         loss = loss_reconstruct + loss_value + loss_reward
 
-        if self.config.use_stochastic_model:
-            loss_lstm = self.env_model.stochastic_model.get_lstm_loss()
-            loss = loss + loss_lstm
-
-        self.optimizer.zero_grad()
-        loss.backward()
-        clip_grad_norm_(self.env_model.parameters(), self.config.clip_grad_norm)
-        self.optimizer.step()
-
+        # save for logs
         tab = [
             float(loss),
             float(loss_reconstruct),
@@ -206,25 +214,44 @@ class EnvModelContainer():
         ]
 
         if self.config.use_stochastic_model:
+            loss_lstm = self.env_model.stochastic_model.get_lstm_loss()
+            loss = loss + loss_lstm
             tab.append(float(loss_lstm))
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        clip_grad_norm_(self.env_model.parameters(), self.config.clip_grad_norm)
+        self.optimizer.step()
 
         return tab
 
-    def rollout_steps(self, frames, actions, policy):
-        batch_size=frames.shape[0]
+    def rollout_steps(self, frames: torch.Tensor, actions: torch.Tensor, act_fn):
+        """
+        Perform N rollout steps in an unsupervised fashion (no rolloutStorage)
+        Bs=batch_size
+        @param frames: [Bs, C, W, H] tensor of frames where the last one is the new observation
+        @param actions: [Bs, num actions] tensor with a one hot encoding of the chosen action
+        @param act_fn: function taking as input the observation and returning an action
+        @return:
+            predicted observation : [N, Bs, C, W, H]: tensor for predicted observations
+            predicted rewards : [N, Bs, 1]
+        """
+
+        batch_size = frames.shape[0]
         self.env_model.eval()
         self.env_model.init_internal_states(batch_size)
-        new_obs=frames
+
+        new_obs = frames
         pred_obs = []
         pred_rews = []
+
         for j in range(self.config.rollout_len):
             # update frame and actions
             frames = torch.concat([frames, new_obs], dim=0)
             frames = frames[1:]
 
             # get new action given pred frame with policy
-            # fixme: needs multi-agent support
-            new_action, _, _ = policy(observation=new_obs)
+            new_action, _, _ = act_fn(observation=new_obs)
             new_action = one_hot_encode(new_action, self.config.num_actions)
             new_action = new_action.to(self.config.device).unsqueeze(dim=0)
 
@@ -234,6 +261,7 @@ class EnvModelContainer():
             with torch.no_grad():
                 new_obs, pred_rew, pred_values = self.env_model(frames, actions)
 
+            # remove feature dimension
             new_obs = torch.argmax(new_obs, dim=1)
 
             # append to pred list
@@ -244,6 +272,7 @@ class EnvModelContainer():
             new_obs = new_obs[-1] / 255
             new_obs = new_obs.unsqueeze(dim=0)
 
+        # todo: should pred_obs be normalized?
         pred_obs = torch.stack(pred_obs) / 255
         pred_rews = torch.stack(pred_rews)
 
@@ -275,19 +304,19 @@ class EnvModelTrainer(BaseTrainer):
 
         self.policy = OptimalAction(self.cur_env, config.num_actions, config.device)
 
-        # fixme: per ora c'è solo un env_model, bisogna capire come gestire il multi agent
-        self.env_model = {k: EnvModelContainer(model, config) for k in self.cur_env.agents}
-
-        self.config = config
-
+        logging_fn = None
         if self.config.use_wandb and False:
             from logging_callbacks import EnvModelWandb
             self.logger = EnvModelWandb(
                 train_log_step=20,
                 val_log_step=50,
                 project="env_model",
-                models=self.env_model,
             )
+            logging_fn = self.logger.on_batch_end
+
+        self.env_model = {k: EnvModelContainer(k, model, config, logging_fn) for k in self.cur_env.agents}
+
+        self.config = config
 
     def collect_trajectories(self) -> RolloutStorage:
 
@@ -340,12 +369,11 @@ class EnvModelTrainer(BaseTrainer):
                     observation = self.cur_env.reset()
         return rollout
 
+    def train(self, rollout: RolloutStorage):
 
-    def train(self, rollout):
-
-        metrics={}
+        metrics = {}
         for ag, model in self.env_model.items():
-            metrics[ag]=model.train(rollout)
+            metrics[ag] = model.train(rollout)
 
 
 if __name__ == "__main__":

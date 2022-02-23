@@ -1,4 +1,3 @@
-import random
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -15,12 +14,12 @@ from src.common import Params
 
 params = Params()
 
+
 class EnvModelWandb(WandbLogger):
     def __init__(
             self,
             train_log_step: int,
             val_log_step: int,
-            models,
             **kwargs,
     ):
         """
@@ -35,12 +34,13 @@ class EnvModelWandb(WandbLogger):
 
         super(EnvModelWandb, self).__init__(**kwargs)
 
-        wandb.watch(models, log_freq=1000, log_graph=True, log="all")
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
 
         self.epoch = 0
+
+
 
     def on_batch_end(
             self, logs: Dict[str, Any], batch_id: int, is_training: bool = True
@@ -168,7 +168,7 @@ class PPOWandb(WandbLogger):
         if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
 
             # map heatmap on image
-            #idx = random.choice(range(done_idx))
+            # idx = random.choice(range(done_idx))
             idx = rollout.step
             img = rollout.states[idx]
             reprs = []
@@ -272,9 +272,9 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
         )
 
     grids = np.stack(grids)
-    #grids = grids.transpose((0, 2, 3, 1))
+    # grids = grids.transpose((0, 2, 3, 1))
 
-    #Image.fromarray(np.asarray(grids[1])).show()
+    # Image.fromarray(np.asarray(grids[1])).show()
     return grids
 
 
@@ -293,7 +293,7 @@ def preprocess_logs(learn_output, ppo_wrapper):
 
     strat = params.get_descriptive_strategy()
     reward_step_strategy, reward_collision_strategy, \
-        landmark_reset_strategy, landmark_collision_strategy = ppo_wrapper.env.get_current_strategy()
+    landmark_reset_strategy, landmark_collision_strategy = ppo_wrapper.env.get_current_strategy()
 
     tbl = wandb.Table(columns=["list", "current strategy", "description"])
 

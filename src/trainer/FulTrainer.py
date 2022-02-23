@@ -100,11 +100,9 @@ class FullTrainer(BaseTrainer):
                     observation = self.cur_env.reset()
         return rollout
 
-    def train(self):
-        for epoch in trange(self.config.epochs, desc="Epoch"):
-            rollout = self.collect_trajectories()
-            self.em_trainer.train(rollout)
-            self.collect_features()
+    def train(self, rollout: RolloutStorage):
+        self.em_trainer.train(rollout)
+        self.collect_features()
 
     def collect_features(self) -> RolloutStorage:
 
@@ -142,6 +140,8 @@ class FullTrainer(BaseTrainer):
                     em_feat = self.encoder(pred_obs, pred_rews)
                     features[agent] = torch.cat((mf_feat, em_feat), dim=-1)
 
+                    #todo: Francesco add action/values arch
+
                 frames, rewards, done, info = self.cur_env.step(actions)
 
 
@@ -149,4 +149,5 @@ if __name__ == '__main__':
     params = Params()
 
     trainer = FullTrainer(params)
-    trainer.train()
+    rollout = trainer.collect_trajectories()
+    trainer.train(rollout)
