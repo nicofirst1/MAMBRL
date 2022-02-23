@@ -21,13 +21,14 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
     TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
     MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
-    MODEL_FREE_LOGGER_FILE = os.path.join(MODEL_FREE_LOG_DIR, "model_free_log.log")
+    MODEL_FREE_LOGGER_FILE = os.path.join(
+        MODEL_FREE_LOG_DIR, "model_free_log.log")
 
     # =============================================================================
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = True
+    use_wandb = False
     visible = False
     device = torch.device("cuda")
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
@@ -45,7 +46,7 @@ class Params:
     # number of future frames that the EnvModel will predict
     future_frame_horizon = 3
     framework = "torch"
-    epochs=10
+    epochs = 10
 
     # =============================================================================
     # MULTIAGENT

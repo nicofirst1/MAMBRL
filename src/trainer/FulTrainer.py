@@ -40,7 +40,8 @@ class FullTrainer(BaseTrainer):
 
         super(FullTrainer, self).__init__(env, config)
 
-        self.em_trainer = EnvModelTrainer(NextFramePredictor, self.cur_env, config)
+        self.em_trainer = EnvModelTrainer(
+            NextFramePredictor, self.cur_env, config)
 
         self.mf_trainer = ModelFreeTrainer(ModelFree, PpoWrapper, env, params)
 
