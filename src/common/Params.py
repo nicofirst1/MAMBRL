@@ -38,7 +38,7 @@ class Params:
     env_model_epochs = 1500
     # number of learning iterations that the algorithm does on the same batch
     # of trajectories (trajectories are shuffled at each iteration)
-    batch_epochs = 3
+    ppo_epochs = 3
     # number of elements on which the algorithm performs a learning step
     minibatch = 32  # 64
     batch_size = 4
@@ -149,7 +149,7 @@ class Params:
     len_reward = 1
     step_reward = -0.01
     landmark_reward = 2
-    episodes = 1   # 3
+    episodes = 3   # 3
     horizon = 128  # 100
     landmarks_positions = np.array([[0.0, -1.0], [0.0, 1.0]])  # None
     agents_positions = np.array([[0.0, 0.0]])  # np.array([[0.0, 0.0]])
@@ -320,10 +320,13 @@ class Params:
 
     def get_ppo_configs(self):
         ppo_configs = dict(
-            rollout_fragment_length=self.rollout_len,
-            gamma=self.gamma,
+            lr= self.lr,
+            eps=self.eps,
+            entropy_coef=self.entropy_coef,
+            value_loss_coef=self.value_loss_coef,
             clip_param=self.ppo_clip_param,
-            grad_clip=self.clip_grad_norm,
+            clip_value_loss=self.clip_value_loss,
+            max_grad_norm=self.max_grad_norm
         )
         return ppo_configs
 
