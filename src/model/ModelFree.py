@@ -144,7 +144,8 @@ class ModelFree(nn.Module):
 
         """
         # TODO add proper value instead of None
-        return self.base.forward(inputs, None, masks)
+        # return self.base.forward(inputs, None, masks)
+        return self.base.forward(inputs, masks)
 
     def act(self, inputs, masks, deterministic=False):
         # normalize the input outside
@@ -296,9 +297,9 @@ class FeatureExtractor(NNBase):
     customizable
     """
 
-    def __init__(self, input_shape, conv_layers, fc_layers, recurrent=False, hidden_size=512, num_frames=1):
+    def __init__(self, input_shape, conv_layers, fc_layers, recurrent=False, hidden_size=512, num_frames=1, **kwargs):
         super(FeatureExtractor, self).__init__(recurrent=recurrent,
-                                               hidden_size=hidden_size, recurrent_input_size=hidden_size)
+                                               hidden_size=hidden_size, recurrent_input_size=hidden_size,)
         self.in_shape = input_shape
         self.num_channels = input_shape[0]
         self.num_frames = num_frames

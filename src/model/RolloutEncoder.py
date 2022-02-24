@@ -63,7 +63,7 @@ class RolloutEncoder(nn.Module):
         state = state.view(num_steps, batch_size, -1)
         # state has 3136 feature and reward is just 1, maybe the reward is
         # useless in our setting
-        lstm_input = torch.cat([state, reward], dim=2)
+        lstm_input = torch.cat([state, reward], dim=-1)
         out, hidden = self.re_LSTM(lstm_input)
 
         # hidden is a tuple (h_n, c_n) where h_n is the final hidden state of

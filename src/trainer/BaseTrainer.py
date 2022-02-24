@@ -1,5 +1,5 @@
 from src.common import Params
-from agent.RolloutStorage import RolloutStorage
+from src.agent.RolloutStorage import RolloutStorage
 from src.trainer.Policies import TrajCollectionPolicy
 
 

@@ -4,9 +4,9 @@ from typing import Dict
 import torch
 from tqdm import trange
 
-from agent.PPO_Agent import PPO_Agent
-from agent.RolloutStorage import RolloutStorage
-from common import mas_dict2tensor
+from src.agent.PPO_Agent import PPO_Agent
+from src.agent.RolloutStorage import RolloutStorage
+from src.common import mas_dict2tensor
 from logging_callbacks.wandbLogger import preprocess_logs
 from src.agent.PpoWrapper import PpoWrapper
 from src.common import Params
@@ -50,7 +50,8 @@ class ModelFreeTrainer(BaseTrainer):
         ppo_configs = config.get_ppo_configs()
         model_free_configs = config.get_model_free_configs()
         self.ppo_agents = {
-            agent_id: agent(model, config.device, model_free_configs, **ppo_configs)
+            agent_id: agent(model, config.device,
+                            model_free_configs, **ppo_configs)
             for agent_id in self.cur_env.agents
         }
 
@@ -91,7 +92,8 @@ class ModelFreeTrainer(BaseTrainer):
 
         for episode in range(self.num_episodes):
             observation = self.cur_env.reset()
-            rollout.states[episode * self.num_steps] = observation.unsqueeze(dim=0)
+            rollout.states[episode *
+                           self.num_steps] = observation.unsqueeze(dim=0)
 
             for step in range(self.num_steps):
                 obs = observation.to(self.config.device).unsqueeze(dim=0)
@@ -107,10 +109,12 @@ class ModelFreeTrainer(BaseTrainer):
                     values_dict[agent_id] = value
                     action_log_dict[agent_id] = action_log_prob
 
-                observation, rewards, done, infos = self.cur_env.step(action_dict)
+                observation, rewards, done, infos = self.cur_env.step(
+                    action_dict)
 
                 actions = mas_dict2tensor(action_dict, int)
-                action_log_probs = torch.cat([elem.unsqueeze(0) for _, elem in action_log_dict.items()], 0)
+                action_log_probs = torch.cat(
+                    [elem.unsqueeze(0) for _, elem in action_log_dict.items()], 0)
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
                 rewards = mas_dict2tensor(rewards, float)
                 values = mas_dict2tensor(values_dict, float)
@@ -155,7 +159,7 @@ class ModelFreeTrainer(BaseTrainer):
 
             for sample in data_generator:
                 states_batch, actions_batch, logs_probs_batch, \
-                values_batch, return_batch, masks_batch, adv_targ = sample
+                    values_batch, return_batch, masks_batch, adv_targ = sample
 
                 for agent_id in self.ppo_agents.keys():
                     agent_index = int(agent_id[-1])
@@ -178,7 +182,8 @@ class ModelFreeTrainer(BaseTrainer):
                     value_losses[agent_id] += float(value_loss)
                     entropies[agent_id] += float(entropy)
 
-        num_updates = self.config.ppo_epochs * int(math.ceil(rollout.rewards.size(0) / self.config.minibatch))
+        num_updates = self.config.ppo_epochs * \
+            int(math.ceil(rollout.rewards.size(0) / self.config.minibatch))
 
         action_losses = sum(action_losses.values()) / num_updates
         value_losses = sum(value_losses.values()) / num_updates
@@ -198,6 +203,7 @@ class ModelFreeTrainer(BaseTrainer):
     def restore_training(self):
         pass
 
+
 if __name__ == '__main__':
     params = Params()
     env = get_env_wrapper(params)
@@ -208,8 +214,9 @@ if __name__ == '__main__':
         action_loss, value_loss, entropy, logs = trainer.train(rollout)
 
         if params.use_wandb:
-            logs = preprocess_logs([value_loss, action_loss, entropy, logs], trainer)
-            trainer.logger.on_batch_end(logs=logs, batch_id=epoch, rollout=rollout)
+            logs = preprocess_logs(
+                [value_loss, action_loss, entropy, logs], trainer)
+            trainer.logger.on_batch_end(
+                logs=logs, batch_id=epoch, rollout=rollout)
 
         rollout.after_update()
-

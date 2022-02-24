@@ -62,30 +62,6 @@ class Params:
     eps = 1e-5
 
     # =============================================================================
-    #  ENV MODEL
-    # =============================================================================
-    stack_internal_states = True
-    recurrent_state_size = 64
-    hidden_size = 96
-    compress_steps = 2
-    filter_double_steps = 3
-    hidden_layers = 2
-    bottleneck_bits = 128
-    latent_state_size = 128
-    dropout = 0.15
-    bottleneck_noise = 0.1
-    latent_rnn_max_sampling = 0.5
-    latent_use_max_probability = 0.8
-    residual_dropout = 0.5
-    target_loss_clipping = 0.03
-    scheduled_sampling_decay_steps = 3000
-    input_noise = 0.05
-    use_stochastic_model = True
-    clip_grad_norm = 1.0
-    rollout_len = 10
-    save_models = True
-
-    # =============================================================================
     # ALGO PARAMETERS
     # =============================================================================
     gamma = 0.998
@@ -132,6 +108,30 @@ class Params:
     base_hidden_size = 64
 
     # =============================================================================
+    #  ENV MODEL
+    # =============================================================================
+    stack_internal_states = True
+    recurrent_state_size = 64
+    hidden_size = 96
+    compress_steps = 2
+    filter_double_steps = 3
+    hidden_layers = 2
+    bottleneck_bits = 128
+    latent_state_size = 128
+    dropout = 0.15
+    bottleneck_noise = 0.1
+    latent_rnn_max_sampling = 0.5
+    latent_use_max_probability = 0.8
+    residual_dropout = 0.5
+    target_loss_clipping = 0.03
+    scheduled_sampling_decay_steps = 3000
+    input_noise = 0.05
+    use_stochastic_model = True
+    clip_grad_norm = 1.0
+    rollout_len = 10
+    save_models = True
+
+    # =============================================================================
     # ROLLOUT ENCODER NETWORK PARAMETERS
     # =============================================================================
     # conv_layers are defined as the model free conv layers.
@@ -140,6 +140,13 @@ class Params:
     )
     # hidden size of the recurrent layer
     re_recurrent_layers = 256
+
+    # =============================================================================
+    # FULL MODEL PARAMETERS
+    # =============================================================================
+    # fully connected parameters for the actor and critic networks of the full
+    # model. They have the same structure of the fc_layers of the model free
+    fm_fc_layers = ([64, 32], [64, 32])
 
     # =============================================================================
     # ENVIRONMENT
@@ -321,7 +328,7 @@ class Params:
 
     def get_ppo_configs(self):
         ppo_configs = dict(
-            lr= self.lr,
+            lr=self.lr,
             eps=self.eps,
             entropy_coef=self.entropy_coef,
             value_loss_coef=self.value_loss_coef,
@@ -331,20 +338,23 @@ class Params:
         )
         return ppo_configs
 
+    def get_mf_feature_extractor_configs(self):
+        return dict(
+            obs_shape=self.obs_shape,
+            share_weights=self.share_weights,
+            action_space=self.num_actions,
+            conv_layers=self.conv_layers,
+            fc_layers=self.fc_layers,
+            use_recurrent=self.use_recurrent,
+            use_residual=self.use_residual,
+            num_frames=self.num_frames,
+            base_hidden_size=self.base_hidden_size
+        )
+
     def get_model_free_configs(self):
         model_config = dict(
             base=self.base,
-            base_kwargs=dict(
-                obs_shape=self.obs_shape,
-                share_weights=self.share_weights,
-                action_space=self.num_actions,
-                conv_layers=self.conv_layers,
-                fc_layers=self.fc_layers,
-                use_recurrent=self.use_recurrent,
-                use_residual=self.use_residual,
-                num_frames=self.num_frames,
-                base_hidden_size=self.base_hidden_size
-            )
+            base_kwargs=self.get_mf_feature_extractor_configs()
         )
         return model_config
 

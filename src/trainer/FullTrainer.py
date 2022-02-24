@@ -4,6 +4,7 @@ import torch
 from tqdm import trange
 
 from src.agent.PpoWrapper import PpoWrapper
+from src.agent.PPO_Agent import PPO_Agent
 from src.agent.RolloutStorage import RolloutStorage
 from src.common import Params, mas_dict2tensor
 from src.common.utils import one_hot_encode
@@ -43,9 +44,10 @@ class FullTrainer(BaseTrainer):
         self.em_trainer = EnvModelTrainer(
             NextFramePredictor, self.cur_env, config)
 
-        self.mf_trainer = ModelFreeTrainer(ModelFree, PpoWrapper, env, params)
+        self.mf_trainer = ModelFreeTrainer(ModelFree, PPO_Agent, env, params)
 
-        self.policy = MultimodalMAS(self.mf_trainer.agent.actor_critic_dict)
+        self.policy = MultimodalMAS(
+            self.mf_trainer.ppo_agents)  # ["agent_0"].actor_critic_dict)
 
         rollout_params = config.get_rollout_encoder_configs()
         self.encoder = RolloutEncoder(**rollout_params).to(self.device)
@@ -70,10 +72,12 @@ class FullTrainer(BaseTrainer):
         for episode in trange(self.config.episodes, desc="Collecting trajectories.."):
             done["__all__"] = False
             observation = self.cur_env.reset()
-            rollout.states[episode * self.config.horizon] = observation.unsqueeze(dim=0)
+            rollout.states[episode *
+                           self.config.horizon] = observation.unsqueeze(dim=0)
 
             for step in range(self.config.horizon):
-                observation = observation.unsqueeze(dim=0).to(self.config.device)
+                observation = observation.unsqueeze(
+                    dim=0).to(self.config.device)
 
                 for agent_id in self.cur_env.agents:
                     with torch.no_grad():
@@ -97,11 +101,13 @@ class FullTrainer(BaseTrainer):
                 )
 
                 if done["__all__"]:
-                    rollout.compute_value_world_model(episode * self.config.horizon + step, self.config.gamma)
+                    rollout.compute_value_world_model(
+                        episode * self.config.horizon + step, self.config.gamma)
                     observation = self.cur_env.reset()
         return rollout
 
     def train(self, rollout: RolloutStorage):
+
         self.em_trainer.train(rollout)
         self.collect_features()
 
@@ -124,14 +130,13 @@ class FullTrainer(BaseTrainer):
                     # get the partial agent policy for acting
                     policy = partial(self.policy.act, agent)
                     # extract features from distillated model free agent
-                    mf_feat = self.mf_trainer.agent.actor_critic_dict[agent].feature_extraction(
+                    mf_feat = self.mf_trainer.ppo_agents[agent].actor_critic.feature_extraction(
                         frames, mask)
                     # get action and encode it
                     action, _, _ = policy(frames)
                     actions[agent] = action
                     action = one_hot_encode(action, self.config.num_actions)
                     action = action.to(self.device).unsqueeze(dim=0)
-
                     # predict up to N rollout in the future
                     pred_obs, pred_rews = self.em_trainer.env_model[agent].rollout_steps(frames,
                                                                                          action,
@@ -141,7 +146,7 @@ class FullTrainer(BaseTrainer):
                     em_feat = self.encoder(pred_obs, pred_rews)
                     features[agent] = torch.cat((mf_feat, em_feat), dim=-1)
 
-                    #todo: Francesco add action/values arch
+                    # todo: Francesco add action/values arch
 
                 frames, rewards, done, info = self.cur_env.step(actions)
 
@@ -150,5 +155,6 @@ if __name__ == '__main__':
     params = Params()
 
     trainer = FullTrainer(params)
+    trainer.collect_features()
     rollout = trainer.collect_trajectories()
     trainer.train(rollout)

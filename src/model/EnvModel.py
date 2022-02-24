@@ -48,7 +48,8 @@ class MiddleNetwork(nn.Module):
 
         self.middle_network = []
         for i in range(self.config.hidden_layers):
-            self.middle_network.append(nn.Conv2d(filters, filters, 3, padding=1))
+            self.middle_network.append(
+                nn.Conv2d(filters, filters, 3, padding=1))
             if i == 0:
                 self.middle_network.append(None)
             else:
@@ -128,7 +129,8 @@ class BitsPredictor(nn.Module):
         for i in range(self.total_number_bits // self.bits_at_once):
             h_state, c_state = self.lstm(lstm_input, (h_state, c_state))
             discrete_logits = self.dense5(h_state)
-            discrete_samples = sample_with_temperature(discrete_logits, temperature)
+            discrete_samples = sample_with_temperature(
+                discrete_logits, temperature)
             outputs.append(discrete_samples)
             lstm_input = self.dense4(
                 one_hot_encode(discrete_samples, 256, dtype=torch.float32)
@@ -154,13 +156,15 @@ class StochasticModel(nn.Module):
         ).to(self.config.device)
 
         self.input_embedding = nn.Conv2d(channels, self.config.hidden_size, 1)
-        self.conv1 = nn.Conv2d(self.config.hidden_size, filters[0], 8, 4, padding=2)
+        self.conv1 = nn.Conv2d(self.config.hidden_size,
+                               filters[0], 8, 4, padding=2)
         self.conv2 = nn.Conv2d(filters[0], filters[1], 8, 4, padding=2)
         self.dense1 = nn.Linear(2 * 2 * channels, self.config.bottleneck_bits)
         self.dense2 = nn.Linear(self.config.bottleneck_bits, layer_shape[0])
         self.dense3 = nn.Linear(self.config.bottleneck_bits, layer_shape[0])
 
-        self.action_injector = ActionInjector(n_action, self.config.hidden_size)
+        self.action_injector = ActionInjector(
+            n_action, self.config.hidden_size)
         self.mean_attentions = nn.ModuleList(
             [MeanAttention(n_filter, 2 * channels) for n_filter in filters]
         )
@@ -215,12 +219,14 @@ class StochasticModel(nn.Module):
             bits_pred, _ = self.bits_predictor(layer, 1.0)
             bits_pred = bits_clean + (bits_pred - bits_clean).detach()
             bits = mix(
-                bits_pred, bits, 1 - (1 - epsilon) * self.config.latent_rnn_max_sampling
+                bits_pred, bits, 1 - (1 - epsilon) *
+                self.config.latent_rnn_max_sampling
             )
 
             res = self.add_bits(layer, bits)
             return mix(
-                res, layer, 1 - (1 - epsilon) * self.config.latent_use_max_probability
+                res, layer, 1 - (1 - epsilon) *
+                self.config.latent_use_max_probability
             )
 
         bits, _ = self.bits_predictor(layer, 1.0)
@@ -260,7 +266,8 @@ class NextFramePredictor(Container):
 
         self.downscale_layers = []
         shape = [self.config.hidden_size, *self.config.obs_shape[1:]]
-        self.timing_signals.append(get_timing_signal_nd(shape).to(self.config.device))
+        self.timing_signals.append(
+            get_timing_signal_nd(shape).to(self.config.device))
         shapes = [shape]
         for i in range(self.config.compress_steps):
             in_filters = filters
@@ -285,7 +292,8 @@ class NextFramePredictor(Container):
         middle_shape = shape
 
         self.upscale_layers = []
-        self.action_injectors = [ActionInjector(self.config.num_actions, filters)]
+        self.action_injectors = [ActionInjector(
+            self.config.num_actions, filters)]
         for i in range(self.config.compress_steps):
             self.action_injectors.append(
                 ActionInjector(self.config.num_actions, filters)
@@ -332,7 +340,8 @@ class NextFramePredictor(Container):
 
         # Sub-models
         self.middle_network = MiddleNetwork(self.config, middle_shape[0])
-        self.reward_estimator = RewardEstimator(self.config, middle_shape[0] + filters)
+        self.reward_estimator = RewardEstimator(
+            self.config, middle_shape[0] + filters)
         self.value_estimator = ValueEstimator(
             middle_shape[0] * middle_shape[1] * middle_shape[2]
         )
@@ -359,7 +368,8 @@ class NextFramePredictor(Container):
 
     def init_internal_states(self, batch_size):
         self.internal_states = torch.zeros(
-            (batch_size, self.config.recurrent_state_size, *self.config.obs_shape[1:])
+            (batch_size, self.config.recurrent_state_size,
+             *self.config.obs_shape[1:])
         ).to(self.config.device)
         self.last_x_start = None
 
@@ -367,7 +377,8 @@ class NextFramePredictor(Container):
         internal_states = self.internal_states
         if self.last_x_start is None:
             return internal_states
-        state_activation = torch.cat((internal_states, self.last_x_start), dim=1)
+        state_activation = torch.cat(
+            (internal_states, self.last_x_start), dim=1)
         state_gate_candidate = self.gate(state_activation)
         state_gate, state_candidate = torch.split(
             state_gate_candidate, self.config.recurrent_state_size, dim=1
@@ -382,9 +393,13 @@ class NextFramePredictor(Container):
     def forward(self, x, action, target=None, epsilon=0):
         x_start = torch.stack([standardize_frame(frame) for frame in x])
 
-        ## fixme: qui qualcosa non quadra con le dimensioni, quindi per ora è disabilitato
+        # fixme: qui qualcosa non quadra con le dimensioni, quindi per ora è disabilitato
+        # FIXME: il problema è che internal_state dipende dalle dimensioni del batch
         if self.config.stack_internal_states:
-            internal_states = self.get_internal_states()
+            # internal_states = self.get_internal_states()
+            # FIXME: HARDCODE, to remove
+            internal_states = self.internal_states
+            internal_states = internal_states[-1].unsqueeze(dim=0)
             x = torch.cat((x_start, internal_states), dim=1)
             self.last_x_start = x_start
         else:
@@ -402,7 +417,8 @@ class NextFramePredictor(Container):
             x = F.relu(x)
             x = self.downscale_layers[2 * i + 1](x)  # LayerNorm
 
-        value_pred = self.value_estimator(torch.flatten(x, start_dim=1)).squeeze(-1)
+        value_pred = self.value_estimator(
+            torch.flatten(x, start_dim=1)).squeeze(-1)
 
         x = self.action_injectors[0](x, action)
 
