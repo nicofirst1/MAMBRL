@@ -12,7 +12,7 @@ class ParameterSealer:
         self.module = module
 
     def __call__(self, *args, **kwargs):
-        return self.module.forward(*args, **kwargs)
+        return self.module.train_step(*args, **kwargs)
 
     def parameters(self, recurse=True):
         return self.module.parameters(recurse)

@@ -466,7 +466,6 @@ class Conv2DModelFree(nn.Module):
         """
 
         # TODO check how to use the rnn
-        inputs = inputs / 255.
         if self.share_weights:
             x = self.feature_extractor.forward(inputs, masks)
             return self.actor(x), self.critic(x)
@@ -535,7 +534,6 @@ class Conv2DModelFree(nn.Module):
                     ]
 
     def feature_extractor(self, inputs, masks):
-        inputs = inputs / 255.
         if self.share_weights:
             x = self.feature_extractor.forward(inputs, masks)
         else:
@@ -617,7 +615,7 @@ class ResNetBase(NNBase):
         )
 
     def forward(self, inputs, rnn_hxs, masks):
-        x = self.preprocess(inputs / 255.0)
+        x = self.preprocess(inputs)
         x = self.features(x)
         x = x.view(x.shape[0], -1)
         x = self.hidden_layer(x)

@@ -1,5 +1,3 @@
-import itertools
-from copy import copy
 from typing import Dict, Tuple
 
 import numpy as np
@@ -90,7 +88,6 @@ class NavEnv(SimpleEnv):
         Returns: returns an image as a torch tensor of size [channels, width, height]
 
         """
-
         observation = self.render()
         if observation is not None:
             observation = torch.from_numpy(observation.copy())
@@ -105,6 +102,9 @@ class NavEnv(SimpleEnv):
             if self.gray_scale:
                 observation = rgb2gray(observation)
                 observation = np.expand_dims(observation, axis=0)
+
+            # normalize observations
+            observation /= 255.0
 
         return observation
 

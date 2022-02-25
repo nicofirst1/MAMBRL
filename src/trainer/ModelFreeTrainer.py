@@ -8,7 +8,6 @@ from src.agent.PPO_Agent import PPO_Agent
 from src.agent.RolloutStorage import RolloutStorage
 from src.common import mas_dict2tensor
 from logging_callbacks.wandbLogger import preprocess_logs
-from src.agent.PpoWrapper import PpoWrapper
 from src.common import Params
 from src.env.EnvWrapper import get_env_wrapper
 from src.model.ModelFree import ModelFree

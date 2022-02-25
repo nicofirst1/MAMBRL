@@ -139,7 +139,6 @@ class FullTrainer(BaseTrainer):
                     action = action.to(self.device).unsqueeze(dim=0)
                     # predict up to N rollout in the future
                     pred_obs, pred_rews = self.em_trainer.env_model[agent].rollout_steps(frames,
-                                                                                         action,
                                                                                          policy
                                                                                          )
                     # encode prediction and cat them to other ones

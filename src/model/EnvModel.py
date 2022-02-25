@@ -220,13 +220,13 @@ class StochasticModel(nn.Module):
             bits_pred = bits_clean + (bits_pred - bits_clean).detach()
             bits = mix(
                 bits_pred, bits, 1 - (1 - epsilon) *
-                self.config.latent_rnn_max_sampling
+                                 self.config.latent_rnn_max_sampling
             )
 
             res = self.add_bits(layer, bits)
             return mix(
                 res, layer, 1 - (1 - epsilon) *
-                self.config.latent_use_max_probability
+                            self.config.latent_use_max_probability
             )
 
         bits, _ = self.bits_predictor(layer, 1.0)
@@ -391,6 +391,8 @@ class NextFramePredictor(Container):
         return internal_states
 
     def forward(self, x, action, target=None, epsilon=0):
+
+        # todo: add function definition
         x_start = torch.stack([standardize_frame(frame) for frame in x])
 
         # fixme: qui qualcosa non quadra con le dimensioni, quindi per ora è disabilitato
@@ -448,3 +450,58 @@ class NextFramePredictor(Container):
         x = self.logits(x)
         x = x.view((-1, 256, *self.config.frame_shape))
         return x, reward_pred, value_pred
+
+    def rollout_steps(self, frames: torch.Tensor, act_fn):
+        """
+        Perform N rollout steps in an unsupervised fashion (no rolloutStorage)
+        Bs=batch_size
+        @param frames: [Bs, C, W, H] tensor of frames where the last one is the new observation
+        @param act_fn: function taking as input the observation and returning an action
+        @return:
+            predicted observation : [N, Bs, C, W, H]: tensor for predicted observations
+            predicted rewards : [N, Bs, 1]
+        """
+
+        batch_size = frames.shape[0]
+        self.init_internal_states(batch_size)
+
+        actions=torch.zeros((batch_size, self.config.num_actions))
+
+        new_obs = frames
+        pred_obs = []
+        pred_rews = []
+
+        for j in range(self.config.rollout_len):
+            # update frame and actions
+            frames = torch.concat([frames, new_obs], dim=0)
+            frames = frames[1:]
+
+            # get new action given pred frame with policy
+            new_action, _, _ = act_fn(observation=new_obs)
+            new_action = one_hot_encode(new_action, self.config.num_actions)
+            new_action = new_action.to(self.config.device).unsqueeze(dim=0)
+
+            actions = torch.concat([actions, new_action], dim=0).float()
+            actions = actions[1:]
+
+            with torch.no_grad():
+                new_obs, pred_rew, pred_values = self.forward(frames, actions)
+
+            # remove feature dimension
+            new_obs = torch.argmax(new_obs, dim=1)
+
+            # append to pred list
+            pred_obs.append(new_obs)
+            pred_rews.append(pred_rew)
+
+            # get last, normalize and add fake batch dimension for stack
+            new_obs = new_obs[-1] / 255
+            new_obs = new_obs.unsqueeze(dim=0)
+
+        pred_obs = torch.stack(pred_obs) / 255
+        pred_rews = torch.stack(pred_rews)
+
+        pred_obs = pred_obs.to(self.device)
+        pred_rews = pred_rews.to(self.device)
+
+        return pred_obs, pred_rews
