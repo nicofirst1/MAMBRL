@@ -6,8 +6,8 @@ class RolloutStorage(object):
         self.num_channels = obs_shape[0]
         self.num_actions = num_actions
 
-        self.states = torch.zeros(num_steps + 1, *obs_shape, dtype=torch.uint8)
-        self.next_state = torch.zeros(num_steps, *frame_shape, dtype=torch.uint8)
+        self.states = torch.zeros(num_steps + 1, *obs_shape, dtype=torch.float32)
+        self.next_state = torch.zeros(num_steps, *frame_shape, dtype=torch.float32)
         self.rewards = torch.zeros(num_steps, num_agents, 1, dtype=torch.float32)
         self.value_preds = torch.zeros(num_steps + 1, num_agents, 1, dtype=torch.float32)
         self.returns = torch.zeros(num_steps + 1, num_agents, 1, dtype=torch.float32)
@@ -45,25 +45,22 @@ class RolloutStorage(object):
 
     def after_update(self):
         self.states[0].copy_(self.states[self.step])
-        # self.recurrent_hs[0].copy_(self.recurrent_hs[self.step])
-        # todo: commentedd mask copy cos is always zero
-        # self.masks[0].copy_(self.masks[self.step])
+        self.masks[0].copy_(self.masks[self.step])
         self.step = 0
 
     def compute_returns(self, next_value, use_gae, gamma, gae_lambda):
         if use_gae:
-            # fixme: add self.step as index
-            self.value_preds[-1] = next_value
+            self.value_preds[self.step] = next_value
             gae = 0
-            for step in reversed(range(self.rewards.size(0))):
+            for step in reversed(range(self.step)):
                 delta = (self.rewards[step] + gamma * self.value_preds[step + 1]
                          * self.masks[step + 1] - self.value_preds[step])
 
                 gae = delta + gamma * gae_lambda * self.masks[step + 1] * gae
                 self.returns[step] = gae + self.value_preds[step]
         else:
-            self.returns[-1] = next_value
-            for step in reversed(range(self.rewards.size(0))):
+            self.returns[self.step] = next_value
+            for step in reversed(range(self.step)):
                 self.returns[step] = self.returns[step + 1] * \
                     gamma * self.masks[step + 1] + self.rewards[step]
 
@@ -90,8 +87,8 @@ class RolloutStorage(object):
             adv_targ_minibatch: torch.Tensor[minibatch_size, num_agents]
             next_states_minibatch: torch.Tensor[minibatch_size, num_channels, width, height]
         """
-        # todo: vedi se splittare i frames nel rollout oppure nell'env
-        total_samples = self.rewards.size(0)
+
+        total_samples = self.step
         perm = torch.randperm(total_samples)
 
         for start_ind in range(0, total_samples, minibatch_frames):

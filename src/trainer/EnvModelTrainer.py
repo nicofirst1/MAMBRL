@@ -122,10 +122,10 @@ class EnvModelTrainer(BaseTrainer):
         rollout_len = self.config.rollout_len
         states, actions, rewards, new_states, _, values = rollout.get(0)
 
-        assert states.dtype == torch.uint8
+        assert states.dtype == torch.float32
         assert actions.dtype == torch.int64
         assert rewards.dtype == torch.float32
-        assert new_states.dtype == torch.uint8
+        assert new_states.dtype == torch.float32
         assert values.dtype == torch.float32
 
         iterator = trange(

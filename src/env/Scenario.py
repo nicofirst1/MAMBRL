@@ -227,8 +227,6 @@ class CollectLandmarkScenario(BaseScenario):
             agent.color = np.array([0, 0, 1])
             self.agents_pos[agent] = None if agents_positions is None else agents_positions[i]
 
-        ## todo: handle agents_position as it is done for landmarks
-
         # add agents collisions
         self.registered_collisions = {agent.name: [] for agent in world.agents}
 

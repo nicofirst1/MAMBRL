@@ -149,7 +149,7 @@ class PPOWandb(WandbLogger):
             #     done_idx = done_idx[0]
 
             states = (
-                rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
+                rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8) * 255
             )
 
             actions = rollout.actions[:rollout.step].squeeze().cpu().numpy()

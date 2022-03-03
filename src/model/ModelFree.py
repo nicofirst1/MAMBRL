@@ -106,9 +106,6 @@ class ModelFree(nn.Module):
         else:
             Exception("Base model not supported")
 
-        # TODO: tieni buffer interno per RNN
-        # self.dist = Categorical(self.base.output_size, action_space)
-
         self.base = base(**base_kwargs)
 
     def get_modules(self):
@@ -321,7 +318,6 @@ class FeatureExtractor(NNBase):
                                              str(i) + "_activ"] = nn.LeakyReLU()
                 next_inp = cnn[0]
 
-            # TODO: replace with right calculation after last conv
             for layer in feature_extractor_layers:
                 if layer == "conv_0":
                     fake_inp = torch.zeros(
@@ -342,11 +338,7 @@ class FeatureExtractor(NNBase):
         # TODO else with more than 1 frame
 
     def forward(self, inputs, masks):
-        x = self.model(inputs)
-        if self.is_recurrent:
-            x, rnn_hxs = self._forward_gru(x, masks)
-
-        return x
+        return self.model(inputs)
 
 
 class Conv2DModelFree(nn.Module):
@@ -465,7 +457,6 @@ class Conv2DModelFree(nn.Module):
 
         """
 
-        # TODO check how to use the rnn
         if self.share_weights:
             x = self.feature_extractor.forward(inputs, masks)
             return self.actor(x), self.critic(x)
