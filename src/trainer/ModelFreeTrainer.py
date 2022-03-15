@@ -48,9 +48,13 @@ class ModelFreeTrainer(BaseTrainer):
         # Build a ppo agent for each agent in the env
         ppo_configs = config.get_ppo_configs()
         model_free_configs = config.get_model_free_configs()
+
+        self.model_free = {
+            agent_id: model(**model_free_configs) for agent_id in self.cur_env.agents
+        }
+
         self.ppo_agents = {
-            agent_id: agent(model, config.device,
-                            model_free_configs, **ppo_configs)
+            agent_id: agent(self.model_free[agent_id], config.device, **ppo_configs) 
             for agent_id in self.cur_env.agents
         }
 

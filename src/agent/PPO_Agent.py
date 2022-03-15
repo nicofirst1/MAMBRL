@@ -3,11 +3,10 @@ from torch import optim, nn
 
 
 class PPO_Agent:
-    def __init__(self, model, device, model_free_configs, lr, eps,
-                 clip_param, clip_value_loss, max_grad_norm,
-                 entropy_coef, value_loss_coef):
+    def __init__(self, model, device, lr, eps, clip_param, clip_value_loss,
+                 max_grad_norm, entropy_coef, value_loss_coef):
 
-        self.actor_critic = model(**model_free_configs).to(device)
+        self.actor_critic = model.to(device)
         self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=lr, eps=eps)
 
         self.clip_param = clip_param
