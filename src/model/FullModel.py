@@ -165,6 +165,24 @@ class FullModel(nn.Module):
 
         return action_logits, value
 
+    def act(self, inputs, masks, deterministic=False):
+        # normalize the input outside
+        action_logit, value = self.forward(inputs)
+
+        action_probs = F.softmax(action_logit, dim=1)
+
+        if deterministic:
+            action = action_probs.max(1)[1]
+        else:
+            action = action_probs.multinomial(1)
+
+        log_actions_prob = F.log_softmax(action_logit, dim=1).squeeze()
+
+        value = float(value)
+        action = int(action)
+
+        return value, action, log_actions_prob
+
 
 if __name__ == "__main__":
     configs = Params()

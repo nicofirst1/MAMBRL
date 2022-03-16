@@ -2,15 +2,17 @@ from functools import partial
 
 import torch
 from tqdm import trange
+from typing import Dict
+import math
 
-from src.agent.PpoWrapper import PpoWrapper
 from src.agent.PPO_Agent import PPO_Agent
 from src.agent.RolloutStorage import RolloutStorage
 from src.common import Params, mas_dict2tensor
 from src.common.utils import one_hot_encode
 from src.env.EnvWrapper import get_env_wrapper
 from src.model import NextFramePredictor
-from src.model.ModelFree import ModelFree
+from src.model.ModelFree import ModelFree, FeatureExtractor
+from src.model.FullModel import FullModel
 from src.model.RolloutEncoder import RolloutEncoder
 from src.trainer.BaseTrainer import BaseTrainer
 from src.trainer.EnvModelTrainer import EnvModelTrainer
@@ -19,15 +21,9 @@ from src.trainer.Policies import MultimodalMAS
 
 
 class FullTrainer(BaseTrainer):
-    def __init__(self, config: Params):
+    def __init__(self, agent, config: Params):
         """__init__ module.
 
-        Parameters
-        ----------
-        model : NextFramePredictor
-            model in src.model.EnvModel 
-        env : env class
-            one of the env classes defined in the src.env directory
         config : Params
             instance of the class Params defined in src.common.Params
 
@@ -41,16 +37,13 @@ class FullTrainer(BaseTrainer):
 
         super(FullTrainer, self).__init__(env, config)
 
-        self.em_trainer = EnvModelTrainer(
-            NextFramePredictor, self.cur_env, config)
-
-        self.mf_trainer = ModelFreeTrainer(ModelFree, PPO_Agent, env, params)
-
-        self.policy = MultimodalMAS(
-            self.mf_trainer.ppo_agents)  # ["agent_0"].actor_critic_dict)
-
-        rollout_params = config.get_rollout_encoder_configs()
-        self.encoder = RolloutEncoder(**rollout_params).to(self.device)
+        self.model = {agent_id: FullModel(FeatureExtractor, ModelFree,
+                                          NextFramePredictor, RolloutEncoder, config)
+                      for agent_id in self.cur_env.agents}
+        self.ppo_agents = {agent_id: agent(model, **config)
+                           for agent_id in self.cur_env.agents
+                           }
+        self.policy = MultimodalMAS(self.model)
 
     def collect_trajectories(self) -> RolloutStorage:
 
@@ -59,7 +52,7 @@ class FullTrainer(BaseTrainer):
             frame_shape=self.config.frame_shape,
             obs_shape=self.config.obs_shape,
             num_actions=self.config.num_actions,
-            num_agents=1,
+            num_agents=self.config.agents,
         )
         rollout.to(self.config.device)
 
@@ -106,8 +99,62 @@ class FullTrainer(BaseTrainer):
                     observation = self.cur_env.reset()
         return rollout
 
-    def train(self, rollout: RolloutStorage):
+    def train(self, rollout: RolloutStorage) -> [torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Dict]]:
+        [model.train() for model in self.ppo_agents.values()]
 
+        logs = {ag: None for ag in self.ppo_agents.keys()}
+
+        action_losses = {ag: 0 for ag in self.ppo_agents.keys()}
+        value_losses = {ag: 0 for ag in self.ppo_agents.keys()}
+        entropies = {ag: 0 for ag in self.ppo_agents.keys()}
+
+        with torch.no_grad():
+            next_value = self.ppo_agents["agent_0"].get_value(
+                rollout.states[-1].unsqueeze(dim=0), rollout.masks[-1]
+            ).detach()
+
+        rollout.compute_returns(next_value, True, self.config.gamma, 0.95)
+        advantages = rollout.returns - rollout.value_preds
+        # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
+
+        for epoch in range(self.config.ppo_epochs):
+            data_generator = rollout.recurrent_generator(
+                advantages, minibatch_frames=self.config.minibatch
+            )
+
+            for sample in data_generator:
+                states_batch, actions_batch, logs_probs_batch, \
+                    values_batch, return_batch, masks_batch, adv_targ = sample
+
+                for agent_id in self.ppo_agents.keys():
+                    agent_index = int(agent_id[-1])
+
+                    agent_actions = actions_batch[:, agent_index]
+                    agent_adv_targ = adv_targ[:, agent_index]
+                    agent_log_probs = logs_probs_batch[:, agent_index, :]
+                    agent_returns = return_batch[:, agent_index]
+                    agent_values = values_batch[:, agent_index]
+
+                    with torch.enable_grad():
+                        action_loss, value_loss, entropy, log = self.ppo_agents[agent_id].ppo_step(
+                            states_batch, agent_actions, agent_log_probs, agent_values,
+                            agent_returns, agent_adv_targ, masks_batch
+                        )
+
+                    logs[agent_id] = log
+
+                    action_losses[agent_id] += float(action_loss)
+                    value_losses[agent_id] += float(value_loss)
+                    entropies[agent_id] += float(entropy)
+
+        num_updates = self.config.ppo_epochs * \
+            int(math.ceil(rollout.rewards.size(0) / self.config.minibatch))
+
+        action_losses = sum(action_losses.values()) / num_updates
+        value_losses = sum(value_losses.values()) / num_updates
+        entropies = sum(entropies.values()) / num_updates
+
+        return action_losses, value_losses, entropies, logs
         self.em_trainer.train(rollout)
         self.collect_features()
 
@@ -154,6 +201,6 @@ if __name__ == '__main__':
     params = Params()
 
     trainer = FullTrainer(params)
-    trainer.collect_features()
+    # trainer.collect_features()
     rollout = trainer.collect_trajectories()
     trainer.train(rollout)

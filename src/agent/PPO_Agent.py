@@ -40,7 +40,8 @@ class PPO_Agent:
             curr_log_probs=[], old_log_probs=[]
         )
 
-        curr_values, curr_log_probs, entropy = self.actor_critic.evaluate_actions(states, masks)
+        curr_values, curr_log_probs, entropy = self.actor_critic.evaluate_actions(
+            states, masks)
 
         logs["curr_log_probs"].append(mean_fn(curr_log_probs))
         logs["old_log_probs"].append(mean_fn(log_probs))
@@ -53,8 +54,8 @@ class PPO_Agent:
         ratio = torch.exp(single_curr_log_prob - single_log_prob)
         surr1 = ratio * adv_targ
         surr2 = (
-                torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param)
-                * adv_targ
+            torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param)
+            * adv_targ
         )
 
         action_loss = -torch.min(surr1, surr2).mean()
@@ -71,7 +72,7 @@ class PPO_Agent:
             value_losses = (curr_values - returns).pow(2)
             value_losses_clipped = (value_pred_clipped - returns).pow(2)
             value_loss = (
-                    0.5 * torch.max(value_losses, value_losses_clipped).mean()
+                0.5 * torch.max(value_losses, value_losses_clipped).mean()
             )
         else:
             value_loss = 0.5 * (returns - curr_values).pow(2).mean()
@@ -81,9 +82,9 @@ class PPO_Agent:
         value_loss *= self.value_loss_coef
         entropy *= self.entropy_coef
         loss = (
-                value_loss
-                + action_loss
-                - entropy
+            value_loss
+            + action_loss
+            - entropy
         )
         loss.backward()
 
@@ -93,4 +94,3 @@ class PPO_Agent:
         self.optimizer.step()
 
         return action_loss, value_loss, entropy, logs
-

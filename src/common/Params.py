@@ -28,7 +28,7 @@ class Params:
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = True
+    use_wandb = False
     visible = False
     device = torch.device("cuda")
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
