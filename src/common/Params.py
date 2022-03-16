@@ -41,8 +41,8 @@ class Params:
     # of trajectories (trajectories are shuffled at each iteration)
     ppo_epochs = 3
     # number of elements on which the algorithm performs a learning step
-    minibatch = 32  # 64
-    batch_size = 4
+    minibatch = 1  # 32
+    batch_size = 4  # 64
     # number of future frames that the EnvModel will predict
     future_frame_horizon = 3
     framework = "torch"

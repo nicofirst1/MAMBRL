@@ -40,7 +40,8 @@ class FullTrainer(BaseTrainer):
         self.model = {agent_id: FullModel(FeatureExtractor, ModelFree,
                                           NextFramePredictor, RolloutEncoder, config)
                       for agent_id in self.cur_env.agents}
-        self.ppo_agents = {agent_id: agent(model, **config)
+        ppo_configs = config.get_ppo_configs()
+        self.ppo_agents = {agent_id: agent(self.model[agent_id], config.device, **ppo_configs)
                            for agent_id in self.cur_env.agents
                            }
         self.policy = MultimodalMAS(self.model)
@@ -107,7 +108,7 @@ class FullTrainer(BaseTrainer):
         action_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         value_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         entropies = {ag: 0 for ag in self.ppo_agents.keys()}
-
+        # FIXME: why we only take the first agent value?
         with torch.no_grad():
             next_value = self.ppo_agents["agent_0"].get_value(
                 rollout.states[-1].unsqueeze(dim=0), rollout.masks[-1]
@@ -155,52 +156,12 @@ class FullTrainer(BaseTrainer):
         entropies = sum(entropies.values()) / num_updates
 
         return action_losses, value_losses, entropies, logs
-        self.em_trainer.train(rollout)
-        self.collect_features()
-
-    def collect_features(self) -> RolloutStorage:
-
-        for episodes in range(self.config.episodes):
-            frames = self.cur_env.reset()
-
-            for step in range(self.config.horizon):
-
-                actions = {}
-                features = {}
-
-                frames = frames.to(self.device)
-                frames = frames.unsqueeze(dim=0)
-                mask = torch.ones(1).to(self.device)
-
-                # for every agent
-                for agent in self.cur_env.agents.keys():
-                    # get the partial agent policy for acting
-                    policy = partial(self.policy.act, agent)
-                    # extract features from distillated model free agent
-                    mf_feat = self.mf_trainer.ppo_agents[agent].actor_critic.feature_extraction(
-                        frames, mask)
-                    # get action and encode it
-                    action, _, _ = policy(frames)
-                    actions[agent] = action
-                    action = one_hot_encode(action, self.config.num_actions)
-                    action = action.to(self.device).unsqueeze(dim=0)
-                    # predict up to N rollout in the future
-                    pred_obs, pred_rews = self.em_trainer.env_model[agent].rollout_steps(frames,
-                                                                                         policy
-                                                                                         )
-                    # encode prediction and cat them to other ones
-                    em_feat = self.encoder(pred_obs, pred_rews)
-                    features[agent] = torch.cat((mf_feat, em_feat), dim=-1)
-
-                    # todo: Francesco add action/values arch
-
-                frames, rewards, done, info = self.cur_env.step(actions)
 
 
 if __name__ == '__main__':
     params = Params()
-
-    trainer = FullTrainer(params)
+    agent = PPO_Agent
+    trainer = FullTrainer(agent, params)
     # trainer.collect_features()
     rollout = trainer.collect_trajectories()
-    trainer.train(rollout)
+    action_losses, value_losses, entropies, logs = trainer.train(rollout)

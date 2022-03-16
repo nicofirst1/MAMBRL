@@ -157,8 +157,9 @@ class ModelFree(nn.Module):
 
         log_actions_prob = F.log_softmax(action_logit, dim=1).squeeze()
 
-        value = float(value)
-        action = int(action)
+        if value.shape[0] == 1:
+            value = float(value)
+            action = int(action)
 
         return value, action, log_actions_prob
 

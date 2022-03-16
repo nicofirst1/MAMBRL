@@ -122,6 +122,48 @@ class FullModel(nn.Module):
 
         return features.shape[-1]
 
+    def get_value(self, observation, mask):
+        """ return the value from the critic
+
+        Returns
+        -------
+        value: float
+
+        """
+        return self.forward(observation)[1]
+
+    def evaluate_actions(self, inputs: torch.Tensor, masks):
+        """evaluate_actions method.
+
+        compute the actions logit, value and actions probability by passing
+        the actual states (frames) to the FullModel network. Then computes
+        the entropy of the actions
+        Parameters
+        ----------
+        inputs : PyTorch Array
+            a 4 dimensional tensor [batch_size, channels, width, height]
+
+        Returns
+        -------
+        action_logit : Torch.Tensor [batch_size, num_actions]
+            output of the ModelFree network before passing it to the softmax
+        action_log_probs : torch.Tensor [batch_size, num_actions]
+            log_probs of all the actions
+        probs : Torch.Tensor [batch_size, num_actions]
+            probability of actions given by the ModelFree network
+        value : Torch.Tensor [batch_size,1]
+            value of the state given by the ModelFree network
+        entropy : Torch.Tensor [batch_size,1]
+            value of the entropy given by the action with index equal to action_indx.
+        """
+
+        action_logit, value = self.forward(inputs)
+        action_probs = F.softmax(action_logit, dim=1)
+        action_log_probs = F.log_softmax(action_logit, dim=1)
+        entropy = -(action_probs * action_log_probs).sum(1).mean()
+
+        return value, action_log_probs, entropy
+
     def to(self, device):
         self.mf_feature_extractor.to(device)
         self.env_model.to(device)
@@ -152,9 +194,14 @@ class FullModel(nn.Module):
         mf_features = self.mf_feature_extractor(inputs, mask)
         _, action, _ = self.mb_actor.act(inputs, mask)
 
-        action = one_hot_encode(
-            action, self.num_actions).to(self.device).unsqueeze(0)
-        action = action.float()
+        if not isinstance(action, torch.Tensor):
+            action = one_hot_encode(
+                action, self.num_actions).to(self.device).unsqueeze(0)
+            action = action.float()
+        else:
+            action = one_hot_encode(
+                action, self.num_actions).to(self.device)
+            action = action.float()
         em_output, reward_pred, value_pred = self.env_model(inputs, action)
         em_output = torch.argmax(em_output, dim=1).unsqueeze(dim=0).float()
         fake_reward = torch.zeros((*em_output.shape[:2], 1)).to(self.device)
@@ -188,5 +235,5 @@ if __name__ == "__main__":
     configs = Params()
     model = FullModel(FeatureExtractor, ModelFree,
                       NextFramePredictor, RolloutEncoder, configs)
-    fake_input = torch.zeros(1, *configs.frame_shape).to(configs.device)
+    fake_input = torch.zeros(32, *configs.frame_shape).to(configs.device)
     action_logits, value = model(fake_input)

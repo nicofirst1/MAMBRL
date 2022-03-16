@@ -220,13 +220,13 @@ class StochasticModel(nn.Module):
             bits_pred = bits_clean + (bits_pred - bits_clean).detach()
             bits = mix(
                 bits_pred, bits, 1 - (1 - epsilon) *
-                                 self.config.latent_rnn_max_sampling
+                self.config.latent_rnn_max_sampling
             )
 
             res = self.add_bits(layer, bits)
             return mix(
                 res, layer, 1 - (1 - epsilon) *
-                            self.config.latent_use_max_probability
+                self.config.latent_use_max_probability
             )
 
         bits, _ = self.bits_predictor(layer, 1.0)
@@ -465,7 +465,7 @@ class NextFramePredictor(Container):
         batch_size = frames.shape[0]
         self.init_internal_states(batch_size)
 
-        actions=torch.zeros((batch_size, self.config.num_actions))
+        actions = torch.zeros((batch_size, self.config.num_actions))
 
         new_obs = frames
         pred_obs = []
