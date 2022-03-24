@@ -28,7 +28,8 @@ setup(
     packages=find_packages(),
     license='MIT',
     url='https://gitlab.com/nicofirst1/MAMBRL',
-    install_requires=requirements.split("\n")
+    install_requires=requirements.split("\n"),
+    python_requires='>=3.9',
 
 )
 
