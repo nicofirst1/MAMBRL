@@ -5,6 +5,7 @@ from tqdm import trange
 from typing import Dict
 import math
 
+from logging_callbacks.wandbLogger import preprocess_logs
 from src.agent.PPO_Agent import PPO_Agent
 from src.agent.RolloutStorage import RolloutStorage
 from src.common import Params, mas_dict2tensor
@@ -37,13 +38,17 @@ class FullTrainer(BaseTrainer):
 
         super(FullTrainer, self).__init__(env, config)
 
-        self.model = {agent_id: FullModel(FeatureExtractor, ModelFree,
-                                          NextFramePredictor, RolloutEncoder, config)
-                      for agent_id in self.cur_env.agents}
+        self.model = {
+            agent_id: FullModel(FeatureExtractor, ModelFree, NextFramePredictor, RolloutEncoder, config)
+            for agent_id in self.cur_env.agents
+        }
+
         ppo_configs = config.get_ppo_configs()
-        self.ppo_agents = {agent_id: agent(self.model[agent_id], config.device, **ppo_configs)
-                           for agent_id in self.cur_env.agents
-                           }
+        self.ppo_agents = {
+            agent_id: agent(self.model[agent_id], config.device, **ppo_configs)
+            for agent_id in self.cur_env.agents
+        }
+
         self.policy = MultimodalMAS(self.model)
 
     def collect_trajectories(self) -> RolloutStorage:
@@ -66,12 +71,10 @@ class FullTrainer(BaseTrainer):
         for episode in trange(self.config.episodes, desc="Collecting trajectories.."):
             done["__all__"] = False
             observation = self.cur_env.reset()
-            rollout.states[episode *
-                           self.config.horizon] = observation.unsqueeze(dim=0)
+            rollout.states[episode * self.config.horizon] = observation.unsqueeze(dim=0)
 
             for step in range(self.config.horizon):
-                observation = observation.unsqueeze(
-                    dim=0).to(self.config.device)
+                observation = observation.unsqueeze(dim=0).to(self.config.device)
 
                 for agent_id in self.cur_env.agents:
                     with torch.no_grad():
@@ -95,9 +98,10 @@ class FullTrainer(BaseTrainer):
                 )
 
                 if done["__all__"]:
-                    rollout.compute_value_world_model(
-                        episode * self.config.horizon + step, self.config.gamma)
+                    ## Needed only when training also env model
+                    #rollout.compute_value_world_model(episode * self.config.horizon + step, self.config.gamma)
                     observation = self.cur_env.reset()
+
         return rollout
 
     def train(self, rollout: RolloutStorage) -> [torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Dict]]:
@@ -108,6 +112,7 @@ class FullTrainer(BaseTrainer):
         action_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         value_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         entropies = {ag: 0 for ag in self.ppo_agents.keys()}
+
         # FIXME: why we only take the first agent value?
         with torch.no_grad():
             next_value = self.ppo_agents["agent_0"].get_value(
@@ -118,14 +123,14 @@ class FullTrainer(BaseTrainer):
         advantages = rollout.returns - rollout.value_preds
         # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
 
-        for epoch in range(self.config.ppo_epochs):
+        for epoch in trange(self.config.ppo_epochs, desc="Training.."):
             data_generator = rollout.recurrent_generator(
                 advantages, minibatch_frames=self.config.minibatch
             )
 
             for sample in data_generator:
                 states_batch, actions_batch, logs_probs_batch, \
-                    values_batch, return_batch, masks_batch, adv_targ = sample
+                values_batch, return_batch, masks_batch, adv_targ = sample
 
                 for agent_id in self.ppo_agents.keys():
                     agent_index = int(agent_id[-1])
@@ -148,8 +153,7 @@ class FullTrainer(BaseTrainer):
                     value_losses[agent_id] += float(value_loss)
                     entropies[agent_id] += float(entropy)
 
-        num_updates = self.config.ppo_epochs * \
-            int(math.ceil(rollout.rewards.size(0) / self.config.minibatch))
+        num_updates = self.config.ppo_epochs * int(math.ceil(rollout.rewards.size(0) / self.config.minibatch))
 
         action_losses = sum(action_losses.values()) / num_updates
         value_losses = sum(value_losses.values()) / num_updates
@@ -163,5 +167,7 @@ if __name__ == '__main__':
     agent = PPO_Agent
     trainer = FullTrainer(agent, params)
     # trainer.collect_features()
-    rollout = trainer.collect_trajectories()
-    action_losses, value_losses, entropies, logs = trainer.train(rollout)
+
+    for epoch in trange(params.model_free_epochs, desc="Training model free"):
+        rollout = trainer.collect_trajectories()
+        action_losses, value_losses, entropies, logs = trainer.train(rollout)

@@ -3,14 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from collections import OrderedDict
-from typing import Tuple, List
 from src.common.utils import one_hot_encode
-from src.trainer.Policies import MultimodalMAS
 from src.common.Params import Params
 from src.model.ModelFree import FeatureExtractor, ModelFree
-from src.trainer.Policies import TrajCollectionPolicy
 from src.model.EnvModel import NextFramePredictor
 from src.model.RolloutEncoder import RolloutEncoder
+from trainer.Policies import OptimalAction
 
 
 class FullModel(nn.Module):
@@ -21,12 +19,14 @@ class FullModel(nn.Module):
     used as input to an actor critic network.
     """
 
-    def __init__(self,
-                 mf_feature_extractor: FeatureExtractor,
-                 mb_actor_model: ModelFree,
-                 env_model: NextFramePredictor,
-                 rollout_encoder: RolloutEncoder,
-                 config: Params):
+    def __init__(
+            self,
+            mf_feature_extractor: FeatureExtractor,
+            mb_actor_model: ModelFree,
+            env_model: NextFramePredictor,
+            rollout_encoder: RolloutEncoder,
+            config: Params
+    ):
         """
         :param mf_feature_extractor: feature extractor class used for the model free
             part of the architecture
@@ -37,7 +37,9 @@ class FullModel(nn.Module):
             the predicted frames
         :param config: class with all the configuration parameters
         """
+
         super(FullModel, self).__init__()
+
         # =============================================================================
         # GENERIC PARAMS
         # =============================================================================
@@ -57,13 +59,14 @@ class FullModel(nn.Module):
 
         # FIXME: add a get_env_model_config() function
         self.env_model = env_model(config).to(self.device)
+
         rollout_encoder_config = config.get_rollout_encoder_configs()
-        self.rollout_encoder = rollout_encoder(
-            **rollout_encoder_config).to(self.device)
+        self.rollout_encoder = rollout_encoder(**rollout_encoder_config).to(self.device)
 
         # actor who chooses the actions to be used by the env_model
-        mb_actor_config = config.get_model_free_configs()
-        self.mb_actor = mb_actor_model(**mb_actor_config).to(self.device)
+        #mb_actor_config = config.get_model_free_configs()
+        #self.mb_actor = mb_actor_model(**mb_actor_config).to(self.device)
+        self.policy = OptimalAction(self.cur_env, config.num_actions, config.device)
 
         next_inp = None
         features_shape = self.get_features()
@@ -83,6 +86,7 @@ class FullModel(nn.Module):
         critic["fm_critic_output"] = nn.Linear(next_inp, 1)
         critic["fm_critic_output_activ"] = nn.Tanh()
         self.critic = nn.Sequential(critic).to(self.device)
+
         # ACTOR
         actor = OrderedDict()
         for i, fc in enumerate(actor_fc_layers):
@@ -108,13 +112,11 @@ class FullModel(nn.Module):
         mask = torch.ones(1)
         mf_features = self.mf_feature_extractor(fake_input, mask)
         fake_action = torch.randint(self.num_actions, (1,))
-        fake_action = one_hot_encode(
-            fake_action, self.num_actions).to(self.device)
+        fake_action = one_hot_encode(fake_action, self.num_actions).to(self.device)
         fake_action = fake_action.float()
-        em_output, reward_pred, value_pred = self.env_model(
-            fake_input, fake_action)
-        # FIXME: Hardcoded reward since its shape returned from the
-        # env_model is not suitable
+
+        em_output, reward_pred, value_pred = self.env_model(fake_input, fake_action)
+        # FIXME: Hardcoded reward since its shape returned from the env_model is not suitable
         em_output = torch.argmax(em_output, dim=1).unsqueeze(dim=0).float()
         fake_reward = torch.zeros((*em_output.shape[:2], 1)).to(self.device)
         em_features = self.rollout_encoder(em_output, fake_reward)
@@ -130,9 +132,9 @@ class FullModel(nn.Module):
         value: float
 
         """
-        return self.forward(observation)[1]
+        return self.forward(observation, mask)[1]
 
-    def evaluate_actions(self, inputs: torch.Tensor, masks):
+    def evaluate_actions(self, inputs: torch.Tensor, mask):
         """evaluate_actions method.
 
         compute the actions logit, value and actions probability by passing
@@ -157,7 +159,7 @@ class FullModel(nn.Module):
             value of the entropy given by the action with index equal to action_indx.
         """
 
-        action_logit, value = self.forward(inputs)
+        action_logit, value = self.forward(inputs, mask)
         action_probs = F.softmax(action_logit, dim=1)
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
@@ -173,13 +175,14 @@ class FullModel(nn.Module):
 
         return self
 
-    def forward(self, inputs):
+    def forward(self, inputs, mask):
         """standard forward pass
 
         Parameters
         ----------
         inputs : Torch.Tensor
             [batch_size, channels, width, height]
+        mask:
         Returns
         -------
         action_logits : Torch.Tensor
@@ -189,32 +192,35 @@ class FullModel(nn.Module):
 
         """
         # FIXME: Hardcoded mask, need to fix
-        batch_size = inputs.shape[0]
-        mask = torch.ones(batch_size, 1)
+        #batch_size = inputs.shape[0]
+        #mask = torch.ones(batch_size, 1)
         mf_features = self.mf_feature_extractor(inputs, mask)
-        _, action, _ = self.mb_actor.act(inputs, mask)
+        #_, action, _ = self.mb_actor.act(inputs, mask)
+
+        ## fixme: hardcoded agent_id
+        action, _, _ = self.policy.act("agent_0", inputs)
 
         if not isinstance(action, torch.Tensor):
-            action = one_hot_encode(
-                action, self.num_actions).to(self.device).unsqueeze(0)
-            action = action.float()
+            action = one_hot_encode(action, self.num_actions).to(self.device).unsqueeze(0)
         else:
-            action = one_hot_encode(
-                action, self.num_actions).to(self.device)
-            action = action.float()
-        em_output, reward_pred, value_pred = self.env_model(inputs, action)
+            action = one_hot_encode(action, self.num_actions).to(self.device)
+        action = action.float()
+
+        with torch.no_grad:
+            em_output, reward_pred, value_pred = self.env_model(inputs, action)
+
         em_output = torch.argmax(em_output, dim=1).unsqueeze(dim=0).float()
-        fake_reward = torch.zeros((*em_output.shape[:2], 1)).to(self.device)
-        em_features = self.rollout_encoder(em_output, fake_reward)
+        em_features = self.rollout_encoder(em_output, reward_pred.unsqueeze(dim=0))
+
         features = torch.cat((mf_features, em_features), dim=-1)
         action_logits = self.actor(features)
         value = self.critic(features)
 
         return action_logits, value
 
-    def act(self, inputs, masks, deterministic=False):
+    def act(self, inputs, mask, deterministic=False):
         # normalize the input outside
-        action_logit, value = self.forward(inputs)
+        action_logit, value = self.forward(inputs, mask)
 
         action_probs = F.softmax(action_logit, dim=1)
 
@@ -233,7 +239,6 @@ class FullModel(nn.Module):
 
 if __name__ == "__main__":
     configs = Params()
-    model = FullModel(FeatureExtractor, ModelFree,
-                      NextFramePredictor, RolloutEncoder, configs)
+    model = FullModel(FeatureExtractor, ModelFree, NextFramePredictor, RolloutEncoder, configs)
     fake_input = torch.zeros(32, *configs.frame_shape).to(configs.device)
     action_logits, value = model(fake_input)

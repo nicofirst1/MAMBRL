@@ -21,11 +21,12 @@ class RolloutEncoder(nn.Module):
                 feature_extractor_layers["re_conv_" +
                                          str(i) + "_activ"] = nn.ReLU()
             next_inp = cnn[0]
+
         # compute the input shape for the residual network
+        fake_inp = None
         for layer in feature_extractor_layers:
             if layer == "re_conv_0":
-                fake_inp = torch.zeros(
-                    [1, *self.in_shape])
+                fake_inp = torch.zeros([1, *self.in_shape])
                 fake_inp = feature_extractor_layers[layer](fake_inp)
             else:
                 fake_inp = feature_extractor_layers[layer](fake_inp)
@@ -34,8 +35,7 @@ class RolloutEncoder(nn.Module):
         next_inp = fake_inp.view(1, -1).size(1)
         feature_extractor_layers["re_flatten"] = nn.Flatten()
         self.feature_extractor = nn.Sequential(feature_extractor_layers)
-        self.re_LSTM = nn.LSTM(
-            next_inp + len_rewards, hidden_size)
+        self.re_LSTM = nn.LSTM(next_inp + len_rewards, hidden_size)
 
     def forward(self, state, reward):
         """forward method.
@@ -61,8 +61,8 @@ class RolloutEncoder(nn.Module):
         state = state.view(-1, *self.in_shape)
         state = self.feature_extractor(state)
         state = state.view(num_steps, batch_size, -1)
-        # state has 3136 feature and reward is just 1, maybe the reward is
-        # useless in our setting
+
+        # state has 3136 feature and reward is just 1, maybe the reward is useless in our setting
         lstm_input = torch.cat([state, reward], dim=-1)
         out, hidden = self.re_LSTM(lstm_input)
 
@@ -78,9 +78,7 @@ if __name__ == "__main__":
     re_model = RolloutEncoder(**re_params)
     # The input to the rollout encoder should be a tensor of size:
     # [sequence_len, batch_size, channel_size, width, height]
-    re_state_input = torch.rand(params.future_frame_horizon,
-                                params.batch_size, *params.frame_shape)
-    re_reward_input = torch.rand(params.future_frame_horizon,
-                                 params.batch_size, params.len_reward)
+    re_state_input = torch.rand(params.future_frame_horizon, params.batch_size, *params.frame_shape)
+    re_reward_input = torch.rand(params.future_frame_horizon, params.batch_size, params.len_reward)
 
     out = re_model(re_state_input, re_reward_input)

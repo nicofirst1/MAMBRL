@@ -306,37 +306,30 @@ class FeatureExtractor(NNBase):
         feature_extractor_layers = OrderedDict()
 
         # if num_frames == 1 we build a 2DConv base, otherwise we build a 3Dconv base
-        if self.num_frames == 1:
-            for i, cnn in enumerate(conv_layers):
-                if i == 0:
-                    feature_extractor_layers["conv_0"] = nn.Conv2d(
-                        self.num_channels, cnn[0], kernel_size=cnn[1], stride=cnn[2])
-                    feature_extractor_layers["conv_0_activ"] = nn.LeakyReLU()
-                else:
-                    feature_extractor_layers["conv_" + str(i)] = nn.Conv2d(
-                        next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
-                    feature_extractor_layers["conv_" +
-                                             str(i) + "_activ"] = nn.LeakyReLU()
-                next_inp = cnn[0]
+        for i, cnn in enumerate(conv_layers):
+            if i == 0:
+                feature_extractor_layers["conv_0"] = nn.Conv2d(self.num_channels, cnn[0], kernel_size=cnn[1], stride=cnn[2])
+                feature_extractor_layers["conv_0_activ"] = nn.LeakyReLU()
+            else:
+                feature_extractor_layers["conv_" + str(i)] = nn.Conv2d(next_inp, cnn[0], kernel_size=cnn[1], stride=cnn[2])
+                feature_extractor_layers["conv_" + str(i) + "_activ"] = nn.LeakyReLU()
+            next_inp = cnn[0]
 
-            for layer in feature_extractor_layers:
-                if layer == "conv_0":
-                    fake_inp = torch.zeros(
-                        [1, self.num_channels, *self.in_shape[1:]])
-                    fake_inp = feature_extractor_layers[layer](fake_inp)
-                else:
-                    fake_inp = feature_extractor_layers[layer](fake_inp)
+        for layer in feature_extractor_layers:
+            if layer == "conv_0":
+                fake_inp = torch.zeros([1, self.num_channels, *self.in_shape[1:]])
+                fake_inp = feature_extractor_layers[layer](fake_inp)
+            else:
+                fake_inp = feature_extractor_layers[layer](fake_inp)
 
-            # flatten layer
-            next_inp = fake_inp.view(1, -1).size(1)
+        # flatten layer
+        next_inp = fake_inp.view(1, -1).size(1)
 
-            # flatten the output starting from dim=1 by default
-            feature_extractor_layers["flatten"] = nn.Flatten()
-            feature_extractor_layers["fc_0"] = nn.Linear(
-                next_inp, fc_layers[0])
-            feature_extractor_layers["fc_0_activ"] = nn.LeakyReLU()
-            self.model = nn.Sequential(feature_extractor_layers)
-        # TODO else with more than 1 frame
+        # flatten the output starting from dim=1 by default
+        feature_extractor_layers["flatten"] = nn.Flatten()
+        feature_extractor_layers["fc_0"] = nn.Linear(next_inp, fc_layers[0])
+        feature_extractor_layers["fc_0_activ"] = nn.LeakyReLU()
+        self.model = nn.Sequential(feature_extractor_layers)
 
     def forward(self, inputs, masks):
         return self.model(inputs)
@@ -350,15 +343,12 @@ class Conv2DModelFree(nn.Module):
 
     def __init__(self, obs_shape, share_weights, action_space, conv_layers, fc_layers,
                  use_recurrent, use_residual, num_frames, base_hidden_size):
-        assert num_frames == 1, "The parameter num_frames should be one when using the 2D convolution"
-        assert 0 < len(
-            fc_layers) < 3, f"fc_layers should be a tuple of lists of 1 or 2 elements while it's {fc_layers}"
-        assert 0 < len(
-            conv_layers) < 3, f"conv_layers should be a tuple of lists of 1 or 2 elements while it's {conv_layers}"
+        #assert num_frames == 1, "The parameter num_frames should be one when using the 2D convolution"
+        assert 0 < len(fc_layers) < 3, f"fc_layers should be a tuple of lists of 1 or 2 elements while it's {fc_layers}"
+        assert 0 < len(conv_layers) < 3, f"conv_layers should be a tuple of lists of 1 or 2 elements while it's {conv_layers}"
         super(Conv2DModelFree, self).__init__()
 
         # self, obs_shape, action_space, base, hidden_size, share_weights, base_kwargs
-
         self.name = "Conv2DModelFree"
         self.num_actions = action_space
         self.share_weights = share_weights

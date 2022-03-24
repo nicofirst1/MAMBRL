@@ -39,7 +39,7 @@ class ModelFreeTrainer(BaseTrainer):
 
         self.num_agents = config.agents
         self.num_episodes = config.episodes
-        self.num_steps = config.num_steps
+        self.num_steps = config.horizon
 
         self.action_space = config.num_actions
         self.frame_shape = config.frame_shape
@@ -95,8 +95,7 @@ class ModelFreeTrainer(BaseTrainer):
 
         for episode in range(self.num_episodes):
             observation = self.cur_env.reset()
-            rollout.states[episode *
-                           self.num_steps] = observation.unsqueeze(dim=0)
+            rollout.states[episode * self.num_steps] = observation.unsqueeze(dim=0)
 
             for step in range(self.num_steps):
                 obs = observation.to(self.config.device).unsqueeze(dim=0)
