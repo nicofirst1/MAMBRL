@@ -153,14 +153,16 @@ class FullModel(nn.Module):
             value of the state given by the ModelFree network
         entropy : Torch.Tensor [batch_size,1]
             value of the entropy given by the action with index equal to action_indx.
+        em_out : Dict[Torch.Tensor]
+            Environment model output as dict
         """
 
-        action_logit, value = self.forward(inputs)
+        action_logit, value, em_out = self.forward(inputs)
         action_probs = F.softmax(action_logit, dim=1)
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
 
-        return value, action_log_probs, entropy
+        return value, action_log_probs, entropy , em_out
 
     def to(self, device):
         self.mf_feature_extractor.to(device)
@@ -184,6 +186,8 @@ class FullModel(nn.Module):
             [batch_size, num_actions]
         value : Torch.Tensor
             [batch_size, 1]
+        env_model_logs: Dict[torch.Tensor]
+            Output of env model :pred_frames, reward_pred, value_pred
 
         """
         # FIXME: Hardcoded mask, need to fix
@@ -203,36 +207,42 @@ class FullModel(nn.Module):
 
         if batch_size > 1:
             # env model dows not work for batch_size>1, so we need a for loop
-            em_outputs = []
+            frame_preds = []
             reward_preds = []
             value_preds = []
 
             for bt in range(batch_size):
                 inp = inputs[bt].unsqueeze(dim=0)
                 act = action[bt].unsqueeze(dim=0)
-                em_output, reward_pred, value_pred = self.env_model(inp, act)
-                em_outputs.append(em_output)
+                frame_pred, reward_pred, value_pred = self.env_model(inp, act)
+                frame_preds.append(frame_pred)
                 reward_preds.append(reward_pred)
                 value_preds.append(value_pred)
 
-            em_output = torch.cat(em_outputs)
+            frame_pred = torch.cat(frame_preds)
             reward_pred = torch.cat(reward_preds)
             value_pred = torch.cat(value_preds)
         else:
-            em_output, reward_pred, value_pred = self.env_model(inputs, action)
+            frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
 
-        em_output = torch.argmax(em_output, dim=1).unsqueeze(dim=0).float()
-        fake_reward = torch.zeros((*em_output.shape[:2], 1)).to(self.device)
-        em_features = self.rollout_encoder(em_output, fake_reward)
+        frame_pred = torch.argmax(frame_pred, dim=1).unsqueeze(dim=0).float()
+        fake_reward = torch.zeros((*frame_pred.shape[:2], 1)).to(self.device)
+        em_features = self.rollout_encoder(frame_pred, fake_reward)
         features = torch.cat((mf_features, em_features), dim=-1)
         action_logits = self.actor(features)
         value = self.critic(features)
 
-        return action_logits, value
+        em_out=dict(
+            frame_pred=frame_pred.detach(),
+            reward_pred=reward_pred.detach(),
+            value_pred=value_pred.detach(),
+        )
+
+        return action_logits, value, em_out
 
     def act(self, inputs, masks, deterministic=False):
         # normalize the input outside
-        action_logit, value = self.forward(inputs)
+        action_logit, value, em_out = self.forward(inputs)
 
         action_probs = F.softmax(action_logit, dim=1)
 

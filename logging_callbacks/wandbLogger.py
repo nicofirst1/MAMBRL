@@ -190,6 +190,117 @@ class PPOWandb(WandbLogger):
         self.log_to_wandb(logs, commit=True)
 
 
+class FullWandb(WandbLogger):
+    def __init__(
+            self,
+            train_log_step: int,
+            val_log_step: int,
+            horizon: int,
+            action_meaning: Dict[str, str],
+            cams: Optional[list],
+            models: Dict[str, nn.Module] = {},
+            **kwargs,
+    ):
+        """
+        Logs env model training onto wandb
+        Args:
+            train_log_step:
+            val_log_step:
+            out_dir:
+            model_config:
+            **kwargs:
+        """
+
+        super(FullWandb, self).__init__(**kwargs)
+
+        for idx, mod in enumerate(models.values()):
+            wandb.watch(mod, log_freq=1000, log_graph=True, idx=idx, log="all")
+
+        self.train_log_step = train_log_step if train_log_step > 0 else 2
+        self.val_log_step = val_log_step if val_log_step > 0 else 2
+        self.horizon = horizon
+        self.action_meaning = action_meaning
+        self.epoch = 0
+
+        self.log_behavior_step = 10
+        self.log_heatmap_step = 100
+
+        # Grad cam
+        self.cams = cams
+
+    def on_batch_end(self, logs: Dict[str, Any], batch_id: int, rollout):
+
+        logs["epoch"] = batch_id
+
+        if batch_id % self.log_behavior_step == 0:
+            # done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
+            #
+            # if len(done_idx) > 1:
+            #     done_idx = done_idx[0]
+
+            states = (
+                    rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8) * 255
+            )
+
+            actions = rollout.actions[:rollout.step].squeeze().cpu().numpy()
+            rewards = rollout.rewards[:rollout.step].squeeze().cpu().numpy()
+
+            grids = write_infos(states, rollout, self.params.action_meanings)
+
+            logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
+            logs["behaviour_info"] = wandb.Video(grids, fps=10, format="gif")
+            logs["hist/actions"] = actions
+            logs["hist/rewards"] = rewards
+            logs["mean_reward"] = rewards.mean()
+            logs["episode_length"] = rollout.step
+
+        if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
+
+            # map heatmap on image
+            # idx = random.choice(range(done_idx))
+            idx = rollout.step
+            img = rollout.states[idx]
+            reprs = []
+            for c in self.cams:
+                cam = c.generate_cam(img.clone().unsqueeze(dim=0))
+                reprs.append((c.name, cam))
+            img = img[-3:]
+            img = np.uint8(img.cpu().data.numpy())
+            img = img.transpose(2, 1, 0)
+            img = Image.fromarray(img).convert("RGB")
+
+            for name, rep in reprs:
+                heatmap, heatmap_on_image = apply_colormap_on_image(
+                    img, rep, "hsv")
+
+                logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
+            imagined_state = logs["imagined_state"]
+            actual_state = logs["actual_state"]
+
+            imagined_state = torch.stack(imagined_state)
+            actual_state = torch.stack(actual_state)
+
+            # bring imageine state in range 0 255
+            imagined_state = (imagined_state - imagined_state.min()) / \
+                             (imagined_state.max() - imagined_state.min())
+            imagined_state *= 255
+
+            diff = abs(imagined_state - actual_state)
+
+            fps = 5
+            img_log = {
+                f"imagined_state": wandb.Video(imagined_state, fps=fps, format="gif"),
+                f"actual_state": wandb.Video(actual_state, fps=fps, format="gif"),
+                f"diff": wandb.Video(diff, fps=fps, format="gif"),
+            }
+
+            logs.update(img_log)
+
+                # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
+
+        self.log_to_wandb(logs, commit=True)
+
+
 def on_epoch_end(self, loss: float, logs: Dict[str, Any], model_path: str):
     self.epoch += 1
 
@@ -214,7 +325,8 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
     info_img = [Image.fromarray(info_img[i]) for i in range(batch_size)]
     draws = [ImageDraw.Draw(img) for img in info_img]
 
-    font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", font_size)
+    font = ImageFont.load_default()
+    #font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", font_size)
 
     # if rewards.size == 1:
     #     rewards = np.expand_dims(rewards, 0)
@@ -284,6 +396,11 @@ def preprocess_logs(learn_output, model_free):
     new_logs = {}
     for agent, values in logs.items():
         new_key = f"agents/{agent}"
+
+        if isinstance(values,list):
+            # we have a list of dict with the same values, convert to a dict of list
+            values={key: [i[key] for i in values] for key in values[0]}
+            values= {k: [x for sub in v for x in sub] for k, v in values.items()}
 
         for k, v in values.items():
             new_logs[f"{new_key}_{k}"] = np.asarray(v).mean()

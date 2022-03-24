@@ -6,6 +6,7 @@ from tqdm import trange
 from typing import Dict
 import math
 
+from logging_callbacks.wandbLogger import preprocess_logs
 from src.agent.PPO_Agent import PPO_Agent
 from src.agent.RolloutStorage import RolloutStorage
 from src.common import Params, mas_dict2tensor
@@ -38,6 +39,8 @@ class FullTrainer(BaseTrainer):
 
         super(FullTrainer, self).__init__(env, config)
 
+
+
         self.model = {agent_id: FullModel(FeatureExtractor, ModelFree,
                                           NextFramePredictor, RolloutEncoder, config)
                       for agent_id in self.cur_env.agents}
@@ -46,6 +49,20 @@ class FullTrainer(BaseTrainer):
                            for agent_id in self.cur_env.agents
                            }
         self.policy = MultimodalMAS(self.model)
+        if self.config.use_wandb:
+            from logging_callbacks import FullWandb
+            cams = []
+
+            self.ppo_logger = FullWandb(
+                train_log_step=5,
+                val_log_step=5,
+                project="full_training",
+                opts={},
+                #models=self.model["agent_0"].get_modules(),
+                horizon=config.horizon,
+                action_meaning=self.cur_env.env.action_meaning_dict,
+                cams=cams,
+            )
 
     def collect_trajectories(self) -> RolloutStorage:
 
@@ -58,8 +75,8 @@ class FullTrainer(BaseTrainer):
         )
         rollout.to(self.config.device)
 
-        if self.logger is not None:
-            self.logger.epoch += 1
+        if self.ppo_logger is not None:
+            self.ppo_logger.epoch += 1
 
         action_dict = {agent_id: None for agent_id in self.cur_env.agents}
         done = {agent_id: None for agent_id in self.cur_env.agents}
@@ -104,7 +121,6 @@ class FullTrainer(BaseTrainer):
     def train(self, rollout: RolloutStorage) -> [torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Dict]]:
         [model.train() for model in self.ppo_agents.values()]
 
-        logs = {ag: None for ag in self.ppo_agents.keys()}
 
         action_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         value_losses = {ag: 0 for ag in self.ppo_agents.keys()}
@@ -123,6 +139,8 @@ class FullTrainer(BaseTrainer):
             data_generator = rollout.recurrent_generator(
                 advantages, minibatch_frames=self.config.minibatch
             )
+
+            logs = {ag: [] for ag in self.ppo_agents.keys()}
 
             for sample in data_generator:
                 states_batch, actions_batch, logs_probs_batch, \
@@ -143,11 +161,17 @@ class FullTrainer(BaseTrainer):
                             agent_returns, agent_adv_targ, masks_batch
                         )
 
-                    logs[agent_id] = log
+                    logs[agent_id].append(log)
 
                     action_losses[agent_id] += float(action_loss)
                     value_losses[agent_id] += float(value_loss)
                     entropies[agent_id] += float(entropy)
+
+            if params.use_wandb:
+                logs = preprocess_logs(
+                    [value_loss, action_loss, entropy, logs], trainer)
+                self.ppo_logger.on_batch_end(
+                    logs=logs, batch_id=epoch, rollout=rollout)
 
         num_updates = self.config.ppo_epochs * \
             int(math.ceil(rollout.rewards.size(0) / self.config.minibatch))
@@ -166,3 +190,4 @@ if __name__ == '__main__':
     # trainer.collect_features()
     rollout = trainer.collect_trajectories()
     action_losses, value_losses, entropies, logs = trainer.train(rollout)
+

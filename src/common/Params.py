@@ -28,7 +28,7 @@ class Params:
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = False
+    use_wandb = True
     visible = False
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
