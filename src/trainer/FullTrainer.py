@@ -181,8 +181,8 @@ class FullTrainer(BaseTrainer):
 
 if __name__ == '__main__':
     params = Params()
-    agent = PPO_Agent
-    trainer = FullTrainer(agent, params)
+
+    trainer = FullTrainer(PPO_Agent, params)
     # trainer.collect_features()
 
     for epoch in trange(params.model_free_epochs, desc="Training model free"):

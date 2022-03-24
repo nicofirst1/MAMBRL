@@ -54,8 +54,7 @@ class FullModel(nn.Module):
         # FIXME: hardcoded
         mf_feature_extractor_config["conv_layers"] = mf_feature_extractor_config["conv_layers"][0]
         mf_feature_extractor_config["fc_layers"] = mf_feature_extractor_config["fc_layers"][0]
-        self.mf_feature_extractor = mf_feature_extractor(input_shape=self.input_shape,
-                                                         **mf_feature_extractor_config).to(self.device)
+        self.mf_feature_extractor = mf_feature_extractor(input_shape=self.input_shape, **mf_feature_extractor_config).to(self.device)
 
         # FIXME: add a get_env_model_config() function
         self.env_model = env_model(config).to(self.device)
@@ -64,9 +63,8 @@ class FullModel(nn.Module):
         self.rollout_encoder = rollout_encoder(**rollout_encoder_config).to(self.device)
 
         # actor who chooses the actions to be used by the env_model
-        #mb_actor_config = config.get_model_free_configs()
-        #self.mb_actor = mb_actor_model(**mb_actor_config).to(self.device)
-        self.policy = OptimalAction(self.cur_env, config.num_actions, config.device)
+        mb_actor_config = config.get_model_free_configs()
+        self.mb_actor = mb_actor_model(**mb_actor_config).to(self.device)
 
         next_inp = None
         features_shape = self.get_features()
@@ -197,12 +195,8 @@ class FullModel(nn.Module):
         """
         # FIXME: Hardcoded mask, need to fix
         batch_size = inputs.shape[0]
-        #mask = torch.ones(batch_size, 1)
         mf_features = self.mf_feature_extractor(inputs, mask)
-        #_, action, _ = self.mb_actor.act(inputs, mask)
-
-        ## fixme: hardcoded agent_id
-        action, _, _ = self.policy.act("agent_0", inputs)
+        _, action, _ = self.mb_actor.act(inputs, mask)
 
         if not isinstance(action, torch.Tensor):
             action = one_hot_encode(action, self.num_actions).to(self.device).unsqueeze(0)

@@ -40,8 +40,7 @@ class PPO_Agent:
             curr_log_probs=[], old_log_probs=[], em_out=[],
         )
 
-        curr_values, curr_log_probs, entropy, em_out = self.actor_critic.evaluate_actions(
-            states, masks)
+        curr_values, curr_log_probs, entropy, em_out = self.actor_critic.evaluate_actions(states, masks)
 
         logs["curr_log_probs"].append(mean_fn(curr_log_probs))
         logs["old_log_probs"].append(mean_fn(log_probs))
