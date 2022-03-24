@@ -30,8 +30,8 @@ class Params:
     debug = False
     use_wandb = False
     visible = False
-    device = torch.device("cuda")
-    frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    frame_shape = [3, 64, 64]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description
     guided_learning_prob = 0.0
     model_free_epochs = 3000
@@ -238,6 +238,9 @@ class Params:
             landmark_collision_strategy=self.landmark_collision_strategy,
             avoid_borders=self.avoid_borders
         )
+
+        if self.debug:
+            self.device="cpu"
 
         self.check_parameters()
 
