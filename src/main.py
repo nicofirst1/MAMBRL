@@ -1,21 +1,18 @@
 import keyboard
 from tqdm import trange
 
-from agent.PPO_Agent import PPO_Agent
-from src.env import get_env
 from src.common import Params
-from src.model.ModelFree import ModelFree
-from src.model.EnvModel import NextFramePredictor
-from src.trainer.Policies import OptimalAction
-from src.agent.PpoWrapper import PpoWrapper
+from src.env import get_env
 from src.env.EnvWrapper import EnvWrapper, get_env_wrapper
+from src.model.EnvModel import NextFramePredictor
 from src.trainer.EnvModelTrainer import EnvModelTrainer
-from src.trainer.ModelFreeTrainer import ModelFreeTrainer
+from src.trainer.Policies import OptimalAction
 
 params = Params()
 
 if not params.visible:
     import pyglet
+
     pyglet.options['shadow_window'] = False
 
 
@@ -69,10 +66,10 @@ def user_game(env, config):
 if __name__ == "__main__":
     params = Params()
     # uncomment the following 2 lines to train the model free
-    #env = get_env_wrapper(params)
-    #trainer = ModelFreeTrainer(ModelFree, PPO_Agent, env, params)
+    env = get_env_wrapper(params)
+    # trainer = ModelFreeTrainer(ModelFree, PPO_Agent, env, params)
     # trainer.train()
-    trainer = EnvModelTrainer(NextFramePredictor, EnvWrapper, params)
+    trainer = EnvModelTrainer(NextFramePredictor, env, params)
     epochs = 3000
     for step in trange(epochs, desc="Training env model"):
         trainer.collect_trajectories(OptimalAction)

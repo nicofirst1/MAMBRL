@@ -1,5 +1,6 @@
 from typing import Dict, Tuple
 
+import PIL.Image
 import numpy as np
 import torch
 
@@ -90,6 +91,14 @@ class NavEnv(SimpleEnv):
         """
         observation = self.render()
         if observation is not None:
+
+            # if the observation is not of frameshape, resize.
+            # This sometimes happen on specific machines, the cause is unkown
+            if observation.shape[:1] != self.frame_shape[1:]:
+                observation = PIL.Image.fromarray(observation)
+                observation = observation.resize(self.frame_shape[1:])
+                observation = np.asarray(observation)
+
             observation = torch.from_numpy(observation.copy())
             observation = observation.float()
 

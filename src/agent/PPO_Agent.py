@@ -37,16 +37,17 @@ class PPO_Agent:
         logs = dict(
             ratio=[], surr1=[], surr2=[], returns=[],
             adv_targ=[], perc_surr1=[], perc_surr2=[],
-            curr_log_probs=[], old_log_probs=[]
+            curr_log_probs=[], old_log_probs=[], em_out=[],
         )
 
-        curr_values, curr_log_probs, entropy = self.actor_critic.evaluate_actions(
+        curr_values, curr_log_probs, entropy, em_out = self.actor_critic.evaluate_actions(
             states, masks)
 
         logs["curr_log_probs"].append(mean_fn(curr_log_probs))
         logs["old_log_probs"].append(mean_fn(log_probs))
         logs["returns"].append(mean_fn(returns))
         logs["adv_targ"].append(mean_fn(values))
+        #logs['em_out'].append(em_out)
 
         single_log_prob = log_probs.gather(-1, actions)
         single_curr_log_prob = curr_log_probs.gather(-1, actions)

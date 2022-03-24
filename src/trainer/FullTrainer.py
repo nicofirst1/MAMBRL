@@ -1,5 +1,6 @@
 from functools import partial
 
+import rich.progress
 import torch
 from tqdm import trange
 from typing import Dict
@@ -51,6 +52,22 @@ class FullTrainer(BaseTrainer):
 
         self.policy = MultimodalMAS(self.model)
 
+        self.use_wandb = self.config.use_wandb
+        if self.config.use_wandb:
+            from logging_callbacks import FullWandb
+            cams = []
+
+            self.ppo_logger = FullWandb(
+                train_log_step=5,
+                val_log_step=5,
+                project="full_training",
+                opts={},
+                #models=self.model["agent_0"].get_modules(),
+                horizon=config.horizon,
+                action_meaning=self.cur_env.env.action_meaning_dict,
+                cams=cams,
+            )
+
     def collect_trajectories(self) -> RolloutStorage:
 
         rollout = RolloutStorage(
@@ -62,8 +79,8 @@ class FullTrainer(BaseTrainer):
         )
         rollout.to(self.config.device)
 
-        if self.logger is not None:
-            self.logger.epoch += 1
+        if self.ppo_logger is not None:
+            self.ppo_logger.epoch += 1
 
         action_dict = {agent_id: None for agent_id in self.cur_env.agents}
         done = {agent_id: None for agent_id in self.cur_env.agents}
@@ -107,8 +124,6 @@ class FullTrainer(BaseTrainer):
     def train(self, rollout: RolloutStorage) -> [torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Dict]]:
         [model.train() for model in self.ppo_agents.values()]
 
-        logs = {ag: None for ag in self.ppo_agents.keys()}
-
         action_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         value_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         entropies = {ag: 0 for ag in self.ppo_agents.keys()}
@@ -127,6 +142,8 @@ class FullTrainer(BaseTrainer):
             data_generator = rollout.recurrent_generator(
                 advantages, minibatch_frames=self.config.minibatch
             )
+
+            logs = {ag: [] for ag in self.ppo_agents.keys()}
 
             for sample in data_generator:
                 states_batch, actions_batch, logs_probs_batch, \
@@ -147,7 +164,7 @@ class FullTrainer(BaseTrainer):
                             agent_returns, agent_adv_targ, masks_batch
                         )
 
-                    logs[agent_id] = log
+                    logs[agent_id].append(log)
 
                     action_losses[agent_id] += float(action_loss)
                     value_losses[agent_id] += float(value_loss)
@@ -171,3 +188,7 @@ if __name__ == '__main__':
     for epoch in trange(params.model_free_epochs, desc="Training model free"):
         rollout = trainer.collect_trajectories()
         action_losses, value_losses, entropies, logs = trainer.train(rollout)
+
+        if trainer.use_wandb:
+            logs = preprocess_logs([value_losses, action_losses, entropies, logs], trainer)
+            trainer.ppo_logger.on_batch_end(logs=logs, batch_id=epoch, rollout=rollout)
