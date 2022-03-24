@@ -2,8 +2,8 @@ import argparse
 import inspect
 import os
 import uuid
-import numpy as np
 
+import numpy as np
 import torch
 
 
@@ -31,7 +31,7 @@ class Params:
     use_wandb = False
     visible = False
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    frame_shape = [3, 64, 64]  # [3, 96, 96]  # [3, 600, 600]
+    frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description
     guided_learning_prob = 0.0
     model_free_epochs = 3000
@@ -41,7 +41,7 @@ class Params:
     # of trajectories (trajectories are shuffled at each iteration)
     ppo_epochs = 3
     # number of elements on which the algorithm performs a learning step
-    minibatch = 1  # 32
+    minibatch = 2  # 32
     batch_size = 4  # 64
     # number of future frames that the EnvModel will predict
     future_frame_horizon = 3
@@ -157,7 +157,7 @@ class Params:
     len_reward = 1
     step_reward = -0.01
     landmark_reward = 2
-    episodes = 3   # 3
+    episodes = 3  # 3
     horizon = 128  # 100
     landmarks_positions = np.array([[0.0, -1.0], [0.0, 1.0]])  # None
     agents_positions = np.array([[0.0, 0.0]])  # np.array([[0.0, 0.0]])
@@ -240,7 +240,10 @@ class Params:
         )
 
         if self.debug:
-            self.device="cpu"
+            self.device = "cpu"
+            self.rollout_len = 2
+            self.horizon = 16
+            self.episodes = 2
 
         self.check_parameters()
 
@@ -401,7 +404,7 @@ class Params:
 
         if self.reward_collision_strategy in ["change_landmark", "all_landmarks"]:
             assert self.landmarks > 1, "At least 2 landmarks are " + \
-                f"needed for the task '{self.reward_collision_strategy}'"
+                                       f"needed for the task '{self.reward_collision_strategy}'"
 
         if self.landmarks_positions is not None:
             assert len(self.landmarks_positions) == self.landmarks, \

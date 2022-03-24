@@ -1,15 +1,13 @@
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from collections import OrderedDict
-from typing import Tuple, List
-from src.common.utils import one_hot_encode
-from src.trainer.Policies import MultimodalMAS
 from src.common.Params import Params
-from src.model.ModelFree import FeatureExtractor, ModelFree
-from src.trainer.Policies import TrajCollectionPolicy
+from src.common.utils import one_hot_encode
 from src.model.EnvModel import NextFramePredictor
+from src.model.ModelFree import FeatureExtractor, ModelFree
 from src.model.RolloutEncoder import RolloutEncoder
 
 
@@ -202,7 +200,27 @@ class FullModel(nn.Module):
             action = one_hot_encode(
                 action, self.num_actions).to(self.device)
             action = action.float()
-        em_output, reward_pred, value_pred = self.env_model(inputs, action)
+
+        if batch_size > 1:
+            # env model dows not work for batch_size>1, so we need a for loop
+            em_outputs = []
+            reward_preds = []
+            value_preds = []
+
+            for bt in range(batch_size):
+                inp = inputs[bt].unsqueeze(dim=0)
+                act = action[bt].unsqueeze(dim=0)
+                em_output, reward_pred, value_pred = self.env_model(inp, act)
+                em_outputs.append(em_output)
+                reward_preds.append(reward_pred)
+                value_preds.append(value_pred)
+
+            em_output = torch.cat(em_outputs)
+            reward_pred = torch.cat(reward_preds)
+            value_pred = torch.cat(value_preds)
+        else:
+            em_output, reward_pred, value_pred = self.env_model(inputs, action)
+
         em_output = torch.argmax(em_output, dim=1).unsqueeze(dim=0).float()
         fake_reward = torch.zeros((*em_output.shape[:2], 1)).to(self.device)
         em_features = self.rollout_encoder(em_output, fake_reward)

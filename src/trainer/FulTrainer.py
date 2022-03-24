@@ -1,5 +1,6 @@
 from functools import partial
 
+import rich.progress
 import torch
 from tqdm import trange
 from typing import Dict
@@ -118,7 +119,7 @@ class FullTrainer(BaseTrainer):
         advantages = rollout.returns - rollout.value_preds
         # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
 
-        for epoch in range(self.config.ppo_epochs):
+        for epoch in rich.progress.track(range(self.config.ppo_epochs), description="Training epoch"):
             data_generator = rollout.recurrent_generator(
                 advantages, minibatch_frames=self.config.minibatch
             )
