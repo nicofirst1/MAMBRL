@@ -163,6 +163,20 @@ class ModelFree(nn.Module):
 
         return value, action, log_actions_prob
 
+    @staticmethod
+    def get_action(action_logit, deterministic=False):
+        action_probs = F.softmax(action_logit, dim=1)
+
+        if deterministic:
+            action = action_probs.max(1)[1]
+        else:
+            action = action_probs.multinomial(1)
+
+        log_actions_prob = F.log_softmax(action_logit, dim=1).squeeze()
+
+        return action, log_actions_prob
+
+
     def get_value(self, inputs, masks):
         return self.base(inputs, masks)[1]
 

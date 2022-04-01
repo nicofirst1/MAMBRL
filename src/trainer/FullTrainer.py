@@ -189,6 +189,6 @@ if __name__ == '__main__':
         rollout = trainer.collect_trajectories()
         action_losses, value_losses, entropies, logs = trainer.train(rollout)
 
-        if trainer.use_wandb:
+        if trainer.use_wandb and epoch % params.log_step == 0:
             logs = preprocess_logs([value_losses, action_losses, entropies, logs], trainer)
             trainer.ppo_logger.on_batch_end(logs=logs, batch_id=epoch, rollout=rollout)

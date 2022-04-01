@@ -22,7 +22,7 @@ class FullModel(nn.Module):
     def __init__(
             self,
             mf_feature_extractor: FeatureExtractor,
-            mb_actor_model: ModelFree,
+            model_free: ModelFree,
             env_model: NextFramePredictor,
             rollout_encoder: RolloutEncoder,
             config: Params
@@ -50,11 +50,14 @@ class FullModel(nn.Module):
         # =============================================================================
         # BLOCKS
         # =============================================================================
-        mf_feature_extractor_config = config.get_mf_feature_extractor_configs()
+        #mf_feature_extractor_config = config.get_mf_feature_extractor_configs()
         # FIXME: hardcoded
-        mf_feature_extractor_config["conv_layers"] = mf_feature_extractor_config["conv_layers"][0]
-        mf_feature_extractor_config["fc_layers"] = mf_feature_extractor_config["fc_layers"][0]
-        self.mf_feature_extractor = mf_feature_extractor(input_shape=self.input_shape, **mf_feature_extractor_config).to(self.device)
+        #mf_feature_extractor_config["conv_layers"] = mf_feature_extractor_config["conv_layers"][0]
+        #mf_feature_extractor_config["fc_layers"] = mf_feature_extractor_config["fc_layers"][0]
+        #self.mf_feature_extractor = mf_feature_extractor(input_shape=self.input_shape, **mf_feature_extractor_config).to(self.device)
+
+        model_free_configs = config.get_model_free_configs()
+        self.model_free = model_free(**model_free_configs).to(self.device)
 
         # FIXME: add a get_env_model_config() function
         self.env_model = env_model(config).to(self.device)
@@ -63,8 +66,8 @@ class FullModel(nn.Module):
         self.rollout_encoder = rollout_encoder(**rollout_encoder_config).to(self.device)
 
         # actor who chooses the actions to be used by the env_model
-        mb_actor_config = config.get_model_free_configs()
-        self.mb_actor = mb_actor_model(**mb_actor_config).to(self.device)
+        #mb_actor_config = config.get_model_free_configs()
+        #self.mb_actor = mb_actor_model(**mb_actor_config).to(self.device)
 
         next_inp = None
         features_shape = self.get_features()
@@ -108,7 +111,8 @@ class FullModel(nn.Module):
         fake_input = torch.zeros(1, *self.input_shape).to(self.device)
         # FIXME: Hardcoded mask, need to fix
         mask = torch.ones(1)
-        mf_features = self.mf_feature_extractor(fake_input, mask)
+        #mf_features = self.mf_feature_extractor(fake_input, mask)
+        mf_features, _ = self.model_free(fake_input, mask)
         fake_action = torch.randint(self.num_actions, (1,))
         fake_action = one_hot_encode(fake_action, self.num_actions).to(self.device)
         fake_action = fake_action.float()
@@ -167,7 +171,8 @@ class FullModel(nn.Module):
         return value, action_log_probs, entropy , em_out
 
     def to(self, device):
-        self.mf_feature_extractor.to(device)
+        #self.mf_feature_extractor.to(device)
+        self.model_free.to(device)
         self.env_model.to(device)
         self.rollout_encoder.to(device)
         self.critic.to(device)
@@ -195,8 +200,11 @@ class FullModel(nn.Module):
         """
         # FIXME: Hardcoded mask, need to fix
         batch_size = inputs.shape[0]
-        mf_features = self.mf_feature_extractor(inputs, mask)
-        _, action, _ = self.mb_actor.act(inputs, mask)
+        #mf_features = self.mf_feature_extractor(inputs, mask)
+        #_, action, _ = self.mb_actor.act(inputs, mask)
+
+        mf_features, _ = self.model_free(inputs, mask)
+        action, _ = self.model_free.get_action(mf_features)
 
         if not isinstance(action, torch.Tensor):
             action = one_hot_encode(action, self.num_actions).to(self.device).unsqueeze(0)
@@ -229,6 +237,7 @@ class FullModel(nn.Module):
         fake_reward = torch.zeros((*frame_pred.shape[:2], 1)).to(self.device)
         em_features = self.rollout_encoder(frame_pred, fake_reward)
         features = torch.cat((mf_features, em_features), dim=-1)
+
         action_logits = self.actor(features)
         value = self.critic(features)
 
