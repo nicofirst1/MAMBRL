@@ -210,7 +210,7 @@ class ModelFree(nn.Module):
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
 
-        return value, action_log_probs, entropy
+        return value, action_log_probs, entropy, None
 
 
 class NNBase(nn.Module):
@@ -461,7 +461,7 @@ class Conv2DModelFree(nn.Module):
             [batch_size, value]
 
         """
-
+        inputs = inputs / 255.0
         if self.share_weights:
             x = self.feature_extractor.forward(inputs, masks)
             return self.actor(x), self.critic(x)

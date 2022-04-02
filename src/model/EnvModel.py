@@ -391,6 +391,8 @@ class NextFramePredictor(Container):
         return internal_states
 
     def forward(self, x, action, target=None, epsilon=0):
+        # Normalize Input
+        x = x / 255.0
 
         # todo: add function definition
         x_start = torch.stack([standardize_frame(frame) for frame in x])

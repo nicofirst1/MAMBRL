@@ -198,7 +198,10 @@ class FullModel(nn.Module):
             Output of env model :pred_frames, reward_pred, value_pred
 
         """
-        # FIXME: Hardcoded mask, need to fix
+
+        # Normalize Inputs
+        inputs = inputs / 255.0
+
         batch_size = inputs.shape[0]
         #mf_features = self.mf_feature_extractor(inputs, mask)
         #_, action, _ = self.mb_actor.act(inputs, mask)

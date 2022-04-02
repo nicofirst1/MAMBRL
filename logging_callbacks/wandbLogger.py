@@ -142,27 +142,26 @@ class PPOWandb(WandbLogger):
 
         logs["epoch"] = batch_id
 
-        if batch_id % self.log_behavior_step == 0:
-            # done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
-            #
-            # if len(done_idx) > 1:
-            #     done_idx = done_idx[0]
+        # done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
+        #
+        # if len(done_idx) > 1:
+        #     done_idx = done_idx[0]
 
-            states = (
-                rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8) * 255
-            )
+        states = (
+            rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
+        )
 
-            actions = rollout.actions[:rollout.step].squeeze().cpu().numpy()
-            rewards = rollout.rewards[:rollout.step].squeeze().cpu().numpy()
+        actions = rollout.actions[:rollout.step].squeeze().cpu().numpy()
+        rewards = rollout.rewards[:rollout.step].squeeze().cpu().numpy()
 
-            grids = write_infos(states, rollout, self.params.action_meanings)
+        grids = write_infos(states, rollout, self.params.action_meanings)
 
-            logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
-            logs["behaviour_info"] = wandb.Video(grids, fps=10, format="gif")
-            logs["hist/actions"] = actions
-            logs["hist/rewards"] = rewards
-            logs["mean_reward"] = rewards.mean()
-            logs["episode_length"] = rollout.step
+        logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
+        logs["behaviour_info"] = wandb.Video(grids, fps=10, format="gif")
+        logs["hist/actions"] = actions
+        logs["hist/rewards"] = rewards
+        logs["mean_reward"] = rewards.mean()
+        logs["episode_length"] = rollout.step
 
         if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
 

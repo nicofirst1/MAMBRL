@@ -19,6 +19,7 @@ pandas==1.3.3
 opencv-python==4.5.4.58
 torchvision==0.11.1
 tqdm==4.62.3
+moviepy==1.0.3
 imageio==1.0.3
 """
 
@@ -31,6 +32,5 @@ setup(
     url='https://gitlab.com/nicofirst1/MAMBRL',
     install_requires=requirements.split("\n"),
     python_requires='>=3.9',
-
 )
 

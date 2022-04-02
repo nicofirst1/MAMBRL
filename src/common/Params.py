@@ -21,8 +21,7 @@ class Params:
     WANDB_DIR = os.path.join(LOG_DIR, "wandb")
     TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
     MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
-    MODEL_FREE_LOGGER_FILE = os.path.join(
-        MODEL_FREE_LOG_DIR, "model_free_log.log")
+    MODEL_FREE_LOGGER_FILE = os.path.join(MODEL_FREE_LOG_DIR, "model_free_log.log")
 
     # =============================================================================
     # TRAINING
@@ -41,7 +40,7 @@ class Params:
     # of trajectories (trajectories are shuffled at each iteration)
     ppo_epochs = 3
     # number of elements on which the algorithm performs a learning step
-    minibatch = 2  # 32
+    minibatch = 32  # 32
     batch_size = 4  # 64
     # number of future frames that the EnvModel will predict
     future_frame_horizon = 3

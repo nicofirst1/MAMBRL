@@ -113,7 +113,7 @@ class NavEnv(SimpleEnv):
                 observation = np.expand_dims(observation, axis=0)
 
             # normalize observations
-            observation /= 255.0
+            #observation /= 255.0
 
         return observation
 
