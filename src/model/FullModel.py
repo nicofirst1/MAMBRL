@@ -8,8 +8,6 @@ from src.common.Params import Params
 from src.model.ModelFree import FeatureExtractor, ModelFree
 from src.model.EnvModel import NextFramePredictor
 from src.model.RolloutEncoder import RolloutEncoder
-from trainer.Policies import OptimalAction
-
 
 class FullModel(nn.Module):
     """FullModel class.
@@ -50,24 +48,27 @@ class FullModel(nn.Module):
         # =============================================================================
         # BLOCKS
         # =============================================================================
-        #mf_feature_extractor_config = config.get_mf_feature_extractor_configs()
+        # mf_feature_extractor_config = config.get_mf_feature_extractor_configs()
         # FIXME: hardcoded
-        #mf_feature_extractor_config["conv_layers"] = mf_feature_extractor_config["conv_layers"][0]
-        #mf_feature_extractor_config["fc_layers"] = mf_feature_extractor_config["fc_layers"][0]
-        #self.mf_feature_extractor = mf_feature_extractor(input_shape=self.input_shape, **mf_feature_extractor_config).to(self.device)
+        # mf_feature_extractor_config["conv_layers"] = mf_feature_extractor_config["conv_layers"][0]
+        # mf_feature_extractor_config["fc_layers"] = mf_feature_extractor_config["fc_layers"][0]
+        # self.mf_feature_extractor = mf_feature_extractor(
+        #   input_shape=self.input_shape, **mf_feature_extractor_config).to(self.device)
 
         model_free_configs = config.get_model_free_configs()
         self.model_free = model_free(**model_free_configs).to(self.device)
 
         # FIXME: add a get_env_model_config() function
         self.env_model = env_model(config).to(self.device)
+        self.env_model.load_state_dict(torch.load("env_model.pt"))
+        self.env_model.eval()
 
         rollout_encoder_config = config.get_rollout_encoder_configs()
         self.rollout_encoder = rollout_encoder(**rollout_encoder_config).to(self.device)
 
         # actor who chooses the actions to be used by the env_model
-        #mb_actor_config = config.get_model_free_configs()
-        #self.mb_actor = mb_actor_model(**mb_actor_config).to(self.device)
+        # mb_actor_config = config.get_model_free_configs()
+        # self.mb_actor = mb_actor_model(**mb_actor_config).to(self.device)
 
         next_inp = None
         features_shape = self.get_features()
@@ -111,7 +112,7 @@ class FullModel(nn.Module):
         fake_input = torch.zeros(1, *self.input_shape).to(self.device)
         # FIXME: Hardcoded mask, need to fix
         mask = torch.ones(1)
-        #mf_features = self.mf_feature_extractor(fake_input, mask)
+        # mf_features = self.mf_feature_extractor(fake_input, mask)
         mf_features, _ = self.model_free(fake_input, mask)
         fake_action = torch.randint(self.num_actions, (1,))
         fake_action = one_hot_encode(fake_action, self.num_actions).to(self.device)
@@ -146,6 +147,7 @@ class FullModel(nn.Module):
         ----------
         inputs : PyTorch Array
             a 4 dimensional tensor [batch_size, channels, width, height]
+        mask: Torch.Tensor
 
         Returns
         -------
@@ -168,7 +170,7 @@ class FullModel(nn.Module):
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
 
-        return value, action_log_probs, entropy , em_out
+        return value, action_log_probs, entropy, em_out
 
     def to(self, device):
         #self.mf_feature_extractor.to(device)
@@ -203,8 +205,8 @@ class FullModel(nn.Module):
         inputs = inputs / 255.0
 
         batch_size = inputs.shape[0]
-        #mf_features = self.mf_feature_extractor(inputs, mask)
-        #_, action, _ = self.mb_actor.act(inputs, mask)
+        # mf_features = self.mf_feature_extractor(inputs, mask)
+        # _, action, _ = self.mb_actor.act(inputs, mask)
 
         mf_features, _ = self.model_free(inputs, mask)
         action, _ = self.model_free.get_action(mf_features)

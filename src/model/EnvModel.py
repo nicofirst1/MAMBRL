@@ -403,7 +403,7 @@ class NextFramePredictor(Container):
             # internal_states = self.get_internal_states()
             # FIXME: HARDCODE, to remove
             internal_states = self.internal_states
-            internal_states = internal_states[-1].unsqueeze(dim=0)
+            #internal_states = internal_states[-1].unsqueeze(dim=0)
             x = torch.cat((x_start, internal_states), dim=1)
             self.last_x_start = x_start
         else:

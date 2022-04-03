@@ -162,12 +162,25 @@ class EnvModelTrainer(BaseTrainer):
             if self.config.use_wandb is not None:
                 self.logger.on_batch_end(metrics, batch_id=i, is_training=True)
 
+    def checkpoint(self):
+        self.env_model["agent_0"].save("env_model.pt")
+
 
 if __name__ == "__main__":
     params = Params()
     env = get_env_wrapper(params)
 
+    # def force_cudnn_initialization():
+    #     s = 32
+    #     dev = torch.device('cuda')
+    #     torch.nn.functional.conv2d(torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev))
+    #
+    # force_cudnn_initialization()
+
     trainer = EnvModelTrainer(NextFramePredictor, env, params)
     for step in trange(params.env_model_epochs, desc="Training env model"):
         rollout = trainer.collect_trajectories()
         trainer.train(rollout)
+
+        if step % 400 == 0:
+            trainer.checkpoint()
