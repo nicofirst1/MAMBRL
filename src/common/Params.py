@@ -22,13 +22,14 @@ class Params:
     TENSORBOARD_DIR = os.path.join(WORKING_DIR, "tensorboard")
     MODEL_FREE_LOG_DIR = os.path.join(LOG_DIR, "model_free_log")
     MODEL_FREE_LOGGER_FILE = os.path.join(MODEL_FREE_LOG_DIR, "model_free_log.log")
+    WEIGHT_DIR = os.path.join(SRC_DIR, "weights")
 
     # =============================================================================
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = False
-    visible = True
+    use_wandb = True
+    visible = False
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
     # TODO: add description

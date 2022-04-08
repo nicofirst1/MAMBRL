@@ -77,10 +77,10 @@ class EnvModelWandb(WandbLogger):
             imagined_state = torch.stack(imagined_state)
             actual_state = torch.stack(actual_state)
 
-            # bring imageine state in range 0 255
+            # bring imagined state in range 0 255
             imagined_state = (imagined_state - imagined_state.min()) / \
                              (imagined_state.max() - imagined_state.min())
-            imagined_state *= 255
+            #imagined_state *= 255
 
             diff = abs(imagined_state - actual_state)
 

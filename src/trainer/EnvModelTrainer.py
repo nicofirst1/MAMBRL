@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 from tqdm import trange
 
@@ -48,7 +50,7 @@ class EnvModelTrainer(BaseTrainer):
 
         self.policy = OptimalAction(self.cur_env, config.num_actions, config.device)
 
-        if self.config.use_wandb and False:
+        if self.config.use_wandb:
             from logging_callbacks import EnvModelWandb
             self.logger = EnvModelWandb(
                 train_log_step=20,
@@ -61,7 +63,6 @@ class EnvModelTrainer(BaseTrainer):
         self.config = config
 
     def collect_trajectories(self) -> RolloutStorage:
-
         rollout = RolloutStorage(
             num_steps=self.config.horizon * self.config.episodes,
             frame_shape=self.config.frame_shape,
@@ -159,28 +160,27 @@ class EnvModelTrainer(BaseTrainer):
                 model.train()
                 metrics[ag] = model.train_step(rollout, frames.clone(), indices, epsilon)
 
-            if self.config.use_wandb is not None:
-                self.logger.on_batch_end(metrics, batch_id=i, is_training=True)
+        return metrics
 
-    def checkpoint(self):
-        self.env_model["agent_0"].save("env_model.pt")
+    def checkpoint(self, path):
+        self.env_model["agent_0"].env_model.save_model(os.path.join(path, "env_model.pt"))
+
+    def restore_training(self):
+        pass
 
 
 if __name__ == "__main__":
     params = Params()
     env = get_env_wrapper(params)
 
-    # def force_cudnn_initialization():
-    #     s = 32
-    #     dev = torch.device('cuda')
-    #     torch.nn.functional.conv2d(torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev))
-    #
-    # force_cudnn_initialization()
-
     trainer = EnvModelTrainer(NextFramePredictor, env, params)
-    for step in trange(params.env_model_epochs, desc="Training env model"):
+    for epoch in trange(params.env_model_epochs, desc="Training env model"):
         rollout = trainer.collect_trajectories()
-        trainer.train(rollout)
+        logs = trainer.train(rollout)
 
-        if step % 400 == 0:
-            trainer.checkpoint()
+        if params.use_wandb and epoch % params.log_step == 0:
+            # fixme: HARDCODED agent_0
+            trainer.logger.on_batch_end(logs["agent_0"], batch_id=epoch, is_training=True)
+
+        if epoch % 400 == 0:
+            trainer.checkpoint(params.WEIGHT_DIR)
