@@ -366,6 +366,34 @@ class NextFramePredictor(Container):
 
         return self
 
+    def save_model(self, path: str):
+        torch.save({
+            "action_injectors": self.action_injectors.state_dict(),
+            "downscale_layers": self.downscale_layers.state_dict(),
+            "gate": self.gate.state_dict(),
+            "input_embedding": self.input_embedding.state_dict(),
+            "logits": self.logits.state_dict(),
+            "middle_network": self.middle_network.state_dict(),
+            "reward_estimator": self.reward_estimator.state_dict(),
+            "stochastic_model": self.stochastic_model.state_dict(),
+            "upscale_layers": self.upscale_layers.state_dict(),
+            "value_estimator": self.value_estimator.state_dict()
+        }, path)
+
+    def load_model(self, path):
+        checkpoint = torch.load(path)
+
+        self.action_injectors.load_state_dict(checkpoint["action_injectors"])
+        self.downscale_layers.load_state_dict(checkpoint["downscale_layers"])
+        self.gate.load_state_dict(checkpoint["gate"])
+        self.input_embedding.load_state_dict(checkpoint["input_embedding"])
+        self.logits.load_state_dict(checkpoint["logits"])
+        self.middle_network.load_state_dict(checkpoint["middle_network"])
+        self.reward_estimator.load_state_dict(checkpoint["reward_estimator"])
+        self.stochastic_model.load_state_dict(checkpoint["stochastic_model"])
+        self.upscale_layers.load_state_dict(checkpoint["upscale_layers"])
+        self.value_estimator.load_state_dict(checkpoint["value_estimator"])
+
     def init_internal_states(self, batch_size):
         self.internal_states = torch.zeros(
             (batch_size, self.config.recurrent_state_size,
