@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Type
 
 import torch
 from torch import optim, nn
@@ -25,7 +25,7 @@ class EnvModelAgent:
     it has both the standard trainig loop with loss function and an unsupervised rollout step
     """
 
-    def __init__(self, agent_id: str, model: NextFramePredictor, config: Params):
+    def __init__(self, agent_id: str, model: Type[NextFramePredictor], config: Params):
         """
         @param agent_id: the agent id associated with the model
         @param model: type of model to use
@@ -37,9 +37,14 @@ class EnvModelAgent:
         self.env_model = model(config)
         self.to(self.device)
 
+        self.action_shape = self.config.num_actions
+        self.rollout_len = self.config.rollout_len
+        self.c, self.h, self.w = self.config.frame_shape
+
         self.optimizer = optim.RMSprop(
             self.env_model.parameters(),
-            lr=config.lr, eps=config.eps, alpha=config.alpha, )
+            lr=config.lr, eps=config.eps, alpha=config.alpha
+        )
 
     def train(self):
         self.env_model.train()
@@ -56,18 +61,18 @@ class EnvModelAgent:
         """
         Perform a single train step. Where N rollout steps are performed in a superviseed fashion
         @param rollout:
-
+        @param frames:
+        @param indices:
+        @param epsilon:
         @return: dictionary of metrics
         """
-        action_shape = self.config.num_actions
-        rollout_len = self.config.rollout_len
-        c, h, w = self.config.frame_shape
 
+        starting_frame = frames[0]
         if self.config.stack_internal_states:
             self.env_model.init_internal_states(self.config.batch_size)
 
         n_losses = 5 if self.config.use_stochastic_model else 4
-        losses = torch.empty((rollout_len, n_losses))
+        losses = torch.empty((self.rollout_len, n_losses))
 
         actual_states = []
         predicted_frames = []
@@ -75,8 +80,8 @@ class EnvModelAgent:
         ############################
         #   Rollout steps
         ############################
-        for j in range(rollout_len):
-            actions = torch.zeros((self.config.batch_size, action_shape)).to(self.config.device)
+        for j in range(self.rollout_len):
+            actions = torch.zeros((self.config.batch_size, self.action_shape)).to(self.config.device)
             rewards = torch.zeros((self.config.batch_size,)).to(self.config.device)
             new_states = torch.zeros((self.config.batch_size, *self.config.frame_shape)).to(self.config.device)
             values = torch.zeros((self.config.batch_size,)).to(self.config.device)
@@ -88,15 +93,18 @@ class EnvModelAgent:
                 new_states[k] = rollout.next_state[indices[k] + j]
                 values[k] = rollout.value_preds[indices[k] + j]
 
-            new_states_input = new_states.float()
+            new_states_input = new_states.float() / 255
 
             # predict future state
             frames_pred, reward_pred, values_pred = self.env_model(
                 frames, actions, new_states_input, epsilon
             )
 
+            actual_states.append(new_states[0].detach().cpu())
+            predicted_frames.append(torch.argmax(frames_pred[0], dim=0).detach().cpu())
+
             # randomly use predicted or actual frame based on epsilon
-            if j < rollout_len - 1:
+            if j < self.rollout_len - 1:
                 for k in range(self.config.batch_size):
                     if float(torch.rand((1,))) < epsilon:
                         frame = new_states[k]
@@ -104,7 +112,7 @@ class EnvModelAgent:
                         frame = torch.argmax(frames_pred[k], dim=0)
 
                     frame = preprocess_state(frame, self.config.input_noise)
-                    frames[k] = torch.cat((frames[k, c:], frame), dim=0)
+                    frames[k] = torch.cat((frames[k, self.c:], frame), dim=0)
 
             # given prediction and values performa a backward pass on loss
             tab = self.loss_step(frames_pred, reward_pred, values_pred, new_states, rewards, values)
@@ -114,24 +122,22 @@ class EnvModelAgent:
             ######################################
             losses[j] = torch.tensor(tab)
 
-            losses = torch.mean(losses, dim=0)
-            actual_states.append(new_states[0].detach().cpu())
-            predicted_frames.append(torch.argmax(
-                frames_pred[0], dim=0).detach().cpu())
-            metrics = {
-                "loss": float(losses[0]),
-                "loss_reconstruct": float(losses[1]),
-                "loss_value": float(losses[2]),
-                "loss_reward": float(losses[3]),
-                "imagined_state": predicted_frames,
-                "actual_state": actual_states,
-                "epsilon": epsilon
-            }
+        losses = torch.mean(losses, dim=0)
+        metrics = {
+            "loss": float(losses[0]),
+            "loss_reconstruct": float(losses[1]),
+            "loss_value": float(losses[2]),
+            "loss_reward": float(losses[3]),
+            "starting_state": starting_frame,
+            "imagined_state": predicted_frames,
+            "actual_state": actual_states,
+            "epsilon": epsilon
+        }
 
-            if self.config.use_stochastic_model:
-                metrics.update({"loss_lstm": float(losses[4])})
+        if self.config.use_stochastic_model:
+            metrics.update({"loss_lstm": float(losses[4])})
 
-            return metrics
+        return metrics
 
     def loss_step(self, frames_pred, reward_pred, values_pred, frames, rewards, values):
         """
