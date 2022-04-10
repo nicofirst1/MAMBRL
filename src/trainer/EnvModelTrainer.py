@@ -1,4 +1,5 @@
 import os.path
+from typing import Type
 
 import torch
 from tqdm import trange
@@ -18,7 +19,7 @@ def get_indices(rollout, batch_size, rollout_len):
         while index == -1:
             index = int(torch.randint(rollout.rewards.size(0) - rollout_len, size=(1,)))
             for i in range(rollout_len):
-                ## fixme: controllo sul value che va rivisto sempre perché non può essere None
+                # fixme: controllo sul value che va rivisto sempre perché non può essere None
                 # if not rollout.masks[index + 1] or rollout.value_preds[index + i] is None:
                 if not rollout.masks[index + 1]:
                     index = -1
@@ -29,7 +30,7 @@ def get_indices(rollout, batch_size, rollout_len):
 
 
 class EnvModelTrainer(BaseTrainer):
-    def __init__(self, model: NextFramePredictor, env, config: Params):
+    def __init__(self, model: Type[NextFramePredictor], env, config: Params):
         """__init__ module.
 
         Parameters
@@ -48,7 +49,12 @@ class EnvModelTrainer(BaseTrainer):
         """
         super(EnvModelTrainer, self).__init__(env, config)
 
+        self.config = config
+        self.c, self.h, self.w = self.config.frame_shape
+        self.rollout_len = self.config.rollout_len
+
         self.policy = OptimalAction(self.cur_env, config.num_actions, config.device)
+        self.env_model = {k: EnvModelAgent(k, model, config) for k in self.cur_env.agents}
 
         if self.config.use_wandb:
             from logging_callbacks import EnvModelWandb
@@ -57,10 +63,6 @@ class EnvModelTrainer(BaseTrainer):
                 val_log_step=50,
                 project="env_model",
             )
-
-        self.env_model = {k: EnvModelAgent(k, model, config) for k in self.cur_env.agents}
-
-        self.config = config
 
     def collect_trajectories(self) -> RolloutStorage:
         rollout = RolloutStorage(
@@ -71,9 +73,6 @@ class EnvModelTrainer(BaseTrainer):
             num_agents=1,
         )
         rollout.to(self.config.device)
-
-        if self.logger is not None:
-            self.logger.epoch += 1
 
         action_dict = {agent_id: None for agent_id in self.cur_env.agents}
         done = {agent_id: None for agent_id in self.cur_env.agents}
@@ -110,6 +109,7 @@ class EnvModelTrainer(BaseTrainer):
                 if done["__all__"]:
                     rollout.compute_value_world_model(episode * self.config.horizon + step, self.config.gamma)
                     observation = self.cur_env.reset()
+
         return rollout
 
     def train(self, rollout: RolloutStorage):
@@ -119,11 +119,10 @@ class EnvModelTrainer(BaseTrainer):
             @param rollout:
             @return:
         """
-        c, h, w = self.config.frame_shape
-        rollout_len = self.config.rollout_len
+
         states, actions, rewards, new_states, _, values = rollout.get(0)
 
-        assert states.dtype == torch.float32
+        assert states.dtype == torch.uint8
         assert actions.dtype == torch.int64
         assert rewards.dtype == torch.float32
         assert new_states.dtype == torch.float32
@@ -131,7 +130,7 @@ class EnvModelTrainer(BaseTrainer):
 
         metrics = {}
 
-        for i in range(0, self.config.env_model_steps, rollout_len):
+        for i in range(0, self.config.env_model_steps, self.rollout_len):
             # Define Epsilon
             decay_steps = self.config.scheduled_sampling_decay_steps
             inv_base = torch.exp(torch.log(torch.tensor(0.01)) / (decay_steps // 4))
@@ -142,8 +141,8 @@ class EnvModelTrainer(BaseTrainer):
             epsilon = 1 - epsilon
 
             # init indices and frames
-            indices = get_indices(rollout, self.config.batch_size, rollout_len)
-            frames = torch.zeros((self.config.batch_size, c * self.config.num_frames, h, w))
+            indices = get_indices(rollout, self.config.batch_size, self.rollout_len)
+            frames = torch.zeros((self.config.batch_size, self.c * self.config.num_frames, self.h, self.w))
             frames = frames.to(self.config.device)
 
             # populate frames with rollout states
@@ -161,7 +160,7 @@ class EnvModelTrainer(BaseTrainer):
     def checkpoint(self, path):
         self.env_model["agent_0"].env_model.save_model(os.path.join(path, "env_model.pt"))
 
-    def restore_training(self):
+    def restore_training(self, path):
         pass
 
 
@@ -176,7 +175,7 @@ if __name__ == "__main__":
 
         if params.use_wandb and epoch % params.log_step == 0:
             # fixme: HARDCODED agent_0
-            trainer.logger.on_batch_end(logs["agent_0"], batch_id=epoch, is_training=True)
+            trainer.logger.on_batch_end(logs["agent_0"], epoch)
 
         if epoch % 400 == 0:
             trainer.checkpoint(params.WEIGHT_DIR)

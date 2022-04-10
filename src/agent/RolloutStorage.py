@@ -6,7 +6,7 @@ class RolloutStorage(object):
         self.num_channels = obs_shape[0]
         self.num_actions = num_actions
 
-        self.states = torch.zeros(num_steps + 1, *obs_shape, dtype=torch.float32)
+        self.states = torch.zeros(num_steps + 1, *obs_shape, dtype=torch.uint8)
         self.next_state = torch.zeros(num_steps, *frame_shape, dtype=torch.float32)
         self.rewards = torch.zeros(num_steps, num_agents, 1, dtype=torch.float32)
         self.value_preds = torch.zeros(num_steps + 1, num_agents, 1, dtype=torch.float32)
