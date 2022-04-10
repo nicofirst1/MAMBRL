@@ -67,7 +67,7 @@ class EnvModelAgent:
         @return: dictionary of metrics
         """
 
-        starting_frame = frames[0]
+        starting_frame = frames[0].clone()
         if self.config.stack_internal_states:
             self.env_model.init_internal_states(self.config.batch_size)
 

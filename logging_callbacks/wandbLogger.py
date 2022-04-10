@@ -60,14 +60,14 @@ class EnvModelWandb(WandbLogger):
         actual_state = actual_state.cpu().numpy().astype(np.uint8)
         imagined_state = imagined_state.cpu().numpy().astype(np.uint8)
 
-        diff = abs(imagined_state - actual_state)
+        # diff = abs(imagined_state - actual_state)
 
         fps = 8
         img_log = {
             f"starting_state": wandb.Image(starting_state),
             f"imagined_state": wandb.Video(imagined_state, fps=fps, format="gif"),
             f"actual_state": wandb.Video(actual_state, fps=fps, format="gif"),
-            f"diff": wandb.Video(diff, fps=fps, format="gif"),
+            # f"diff": wandb.Video(diff, fps=fps, format="gif"),
         }
 
         wandb_log.update(img_log)
@@ -263,7 +263,7 @@ class FullWandb(WandbLogger):
 
             logs.update(img_log)
 
-                # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
+            # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
         self.log_to_wandb(logs, commit=True)
 
@@ -276,11 +276,10 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
     """
     Write reward on state image
     :param states:
-    :param rewards:
+    :param rollout:
+    :param action_meaning:
     :return:
     """
-
-    font_size = 10
 
     img_size = 128
     batch_size = states.shape[0]
@@ -293,10 +292,6 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
     draws = [ImageDraw.Draw(img) for img in info_img]
 
     font = ImageFont.load_default()
-    #font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", font_size)
-
-    # if rewards.size == 1:
-    #     rewards = np.expand_dims(rewards, 0)
 
     for idx in range(batch_size):
         rew = float(rollout.rewards[idx].squeeze().cpu())
@@ -350,9 +345,6 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
         )
 
     grids = np.stack(grids)
-    # grids = grids.transpose((0, 2, 3, 1))
-
-    # Image.fromarray(np.asarray(grids[1])).show()
     return grids
 
 
