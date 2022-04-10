@@ -50,13 +50,15 @@ class EnvModelWandb(WandbLogger):
         actual_state = logs["actual_state"]
         imagined_state = logs["imagined_state"]
 
-
         imagined_state = torch.stack(imagined_state)
         actual_state = torch.stack(actual_state)
 
         # bring imagined state in range 0 255
         imagined_state = (imagined_state - imagined_state.min()) / (imagined_state.max() - imagined_state.min())
         imagined_state *= 255
+
+        actual_state = actual_state.cpu().numpy().astype(np.uint8)
+        imagined_state = imagined_state.cpu().numpy().astype(np.uint8)
 
         diff = abs(imagined_state - actual_state)
 
