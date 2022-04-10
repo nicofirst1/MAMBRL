@@ -180,7 +180,7 @@ class Params:
     landmark_size = 0.3
 
     #### EVALUATION ####
-    log_step = 500
+    log_step = 10
     checkpoint_freq = 50
     restore = True
     resume_training = False

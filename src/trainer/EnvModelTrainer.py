@@ -78,7 +78,7 @@ class EnvModelTrainer(BaseTrainer):
         action_dict = {agent_id: None for agent_id in self.cur_env.agents}
         done = {agent_id: None for agent_id in self.cur_env.agents}
 
-        for episode in trange(self.config.episodes, desc="Collecting trajectories.."):
+        for episode in range(self.config.episodes):
             done["__all__"] = False
             observation = self.cur_env.reset()
             rollout.states[episode * self.config.horizon] = observation.unsqueeze(dim=0)
@@ -129,13 +129,9 @@ class EnvModelTrainer(BaseTrainer):
         assert new_states.dtype == torch.float32
         assert values.dtype == torch.float32
 
-        iterator = trange(
-            0, self.config.env_model_steps, rollout_len, desc="Training world model", unit_scale=rollout_len
-        )
-
         metrics = {}
 
-        for i in iterator:
+        for i in range(0, self.config.env_model_steps, rollout_len):
             # Define Epsilon
             decay_steps = self.config.scheduled_sampling_decay_steps
             inv_base = torch.exp(torch.log(torch.tensor(0.01)) / (decay_steps // 4))

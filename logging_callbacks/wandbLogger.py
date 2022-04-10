@@ -52,11 +52,6 @@ class EnvModelWandb(WandbLogger):
         if not is_training:
             log_step = self.val_log_step
 
-        if batch_id % log_step != 0:
-            return
-
-        image_log_step = log_step * 10
-
         wandb_log = {
             f"loss/total": logs["loss_reward"] + logs["loss_reconstruct"] + logs["loss_value"],
             f"loss/reward": logs["loss_reward"],
@@ -70,28 +65,29 @@ class EnvModelWandb(WandbLogger):
             wandb_log["loss/lstm"] = logs['loss_lstm']
 
         # image logging_callbacks
-        if batch_id % image_log_step == 0:
-            imagined_state = logs["imagined_state"]
-            actual_state = logs["actual_state"]
+        imagined_state = logs["imagined_state"]
+        actual_state = logs["actual_state"]
 
-            imagined_state = torch.stack(imagined_state)
-            actual_state = torch.stack(actual_state)
+        imagined_state = torch.stack(imagined_state)
+        actual_state = torch.stack(actual_state)
 
-            # bring imagined state in range 0 255
-            imagined_state = (imagined_state - imagined_state.min()) / \
-                             (imagined_state.max() - imagined_state.min())
-            #imagined_state *= 255
+        # bring imagined state in range 0 255
+        imagined_state = (imagined_state - imagined_state.min()) / (imagined_state.max() - imagined_state.min())
+        imagined_state *= 255
 
-            diff = abs(imagined_state - actual_state)
+        actual_state = (actual_state - actual_state.min()) / (actual_state.max() - actual_state.min())
+        actual_state *= 255
 
-            fps = 5
-            img_log = {
-                f"imagined_state": wandb.Video(imagined_state, fps=fps, format="gif"),
-                f"actual_state": wandb.Video(actual_state, fps=fps, format="gif"),
-                f"diff": wandb.Video(diff, fps=fps, format="gif"),
-            }
+        diff = abs(imagined_state - actual_state)
 
-            wandb_log.update(img_log)
+        fps = 32
+        img_log = {
+            f"imagined_state": wandb.Video(imagined_state, fps=fps, format="gif"),
+            f"actual_state": wandb.Video(actual_state, fps=fps, format="gif"),
+            f"diff": wandb.Video(diff, fps=fps, format="gif"),
+        }
+
+        wandb_log.update(img_log)
 
         self.log_to_wandb(wandb_log, commit=True)
 
