@@ -45,8 +45,8 @@ class BaseTrainer:
     def train(self, rollout: RolloutStorage):
         raise NotImplementedError("Subclasses should implement this method!!")
 
-    def checkpoint(self):
+    def checkpoint(self, path: str):
         raise NotImplementedError("Subclasses should implement this method!!")
 
-    def restore_training(self):
+    def restore_training(self, path: str):
         raise NotImplementedError("Subclasses should implement this method!!")
