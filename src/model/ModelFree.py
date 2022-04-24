@@ -146,7 +146,7 @@ class ModelFree(nn.Module):
 
     def act(self, inputs, masks, deterministic=False):
         # normalize the input outside
-        _, action_logit, value = self.base(inputs, masks)
+        action_logit, value = self.base(inputs, masks)
 
         action_probs = F.softmax(action_logit, dim=1)
 
@@ -163,22 +163,11 @@ class ModelFree(nn.Module):
 
         return value, action, log_actions_prob
 
-    @staticmethod
-    def get_action(action_logit, deterministic=False):
-        action_probs = F.softmax(action_logit, dim=1)
-
-        if deterministic:
-            action = action_probs.max(1)[1]
-        else:
-            action = action_probs.multinomial(1)
-
-        log_actions_prob = F.log_softmax(action_logit, dim=1).squeeze()
-
-        return action, log_actions_prob
-
-
     def get_value(self, inputs, masks):
-        return self.base(inputs, masks)[2]
+        return self.base(inputs, masks)[1]
+
+    def features_and_action(self, inputs, masks, deterministic=False):
+        return self.base.features_and_action(inputs, masks, deterministic)
 
     def evaluate_actions(self, inputs: torch.Tensor, masks):
         """evaluate_actions method.
@@ -205,7 +194,7 @@ class ModelFree(nn.Module):
             value of the entropy given by the action with index equal to action_indx.
         """
 
-        _, action_logit, value = self.base(inputs, masks)
+        action_logit, value = self.base(inputs, masks)
         action_probs = F.softmax(action_logit, dim=1)
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
@@ -475,7 +464,42 @@ class Conv2DModelFree(nn.Module):
             x = self.feature_extractor_actor.forward(inputs, masks)
             action_logits = self.actor(x)
 
-            return x, action_logits, value
+            return action_logits, value
+
+    def features_and_action(self, inputs, masks, deterministic=False):
+        """features_and_action method.
+
+        Return the features and the action of the Conv2DModelFree, used just for the full model.
+        Parameters
+        ----------
+        inputs: torch.Tensor
+            [batch_size, num_channels, width, height]
+        masks:
+        deterministic:
+
+        Returns
+        -------
+        x : torch.Tensor
+        action : torch.Tensor
+
+        """
+
+        inputs = inputs / 255.0
+        if self.share_weights:
+            x = self.feature_extractor.forward(inputs, masks)
+            action_logit = self.actor(x)
+        else:
+            # fixme: should we use both actor and critic?
+            x = self.feature_extractor_actor.forward(inputs, masks)
+            action_logit = self.actor(x)
+
+        action_probs = F.softmax(action_logit, dim=1)
+        if deterministic:
+            action = action_probs.max(1)[1]
+        else:
+            action = action_probs.multinomial(1)
+
+        return x, action
 
     def get_actor_parameters(self):
         """get_actor_parameters method.

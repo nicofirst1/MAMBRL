@@ -101,7 +101,7 @@ class FullModel(nn.Module):
         # FIXME: Hardcoded mask, need to fix
         mask = torch.ones(1)
         # mf_features = self.mf_feature_extractor(fake_input, mask)
-        mf_features, _, _ = self.model_free(fake_input, mask)
+        mf_features, _ = self.model_free.features_and_action(fake_input, mask)
         fake_action = torch.randint(self.num_actions, (1,))
         fake_action = one_hot_encode(fake_action, self.num_actions).to(self.device)
         fake_action = fake_action.float()
@@ -153,12 +153,12 @@ class FullModel(nn.Module):
             Environment model output as dict
         """
 
-        action_logit, value, em_out = self.forward(inputs, mask)
+        action_logit, value, _ = self.forward(inputs, mask)
         action_probs = F.softmax(action_logit, dim=1)
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
 
-        return value, action_log_probs, entropy, em_out
+        return value, action_log_probs, entropy, _
 
     def to(self, device):
         self.model_free.to(device)
@@ -192,8 +192,7 @@ class FullModel(nn.Module):
         # mf_features = self.mf_feature_extractor(inputs, mask)
         # _, action, _ = self.mb_actor.act(inputs, mask)
 
-        mf_features, action_logits, _ = self.model_free(inputs, mask)
-        action, _ = self.model_free.get_action(action_logits)
+        mf_features, action = self.model_free.features_and_action(inputs, mask)
 
         if not isinstance(action, torch.Tensor):
             action = one_hot_encode(action, self.num_actions).to(self.device).unsqueeze(0)

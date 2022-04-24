@@ -28,7 +28,7 @@ class Params:
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = False
+    use_wandb = True
     visible = False
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
@@ -157,8 +157,8 @@ class Params:
     len_reward = 1
     step_reward = -0.01
     landmark_reward = 2
-    episodes = 1  # 3
-    horizon = 1  # 100
+    episodes = 3  # 3
+    horizon = 128  # 100
     landmarks_positions = np.array([[0.0, -1.0], [0.0, 1.0]])  # None
     agents_positions = np.array([[0.0, 0.0]])  # np.array([[0.0, 0.0]])
     env_name = "collab_nav"
