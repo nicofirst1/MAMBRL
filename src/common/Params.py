@@ -47,6 +47,7 @@ class Params:
     future_frame_horizon = 3
     framework = "torch"
     epochs = 10
+    checkpoint = 100
 
     # =============================================================================
     # MULTIAGENT

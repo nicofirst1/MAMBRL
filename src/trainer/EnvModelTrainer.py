@@ -161,7 +161,7 @@ class EnvModelTrainer(BaseTrainer):
         self.env_model["agent_0"].env_model.save_model(os.path.join(path, "env_model.pt"))
 
     def restore_training(self, path):
-        pass
+        self.env_model["agent_0"].env_model.load_model(os.path.join(path, "env_model.pt"))
 
 
 if __name__ == "__main__":
@@ -177,5 +177,5 @@ if __name__ == "__main__":
             # fixme: HARDCODED agent_0
             trainer.logger.on_batch_end(logs["agent_0"], epoch)
 
-        if epoch % 400 == 0:
+        if epoch % params.checkpoint == 0:
             trainer.checkpoint(params.WEIGHT_DIR)

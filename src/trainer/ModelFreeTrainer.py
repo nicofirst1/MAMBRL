@@ -1,4 +1,5 @@
 import math
+import os
 from typing import Dict
 
 import torch
@@ -101,7 +102,6 @@ class ModelFreeTrainer(BaseTrainer):
                 obs = observation.to(self.config.device).unsqueeze(dim=0)
 
                 for agent_id in self.cur_env.agents:
-                    # FIX: the mask of the rollout is a different thing from the mask of the rnn
                     with torch.no_grad():
                         value, action, action_log_prob = self.ppo_agents[agent_id].act(
                             obs, rollout.masks[step]
@@ -192,16 +192,10 @@ class ModelFreeTrainer(BaseTrainer):
         return action_losses, value_losses, entropies, logs
 
     def checkpoint(self, path):
-        pass
-        # torch.save({
-        #     'epoch': EPOCH,
-        #     'model_state_dict': net.state_dict(),
-        #     'optimizer_state_dict': optimizer.state_dict(),
-        #     'loss': LOSS,
-        # }, PATH)
+        self.model_free["agent_0"].base.save_model(os.path.join(path, "model_free.pt"))
 
     def restore_training(self, path):
-        pass
+        self.model_free["agent_0"].base.load_model(os.path.join(path, "model_free.pt"))
 
 
 if __name__ == '__main__':
@@ -217,4 +211,5 @@ if __name__ == '__main__':
             logs = preprocess_logs([value_loss, action_loss, entropy, logs], trainer)
             trainer.logger.on_batch_end(logs=logs, batch_id=epoch, rollout=rollout)
 
-        #rollout.after_update()
+        if epoch % params.checkpoint == 0:
+            trainer.checkpoint(params.WEIGHT_DIR)

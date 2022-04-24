@@ -146,7 +146,7 @@ class ModelFree(nn.Module):
 
     def act(self, inputs, masks, deterministic=False):
         # normalize the input outside
-        action_logit, value = self.base(inputs, masks)
+        _, action_logit, value = self.base(inputs, masks)
 
         action_probs = F.softmax(action_logit, dim=1)
 
@@ -178,7 +178,7 @@ class ModelFree(nn.Module):
 
 
     def get_value(self, inputs, masks):
-        return self.base(inputs, masks)[1]
+        return self.base(inputs, masks)[2]
 
     def evaluate_actions(self, inputs: torch.Tensor, masks):
         """evaluate_actions method.
@@ -205,7 +205,7 @@ class ModelFree(nn.Module):
             value of the entropy given by the action with index equal to action_indx.
         """
 
-        action_logit, value = self.base(inputs, masks)
+        _, action_logit, value = self.base(inputs, masks)
         action_probs = F.softmax(action_logit, dim=1)
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
@@ -357,9 +357,12 @@ class Conv2DModelFree(nn.Module):
 
     def __init__(self, obs_shape, share_weights, action_space, conv_layers, fc_layers,
                  use_recurrent, use_residual, num_frames, base_hidden_size):
-        #assert num_frames == 1, "The parameter num_frames should be one when using the 2D convolution"
-        assert 0 < len(fc_layers) < 3, f"fc_layers should be a tuple of lists of 1 or 2 elements while it's {fc_layers}"
-        assert 0 < len(conv_layers) < 3, f"conv_layers should be a tuple of lists of 1 or 2 elements while it's {conv_layers}"
+        # assert num_frames == 1, "The parameter num_frames should be one when using the 2D convolution"
+        assert 0 < len(fc_layers) < 3, \
+            f"fc_layers should be a tuple of lists of 1 or 2 elements while it's {fc_layers}"
+        assert 0 < len(conv_layers) < 3, \
+            f"conv_layers should be a tuple of lists of 1 or 2 elements while it's {conv_layers}"
+
         super(Conv2DModelFree, self).__init__()
 
         # self, obs_shape, action_space, base, hidden_size, share_weights, base_kwargs
@@ -539,6 +542,33 @@ class Conv2DModelFree(nn.Module):
             x = torch.cat((x1, x2), dim=-1)
 
         return x
+
+    def save_model(self, path: str):
+        if self.share_weights:
+            torch.save({
+                "feature_extractor": self.feature_extractor,
+                "actor": self.actor,
+                "critic": self.critic
+            }, path)
+        else:
+            torch.save({
+                "feature_extractor_actor": self.feature_extractor_actor,
+                "feature_extractor_critic": self.feature_extractor_critic,
+                "actor": self.actor,
+                "critic": self.critic
+            }, path)
+
+    def load_model(self, path):
+        checkpoint = torch.load(path)
+
+        if self.share_weights:
+            self.feature_extractor.load_state_dict(checkpoint["feature_extractor"])
+        else:
+            self.feature_extractor_actor.load_state_dict(checkpoint["feature_extractor_actor"])
+            self.feature_extractor_critic.load_state_dict(checkpoint["feature_extractor_critic"])
+
+        self.actor.load_state_dict(checkpoint["actor"])
+        self.critic.load_state_dict(checkpoint["critic"])
 
 
 class ResNetBase(NNBase):
