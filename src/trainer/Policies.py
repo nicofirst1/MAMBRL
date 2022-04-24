@@ -108,11 +108,10 @@ class MultimodalMAS(TrajCollectionPolicy):
 
 
     def act(self, agent_id: str, observation: torch.Tensor) -> Tuple[int, float, torch.Tensor]:
-
-        masks=torch.ones(1).to(observation.device)
+        masks = torch.ones(1).to(observation.device)
         value, action, log_actions_prob = self.ac_dict[agent_id].act(observation, masks)
 
-        return action, value, log_actions_prob
+        return value, action, log_actions_prob
 
 
 class OptimalAction(TrajCollectionPolicy):

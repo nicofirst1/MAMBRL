@@ -40,7 +40,7 @@ class FullTrainer(BaseTrainer):
         super(FullTrainer, self).__init__(env, config)
 
         self.model = {
-            agent_id: FullModel(FeatureExtractor, ModelFree, NextFramePredictor, RolloutEncoder, config)
+            agent_id: FullModel(ModelFree, NextFramePredictor, RolloutEncoder, config)
             for agent_id in self.cur_env.agents
         }
 
@@ -62,7 +62,6 @@ class FullTrainer(BaseTrainer):
                 val_log_step=5,
                 project="full_training",
                 opts={},
-                #models=self.model["agent_0"].get_modules(),
                 horizon=config.horizon,
                 action_meaning=self.cur_env.env.action_meaning_dict,
                 cams=cams,
@@ -79,14 +78,11 @@ class FullTrainer(BaseTrainer):
         )
         rollout.to(self.config.device)
 
-        if self.ppo_logger is not None:
-            self.ppo_logger.epoch += 1
-
         action_dict = {agent_id: None for agent_id in self.cur_env.agents}
-        done = {agent_id: None for agent_id in self.cur_env.agents}
+        values_dict = {agent_id: False for agent_id in self.cur_env.agents}
+        action_log_dict = {agent_id: False for agent_id in self.cur_env.agents}
 
-        for episode in trange(self.config.episodes, desc="Collecting trajectories.."):
-            done["__all__"] = False
+        for episode in range(self.config.episodes):
             observation = self.cur_env.reset()
             rollout.states[episode * self.config.horizon] = observation.unsqueeze(dim=0)
 
@@ -95,28 +91,33 @@ class FullTrainer(BaseTrainer):
 
                 for agent_id in self.cur_env.agents:
                     with torch.no_grad():
-                        action, _, _ = self.policy.act(agent_id, observation)
-                        action_dict[agent_id] = action
+                        value, action, action_log_prob = self.policy.act(agent_id, observation)
+
+                    action_dict[agent_id] = action
+                    values_dict[agent_id] = value
+                    action_log_dict[agent_id] = action_log_prob
 
                 observation, rewards, done, _ = self.cur_env.step(action_dict)
 
                 actions = mas_dict2tensor(action_dict, int)
+                action_log_probs = torch.cat([elem.unsqueeze(0) for _, elem in action_log_dict.items()], 0)
                 rewards = mas_dict2tensor(rewards, float)
+                values = mas_dict2tensor(values_dict, float)
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
 
                 rollout.insert(
                     state=observation,
                     next_state=observation[-3:, :, :],
                     action=actions,
-                    action_log_probs=None,
-                    value_preds=None,
+                    action_log_probs=action_log_probs,
+                    value_preds=values,
                     reward=rewards,
                     mask=masks
                 )
 
                 if done["__all__"]:
-                    ## Needed only when training also env model
-                    #rollout.compute_value_world_model(episode * self.config.horizon + step, self.config.gamma)
+                    # Needed only when training also env model
+                    # rollout.compute_value_world_model(episode * self.config.horizon + step, self.config.gamma)
                     observation = self.cur_env.reset()
 
         return rollout
@@ -124,11 +125,12 @@ class FullTrainer(BaseTrainer):
     def train(self, rollout: RolloutStorage) -> [torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Dict]]:
         [model.train() for model in self.ppo_agents.values()]
 
+        logs = {ag: [] for ag in self.ppo_agents.keys()}
+
         action_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         value_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         entropies = {ag: 0 for ag in self.ppo_agents.keys()}
 
-        # FIXME: why we only take the first agent value?
         with torch.no_grad():
             next_value = self.ppo_agents["agent_0"].get_value(
                 rollout.states[-1].unsqueeze(dim=0), rollout.masks[-1]
@@ -138,16 +140,14 @@ class FullTrainer(BaseTrainer):
         advantages = rollout.returns - rollout.value_preds
         # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
 
-        for epoch in trange(self.config.ppo_epochs, desc="Training.."):
+        for _ in range(self.config.ppo_epochs):
             data_generator = rollout.recurrent_generator(
                 advantages, minibatch_frames=self.config.minibatch
             )
 
-            logs = {ag: [] for ag in self.ppo_agents.keys()}
-
             for sample in data_generator:
                 states_batch, actions_batch, logs_probs_batch, \
-                values_batch, return_batch, masks_batch, adv_targ = sample
+                    values_batch, return_batch, masks_batch, adv_targ = sample
 
                 for agent_id in self.ppo_agents.keys():
                     agent_index = int(agent_id[-1])
@@ -170,7 +170,7 @@ class FullTrainer(BaseTrainer):
                     value_losses[agent_id] += float(value_loss)
                     entropies[agent_id] += float(entropy)
 
-        num_updates = self.config.ppo_epochs * int(math.ceil(rollout.rewards.size(0) / self.config.minibatch))
+        num_updates = self.config.ppo_epochs * int(math.ceil(rollout.step / self.config.minibatch))
 
         action_losses = sum(action_losses.values()) / num_updates
         value_losses = sum(value_losses.values()) / num_updates
@@ -185,7 +185,7 @@ if __name__ == '__main__':
     trainer = FullTrainer(PPO_Agent, params)
     # trainer.collect_features()
 
-    for epoch in trange(params.model_free_epochs, desc="Training model free"):
+    for epoch in trange(params.model_free_epochs, desc="Training full free"):
         rollout = trainer.collect_trajectories()
         action_losses, value_losses, entropies, logs = trainer.train(rollout)
 

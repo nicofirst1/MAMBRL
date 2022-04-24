@@ -28,7 +28,7 @@ class Params:
     # TRAINING
     # =============================================================================
     debug = False
-    use_wandb = True
+    use_wandb = False
     visible = False
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     frame_shape = [3, 32, 32]  # [3, 96, 96]  # [3, 600, 600]
@@ -153,12 +153,11 @@ class Params:
     # =============================================================================
     agents = 1
     landmarks = 2
-    # len_reward is 1 since we are using continuous reward
     len_reward = 1
     step_reward = -0.01
     landmark_reward = 2
-    episodes = 3  # 3
-    horizon = 128  # 100
+    episodes = 1  # 3
+    horizon = 1  # 100
     landmarks_positions = np.array([[0.0, -1.0], [0.0, 1.0]])  # None
     agents_positions = np.array([[0.0, 0.0]])  # np.array([[0.0, 0.0]])
     env_name = "collab_nav"
@@ -175,18 +174,18 @@ class Params:
     # 0 don't move, 1 left, 2 right,  3 down, 4 top
     num_actions = 5
 
-    #### ENVIRONMENT ENTITIES ####
+    # ENVIRONMENT ENTITIES
     agent_size = 0.1
     landmark_size = 0.3
 
-    #### EVALUATION ####
+    # EVALUATION
     log_step = 10
     checkpoint_freq = 50
     restore = True
     resume_training = False
     max_checkpoint_keep = 10
 
-    ## STRATEGIES ##
+    # STRATEGIES
     possible_strategies = dict(
         agent_positions_strategies=[
             "fixed", "random"

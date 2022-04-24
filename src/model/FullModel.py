@@ -1,3 +1,6 @@
+import os
+from typing import Type
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -19,21 +22,17 @@ class FullModel(nn.Module):
 
     def __init__(
             self,
-            mf_feature_extractor: FeatureExtractor,
-            model_free: ModelFree,
-            env_model: NextFramePredictor,
-            rollout_encoder: RolloutEncoder,
+            model_free: Type[ModelFree],
+            env_model: Type[NextFramePredictor],
+            rollout_encoder: Type[RolloutEncoder],
             config: Params
     ):
         """
-        :param mf_feature_extractor: feature extractor class used for the model free
-            part of the architecture
-        :param mb_actor: Policy calss, it select an action used by the env_model 
-        :param env_model: class used to predict future frames from the actual frame
-            the actual actions picked by the mb_actor
-        :param rollout_encoder: use the output of the env_model to encode
+        @param env_model: class used to predict future frames from the
+            actual frame the actual actions picked by the mb_actor
+        @param rollout_encoder: use the output of the env_model to encode
             the predicted frames
-        :param config: class with all the configuration parameters
+        @param config: class with all the configuration parameters
         """
 
         super(FullModel, self).__init__()
@@ -48,27 +47,16 @@ class FullModel(nn.Module):
         # =============================================================================
         # BLOCKS
         # =============================================================================
-        # mf_feature_extractor_config = config.get_mf_feature_extractor_configs()
-        # FIXME: hardcoded
-        # mf_feature_extractor_config["conv_layers"] = mf_feature_extractor_config["conv_layers"][0]
-        # mf_feature_extractor_config["fc_layers"] = mf_feature_extractor_config["fc_layers"][0]
-        # self.mf_feature_extractor = mf_feature_extractor(
-        #   input_shape=self.input_shape, **mf_feature_extractor_config).to(self.device)
-
         model_free_configs = config.get_model_free_configs()
         self.model_free = model_free(**model_free_configs).to(self.device)
 
         # FIXME: add a get_env_model_config() function
         self.env_model = env_model(config).to(self.device)
-        self.env_model.load_state_dict(torch.load("env_model.pt"))
+        self.env_model.load_model(os.path.join(config.WEIGHT_DIR, "env_model.pt"))
         self.env_model.eval()
 
         rollout_encoder_config = config.get_rollout_encoder_configs()
         self.rollout_encoder = rollout_encoder(**rollout_encoder_config).to(self.device)
-
-        # actor who chooses the actions to be used by the env_model
-        # mb_actor_config = config.get_model_free_configs()
-        # self.mb_actor = mb_actor_model(**mb_actor_config).to(self.device)
 
         next_inp = None
         features_shape = self.get_features()
@@ -113,7 +101,7 @@ class FullModel(nn.Module):
         # FIXME: Hardcoded mask, need to fix
         mask = torch.ones(1)
         # mf_features = self.mf_feature_extractor(fake_input, mask)
-        mf_features, _ = self.model_free(fake_input, mask)
+        mf_features, _, _ = self.model_free(fake_input, mask)
         fake_action = torch.randint(self.num_actions, (1,))
         fake_action = one_hot_encode(fake_action, self.num_actions).to(self.device)
         fake_action = fake_action.float()
@@ -173,7 +161,6 @@ class FullModel(nn.Module):
         return value, action_log_probs, entropy, em_out
 
     def to(self, device):
-        #self.mf_feature_extractor.to(device)
         self.model_free.to(device)
         self.env_model.to(device)
         self.rollout_encoder.to(device)
@@ -201,15 +188,12 @@ class FullModel(nn.Module):
 
         """
 
-        # Normalize Inputs
-        inputs = inputs / 255.0
-
         batch_size = inputs.shape[0]
         # mf_features = self.mf_feature_extractor(inputs, mask)
         # _, action, _ = self.mb_actor.act(inputs, mask)
 
-        mf_features, _ = self.model_free(inputs, mask)
-        action, _ = self.model_free.get_action(mf_features)
+        mf_features, action_logits, _ = self.model_free(inputs, mask)
+        action, _ = self.model_free.get_action(action_logits)
 
         if not isinstance(action, torch.Tensor):
             action = one_hot_encode(action, self.num_actions).to(self.device).unsqueeze(0)
@@ -218,25 +202,26 @@ class FullModel(nn.Module):
 
         action = action.float()
 
-        if batch_size > 1:
-            # env model dows not work for batch_size>1, so we need a for loop
-            frame_preds = []
-            reward_preds = []
-            value_preds = []
+        with torch.no_grad():
+            if batch_size > 1:
+                # env model dows not work for batch_size>1, so we need a for loop
+                frame_preds = []
+                reward_preds = []
+                value_preds = []
 
-            for bt in range(batch_size):
-                inp = inputs[bt].unsqueeze(dim=0)
-                act = action[bt].unsqueeze(dim=0)
-                frame_pred, reward_pred, value_pred = self.env_model(inp, act)
-                frame_preds.append(frame_pred)
-                reward_preds.append(reward_pred)
-                value_preds.append(value_pred)
+                for bt in range(batch_size):
+                    inp = inputs[bt].unsqueeze(dim=0)
+                    act = action[bt].unsqueeze(dim=0)
+                    frame_pred, reward_pred, value_pred = self.env_model(inp, act)
+                    frame_preds.append(frame_pred)
+                    reward_preds.append(reward_pred)
+                    value_preds.append(value_pred)
 
-            frame_pred = torch.cat(frame_preds)
-            reward_pred = torch.cat(reward_preds)
-            value_pred = torch.cat(value_preds)
-        else:
-            frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
+                frame_pred = torch.cat(frame_preds)
+                reward_pred = torch.cat(reward_preds)
+                value_pred = torch.cat(value_preds)
+            else:
+                frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
 
         frame_pred = torch.argmax(frame_pred, dim=1).unsqueeze(dim=0).float()
         fake_reward = torch.zeros((*frame_pred.shape[:2], 1)).to(self.device)
@@ -246,7 +231,7 @@ class FullModel(nn.Module):
         action_logits = self.actor(features)
         value = self.critic(features)
 
-        em_out=dict(
+        em_out = dict(
             frame_pred=frame_pred.detach(),
             reward_pred=reward_pred.detach(),
             value_pred=value_pred.detach(),
@@ -256,7 +241,7 @@ class FullModel(nn.Module):
 
     def act(self, inputs, mask, deterministic=False):
         # normalize the input outside
-        action_logit, value, em_out = self.forward(inputs, mask)
+        action_logit, value, _ = self.forward(inputs, mask)
 
         action_probs = F.softmax(action_logit, dim=1)
 

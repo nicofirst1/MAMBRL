@@ -206,7 +206,7 @@ class FullWandb(WandbLogger):
         logs["epoch"] = batch_id
 
         states = (
-                rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8) * 255.0
+                rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
         )
 
         actions = rollout.actions[:rollout.step].squeeze().cpu().numpy()
@@ -214,8 +214,8 @@ class FullWandb(WandbLogger):
 
         grids = write_infos(states, rollout, self.params.action_meanings)
 
-        logs["behaviour"] = wandb.Video(states, fps=16, format="gif")
-        logs["behaviour_info"] = wandb.Video(grids, fps=10, format="gif")
+        logs["behaviour"] = wandb.Video(states, fps=8, format="gif")
+        logs["behaviour_info"] = wandb.Video(grids, fps=8, format="gif")
         logs["hist/actions"] = actions
         logs["hist/rewards"] = rewards
         logs["mean_reward"] = rewards.mean()
@@ -358,11 +358,11 @@ def preprocess_logs(learn_output, model_free):
 
         if isinstance(values,list):
             # we have a list of dict with the same values, convert to a dict of list
-            values={key: [i[key] for i in values] for key in values[0]}
-            values= {k: [x for sub in v for x in sub] for k, v in values.items()}
+            values = {key: [i[key] for i in values] for key in values[0]}
+            values = {k: [x for sub in v for x in sub] for k, v in values.items()}
 
         for k, v in values.items():
-            new_logs[f"{new_key}_{k}"] = np.asarray(v).mean()
+            new_logs[f"{new_key}_{k}"] = np.asarray(v).mean() if len(v) > 0 else 0
 
     logs = new_logs
 

@@ -111,12 +111,10 @@ class ModelFreeTrainer(BaseTrainer):
                     values_dict[agent_id] = value
                     action_log_dict[agent_id] = action_log_prob
 
-                observation, rewards, done, infos = self.cur_env.step(
-                    action_dict)
+                observation, rewards, done, infos = self.cur_env.step(action_dict)
 
                 actions = mas_dict2tensor(action_dict, int)
-                action_log_probs = torch.cat(
-                    [elem.unsqueeze(0) for _, elem in action_log_dict.items()], 0)
+                action_log_probs = torch.cat([elem.unsqueeze(0) for _, elem in action_log_dict.items()], 0)
                 masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
                 rewards = mas_dict2tensor(rewards, float)
                 values = mas_dict2tensor(values_dict, float)
@@ -193,7 +191,7 @@ class ModelFreeTrainer(BaseTrainer):
 
         return action_losses, value_losses, entropies, logs
 
-    def checkpoint(self):
+    def checkpoint(self, path):
         pass
         # torch.save({
         #     'epoch': EPOCH,
@@ -202,7 +200,7 @@ class ModelFreeTrainer(BaseTrainer):
         #     'loss': LOSS,
         # }, PATH)
 
-    def restore_training(self):
+    def restore_training(self, path):
         pass
 
 

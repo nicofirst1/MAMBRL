@@ -431,7 +431,7 @@ class NextFramePredictor(Container):
             # internal_states = self.get_internal_states()
             # FIXME: HARDCODE, to remove
             internal_states = self.internal_states
-            #internal_states = internal_states[-1].unsqueeze(dim=0)
+            internal_states = internal_states[-1].unsqueeze(dim=0)
             x = torch.cat((x_start, internal_states), dim=1)
             self.last_x_start = x_start
         else:
@@ -449,8 +449,7 @@ class NextFramePredictor(Container):
             x = F.relu(x)
             x = self.downscale_layers[2 * i + 1](x)  # LayerNorm
 
-        value_pred = self.value_estimator(
-            torch.flatten(x, start_dim=1)).squeeze(-1)
+        value_pred = self.value_estimator(torch.flatten(x, start_dim=1)).squeeze(-1)
 
         x = self.action_injectors[0](x, action)
 

@@ -472,7 +472,7 @@ class Conv2DModelFree(nn.Module):
             x = self.feature_extractor_actor.forward(inputs, masks)
             action_logits = self.actor(x)
 
-            return action_logits, value
+            return x, action_logits, value
 
     def get_actor_parameters(self):
         """get_actor_parameters method.
