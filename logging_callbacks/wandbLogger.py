@@ -5,12 +5,11 @@ import torch
 import torchvision
 import wandb
 from PIL import Image, ImageDraw, ImageFont
-from torch import nn
-
 from logging_callbacks.callbacks import WandbLogger
 from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
 from src.agent.RolloutStorage import RolloutStorage
 from src.common import Params
+from torch import nn
 
 params = Params()
 
@@ -97,8 +96,8 @@ class PPOWandb(WandbLogger):
 
         super(PPOWandb, self).__init__(**kwargs)
 
-        for idx, mod in enumerate(models.values()):
-            wandb.watch(mod, log_freq=1000, log_graph=True, idx=idx, log="all")
+        # for idx, mod in enumerate(models.values()):
+        #     wandb.watch(mod, log_freq=1000, log_graph=True, idx=idx, log="all")
 
         self.train_log_step = train_log_step if train_log_step > 0 else 2
         self.val_log_step = val_log_step if val_log_step > 0 else 2
@@ -206,7 +205,7 @@ class FullWandb(WandbLogger):
         logs["epoch"] = batch_id
 
         states = (
-                rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
+            rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
         )
 
         actions = rollout.actions[:rollout.step].squeeze().cpu().numpy()
@@ -348,6 +347,13 @@ def write_infos(states, rollout: RolloutStorage, action_meaning: Dict):
     return grids
 
 
+def _cat_dict(lst):
+    # we have a list of dict with the same values, convert to a dict of list
+    values = {key: [i[key] for i in lst] for key in lst[0]}
+    values = {k: [x for sub in v for x in sub] for k, v in values.items()}
+    return values
+
+
 def preprocess_logs(learn_output, model_free):
     value_loss, action_loss, entropy, logs = learn_output
 
@@ -356,36 +362,52 @@ def preprocess_logs(learn_output, model_free):
     for agent, values in logs.items():
         new_key = f"agents/{agent}"
 
-        if isinstance(values,list):
-            # we have a list of dict with the same values, convert to a dict of list
-            values = {key: [i[key] for i in values] for key in values[0]}
-            values = {k: [x for sub in v for x in sub] for k, v in values.items()}
+        if isinstance(values, list):
+            values = _cat_dict(values)
 
         for k, v in values.items():
-            new_logs[f"{new_key}_{k}"] = np.asarray(v).mean() if len(v) > 0 else 0
+            # filter out Nones
+            v=[x for x in v if x]
+            if k == "em_out" and len(v)>0:
+                v=_cat_dict(v)
+                v={k2:torch.stack(v2) for k2,v2 in v.items()}
+                v['reward_pred']= v['reward_pred'].squeeze()
+                # collapse batch size
+                v['frame_pred']= v['frame_pred'].view( -1, *(v['frame_pred'].size()[2:]))
+                # cast to uint and make wandb video
+                v['frame_pred']=v['frame_pred'].type(torch.uint8)
+                v['frame_pred']= wandb.Video(v['frame_pred'], fps=8, format="gif")
+                for k2,v2 in v.items():
+                    new_logs[f"{new_key}_{k2}"]=v2
+
+            else:
+
+                new_logs[f"{new_key}_{k}"] = np.asarray(v).mean() if len(v) > 0 else 0
 
     logs = new_logs
 
     strat = params.get_descriptive_strategy()
     reward_step_strategy, reward_collision_strategy, \
-        landmark_reset_strategy, landmark_collision_strategy = model_free.cur_env.get_current_strategy()
+    landmark_reset_strategy, landmark_collision_strategy = model_free.cur_env.get_current_strategy()
 
     tbl = wandb.Table(columns=["list", "current strategy", "description"])
 
     tbl.add_data("reward_step", reward_step_strategy, strat["reward_step_strategy"][reward_step_strategy])
-    tbl.add_data("reward_collision", reward_collision_strategy, strat["reward_collision_strategy"][reward_collision_strategy])
+    tbl.add_data("reward_collision", reward_collision_strategy,
+                 strat["reward_collision_strategy"][reward_collision_strategy])
     tbl.add_data("landmark_reset", landmark_reset_strategy, strat["landmark_reset_strategy"][landmark_reset_strategy])
-    tbl.add_data("landmark_collision", landmark_collision_strategy, strat["landmark_collision_strategy"][landmark_collision_strategy])
+    tbl.add_data("landmark_collision", landmark_collision_strategy,
+                 strat["landmark_collision_strategy"][landmark_collision_strategy])
 
     general_logs = {
         "loss/value_loss": value_loss,
         "loss/action_loss": action_loss,
         "loss/entropy_loss": entropy,
         "loss/total": value_loss + action_loss - entropy,
-        #"curriculum/guided_learning": ppo_wrapper.guided_learning_prob,
+        # "curriculum/guided_learning": ppo_wrapper.guided_learning_prob,
         "strategies": tbl,
-        #"curriculum/lr": ppo_wrapper.get_learning_rate(),
-        #"curriculum/entropy_coef": ppo_wrapper.ppo_agent.entropy_coef,
+        # "curriculum/lr": ppo_wrapper.get_learning_rate(),
+        # "curriculum/entropy_coef": ppo_wrapper.ppo_agent.entropy_coef,
     }
 
     logs.update(general_logs)

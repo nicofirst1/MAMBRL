@@ -207,9 +207,10 @@ if __name__ == '__main__':
         rollout = trainer.collect_trajectories()
         action_loss, value_loss, entropy, logs = trainer.train(rollout)
 
+        if epoch % params.checkpoint == 0:
+            trainer.checkpoint(params.WEIGHT_DIR)
+
+
         if params.use_wandb and epoch % params.log_step == 0:
             logs = preprocess_logs([value_loss, action_loss, entropy, logs], trainer)
             trainer.logger.on_batch_end(logs=logs, batch_id=epoch, rollout=rollout)
-
-        if epoch % params.checkpoint == 0:
-            trainer.checkpoint(params.WEIGHT_DIR)

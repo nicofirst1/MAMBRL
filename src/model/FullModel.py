@@ -52,7 +52,9 @@ class FullModel(nn.Module):
 
         # FIXME: add a get_env_model_config() function
         self.env_model = env_model(config).to(self.device)
-        self.env_model.load_model(os.path.join(config.WEIGHT_DIR, "env_model.pt"))
+
+        if config.load_pretrained_envmodel:
+            self.env_model.load_model(os.path.join(config.WEIGHT_DIR, "env_model.pt"))
         self.env_model.eval()
 
         rollout_encoder_config = config.get_rollout_encoder_configs()
@@ -153,12 +155,12 @@ class FullModel(nn.Module):
             Environment model output as dict
         """
 
-        action_logit, value, _ = self.forward(inputs, mask)
+        action_logit, value, em_out = self.forward(inputs, mask)
         action_probs = F.softmax(action_logit, dim=1)
         action_log_probs = F.log_softmax(action_logit, dim=1)
         entropy = -(action_probs * action_log_probs).sum(1).mean()
 
-        return value, action_log_probs, entropy, _
+        return value, action_log_probs, entropy, em_out
 
     def to(self, device):
         self.model_free.to(device)
