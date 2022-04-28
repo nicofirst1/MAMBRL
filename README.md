@@ -15,6 +15,27 @@ pip install .
 ```
 If you wish to modify the library while coding use `pip install -e .` instead.
 
+# Training
+The pipeline is made of serveral architectures that can be trained separately.
+
+## ModelFree and EnvModel
+The [model free](src/model/ModelFree.py) and [env model](src/model/EnvModel.py) can be trained with 
+```shell
+python src/trainer/ModelFreeTrainer.py
+or
+python src/trainer/EnvModelTrainer.py
+```
+You can also pass arguements to the trained pipeline such as:
+```shell
+python src/trainer/ModelFreeTrainer.py -use_wandb --horizon 128 --lr 0.0001
+```
+For a complete list of parameters check the [Parameter class](src/common/Params.py).
+
+## Full Training
+If you want to train the whole architecture use the [FullTrainer](src/trainer/FullTrainer.py) with:
+```shell
+python src/trainer/FullTrainer.py
+```
 
 ## Training on colab
 You can train the model on
