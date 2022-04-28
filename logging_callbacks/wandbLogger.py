@@ -370,7 +370,7 @@ def preprocess_logs(learn_output, model_free):
             v=[x for x in v if x]
             if k == "em_out" and len(v)>0:
                 v=_cat_dict(v)
-                v={k2:torch.stack(v2) for k2,v2 in v.items()}
+                v={k2:torch.stack(v2).detach().cpu() for k2,v2 in v.items()}
                 v['reward_pred']= v['reward_pred'].squeeze()
                 # collapse batch size
                 v['frame_pred']= v['frame_pred'].view( -1, *(v['frame_pred'].size()[2:]))
