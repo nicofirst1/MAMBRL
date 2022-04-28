@@ -220,13 +220,13 @@ class StochasticModel(nn.Module):
             bits_pred = bits_clean + (bits_pred - bits_clean).detach()
             bits = mix(
                 bits_pred, bits, 1 - (1 - epsilon) *
-                self.config.latent_rnn_max_sampling
+                                 self.config.latent_rnn_max_sampling
             )
 
             res = self.add_bits(layer, bits)
             return mix(
                 res, layer, 1 - (1 - epsilon) *
-                self.config.latent_use_max_probability
+                            self.config.latent_use_max_probability
             )
 
         bits, _ = self.bits_predictor(layer, 1.0)
@@ -355,7 +355,6 @@ class NextFramePredictor(Container):
     def to(self, device):
         self.action_injectors = self.action_injectors.to(device)
         self.downscale_layers = self.downscale_layers.to(device)
-        self.gate = self.gate.to(device)
         self.input_embedding = self.input_embedding.to(device)
         self.logits = self.logits.to(device)
         self.middle_network = self.middle_network.to(device)
@@ -364,13 +363,16 @@ class NextFramePredictor(Container):
         self.upscale_layers = self.upscale_layers.to(device)
         self.value_estimator = self.value_estimator.to(device)
 
+        if self.config.stack_internal_states:
+            self.gate = self.gate.to(device)
+
         return self
 
     def save_model(self, path: str):
-        torch.save({
+
+        save_dict = {
             "action_injectors": self.action_injectors.state_dict(),
             "downscale_layers": self.downscale_layers.state_dict(),
-            "gate": self.gate.state_dict(),
             "input_embedding": self.input_embedding.state_dict(),
             "logits": self.logits.state_dict(),
             "middle_network": self.middle_network.state_dict(),
@@ -378,7 +380,12 @@ class NextFramePredictor(Container):
             "stochastic_model": self.stochastic_model.state_dict(),
             "upscale_layers": self.upscale_layers.state_dict(),
             "value_estimator": self.value_estimator.state_dict()
-        }, path)
+        }
+
+        if self.config.stack_internal_states:
+            save_dict['gate'] = self.gate.state_dict()
+
+        torch.save(save_dict, path)
 
     def load_model(self, path):
         checkpoint = torch.load(path)

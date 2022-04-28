@@ -209,6 +209,7 @@ class FullModel(nn.Module):
                 frame_preds = []
                 reward_preds = []
                 value_preds = []
+                frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
 
                 for bt in range(batch_size):
                     inp = inputs[bt].unsqueeze(dim=0)

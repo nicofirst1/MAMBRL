@@ -114,7 +114,7 @@ class Params:
 
     # load the pretrained env model stored in $WEIGHT_DIR/env_model.pt
     load_pretrained_envmodel = False
-    stack_internal_states = True
+    stack_internal_states = False
     recurrent_state_size = 64
     hidden_size = 96
     compress_steps = 2

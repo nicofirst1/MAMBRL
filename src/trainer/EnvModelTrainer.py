@@ -2,6 +2,7 @@ import os.path
 from typing import Type
 
 import torch
+import wandb
 from tqdm import trange
 
 from src.agent.EnvModelAgent import EnvModelAgent, preprocess_state
@@ -158,7 +159,11 @@ class EnvModelTrainer(BaseTrainer):
         return metrics
 
     def checkpoint(self, path):
-        self.env_model["agent_0"].env_model.save_model(os.path.join(path, "env_model.pt"))
+        path=os.path.join(path, "env_model.pt")
+        self.env_model["agent_0"].env_model.save_model(path)
+        self.logger.save_model(path,model_name=f"agent_0_EnvModel")
+
+
 
     def restore_training(self, path):
         self.env_model["agent_0"].env_model.load_model(os.path.join(path, "env_model.pt"))

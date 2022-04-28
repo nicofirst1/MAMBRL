@@ -5,11 +5,12 @@ import torch
 import torchvision
 import wandb
 from PIL import Image, ImageDraw, ImageFont
+from torch import nn
+
 from logging_callbacks.callbacks import WandbLogger
 from pytorchCnnVisualizations.src.misc_functions import apply_colormap_on_image
 from src.agent.RolloutStorage import RolloutStorage
 from src.common import Params
-from torch import nn
 
 params = Params()
 
@@ -71,6 +72,11 @@ class EnvModelWandb(WandbLogger):
 
         wandb_log.update(img_log)
         self.log_to_wandb(wandb_log, commit=True)
+
+    def save_model(self, path2model, model_name):
+        artifact = wandb.Artifact(model_name, type='model')
+        artifact.add_file(path2model)
+        wandb.log_artifact(artifact)
 
 
 class PPOWandb(WandbLogger):
@@ -367,18 +373,18 @@ def preprocess_logs(learn_output, model_free):
 
         for k, v in values.items():
             # filter out Nones
-            v=[x for x in v if x]
-            if k == "em_out" and len(v)>0:
-                v=_cat_dict(v)
-                v={k2:torch.stack(v2).detach().cpu() for k2,v2 in v.items()}
-                v['reward_pred']= v['reward_pred'].squeeze()
+            v = [x for x in v if x]
+            if k == "em_out" and len(v) > 0:
+                v = _cat_dict(v)
+                v = {k2: torch.stack(v2).detach().cpu() for k2, v2 in v.items()}
+                v['reward_pred'] = v['reward_pred'].squeeze()
                 # collapse batch size
-                v['frame_pred']= v['frame_pred'].view( -1, *(v['frame_pred'].size()[2:]))
+                v['frame_pred'] = v['frame_pred'].view(-1, *(v['frame_pred'].size()[2:]))
                 # cast to uint and make wandb video
-                v['frame_pred']=v['frame_pred'].type(torch.uint8)
-                v['frame_pred']= wandb.Video(v['frame_pred'], fps=8, format="gif")
-                for k2,v2 in v.items():
-                    new_logs[f"{new_key}_{k2}"]=v2
+                v['frame_pred'] = v['frame_pred'].type(torch.uint8)
+                v['frame_pred'] = wandb.Video(v['frame_pred'], fps=8, format="gif")
+                for k2, v2 in v.items():
+                    new_logs[f"{new_key}_{k2}"] = v2
 
             else:
 
