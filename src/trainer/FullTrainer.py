@@ -54,10 +54,11 @@ class FullTrainer(BaseTrainer):
 
         self.use_wandb = self.config.use_wandb
         if self.config.use_wandb:
+            import os
             from logging_callbacks import FullWandb
             cams = []
 
-            self.ppo_logger = FullWandb(
+            self.logger = FullWandb(
                 train_log_step=5,
                 val_log_step=5,
                 project="full_training",
@@ -66,6 +67,11 @@ class FullTrainer(BaseTrainer):
                 action_meaning=self.cur_env.env.action_meaning_dict,
                 cams=cams,
             )
+
+            artifact = self.logger.run.use_artifact('mambrl/env_model/agent_0_EnvModel:v14', type='model')
+            artifact_dir = artifact.download()
+
+            self.model["agent_0"].env_model.load_model(os.path.join(artifact_dir, 'env_model.pt'))
 
     def collect_trajectories(self) -> RolloutStorage:
 
@@ -191,4 +197,4 @@ if __name__ == '__main__':
 
         if trainer.use_wandb and epoch % params.log_step == 0:
             logs = preprocess_logs([value_losses, action_losses, entropies, logs], trainer)
-            trainer.ppo_logger.on_batch_end(logs=logs, batch_id=epoch, rollout=rollout)
+            trainer.logger.on_batch_end(logs=logs, batch_id=epoch, rollout=rollout)

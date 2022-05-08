@@ -292,12 +292,9 @@ class NextFramePredictor(Container):
         middle_shape = shape
 
         self.upscale_layers = []
-        self.action_injectors = [ActionInjector(
-            self.config.num_actions, filters)]
+        self.action_injectors = [ActionInjector(self.config.num_actions, filters)]
         for i in range(self.config.compress_steps):
-            self.action_injectors.append(
-                ActionInjector(self.config.num_actions, filters)
-            )
+            self.action_injectors.append(ActionInjector(self.config.num_actions, filters))
 
             in_filters = filters
             if i >= self.config.compress_steps - self.config.filter_double_steps:
@@ -340,14 +337,9 @@ class NextFramePredictor(Container):
 
         # Sub-models
         self.middle_network = MiddleNetwork(self.config, middle_shape[0])
-        self.reward_estimator = RewardEstimator(
-            self.config, middle_shape[0] + filters)
-        self.value_estimator = ValueEstimator(
-            middle_shape[0] * middle_shape[1] * middle_shape[2]
-        )
-        self.stochastic_model = StochasticModel(
-            self.config, middle_shape, self.config.num_actions
-        )
+        self.reward_estimator = RewardEstimator(self.config, middle_shape[0] + filters)
+        self.value_estimator = ValueEstimator(middle_shape[0] * middle_shape[1] * middle_shape[2])
+        self.stochastic_model = StochasticModel(self.config, middle_shape, self.config.num_actions)
 
         if self.config.stack_internal_states:
             self.init_internal_states(self.config.batch_size)
@@ -369,7 +361,6 @@ class NextFramePredictor(Container):
         return self
 
     def save_model(self, path: str):
-
         save_dict = {
             "action_injectors": self.action_injectors.state_dict(),
             "downscale_layers": self.downscale_layers.state_dict(),
@@ -392,7 +383,6 @@ class NextFramePredictor(Container):
 
         self.action_injectors.load_state_dict(checkpoint["action_injectors"])
         self.downscale_layers.load_state_dict(checkpoint["downscale_layers"])
-        self.gate.load_state_dict(checkpoint["gate"])
         self.input_embedding.load_state_dict(checkpoint["input_embedding"])
         self.logits.load_state_dict(checkpoint["logits"])
         self.middle_network.load_state_dict(checkpoint["middle_network"])
@@ -401,10 +391,12 @@ class NextFramePredictor(Container):
         self.upscale_layers.load_state_dict(checkpoint["upscale_layers"])
         self.value_estimator.load_state_dict(checkpoint["value_estimator"])
 
+        if self.config.stack_internal_states:
+            self.gate.load_state_dict(checkpoint["gate"])
+
     def init_internal_states(self, batch_size):
         self.internal_states = torch.zeros(
-            (batch_size, self.config.recurrent_state_size,
-             *self.config.obs_shape[1:])
+            (batch_size, self.config.recurrent_state_size, *self.config.obs_shape[1:])
         ).to(self.config.device)
         self.last_x_start = None
 

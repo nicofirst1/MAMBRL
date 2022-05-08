@@ -53,8 +53,8 @@ class FullModel(nn.Module):
         # FIXME: add a get_env_model_config() function
         self.env_model = env_model(config).to(self.device)
 
-        if config.load_pretrained_envmodel:
-            self.env_model.load_model(os.path.join(config.WEIGHT_DIR, "env_model.pt"))
+        # if config.load_pretrained_envmodel:
+        #    self.env_model.load_model(os.path.join(config.WEIGHT_DIR, "env_model.pt"))
         self.env_model.eval()
 
         rollout_encoder_config = config.get_rollout_encoder_configs()

@@ -392,28 +392,22 @@ def preprocess_logs(learn_output, model_free):
 
     logs = new_logs
 
-    strat = params.get_descriptive_strategy()
-    reward_step_strategy, reward_collision_strategy, \
-    landmark_reset_strategy, landmark_collision_strategy = model_free.cur_env.get_current_strategy()
-
-    tbl = wandb.Table(columns=["list", "current strategy", "description"])
-
-    tbl.add_data("reward_step", reward_step_strategy, strat["reward_step_strategy"][reward_step_strategy])
-    tbl.add_data("reward_collision", reward_collision_strategy,
-                 strat["reward_collision_strategy"][reward_collision_strategy])
-    tbl.add_data("landmark_reset", landmark_reset_strategy, strat["landmark_reset_strategy"][landmark_reset_strategy])
-    tbl.add_data("landmark_collision", landmark_collision_strategy,
-                 strat["landmark_collision_strategy"][landmark_collision_strategy])
+    # strat = params.get_descriptive_strategy()
+    # reward_step_strategy, reward_collision_strategy, \
+    # landmark_reset_strategy, landmark_collision_strategy = model_free.cur_env.get_current_strategy()
+    #
+    # tbl = wandb.Table(columns=["list", "current strategy", "description"])
+    # tbl.add_data("reward_step", reward_step_strategy, strat["reward_step_strategy"][reward_step_strategy])
+    # tbl.add_data("reward_collision", reward_collision_strategy, strat["reward_collision_strategy"][reward_collision_strategy])
+    # tbl.add_data("landmark_reset", landmark_reset_strategy, strat["landmark_reset_strategy"][landmark_reset_strategy])
+    # tbl.add_data("landmark_collision", landmark_collision_strategy, strat["landmark_collision_strategy"][landmark_collision_strategy])
 
     general_logs = {
         "loss/value_loss": value_loss,
         "loss/action_loss": action_loss,
         "loss/entropy_loss": entropy,
         "loss/total": value_loss + action_loss - entropy,
-        # "curriculum/guided_learning": ppo_wrapper.guided_learning_prob,
-        "strategies": tbl,
-        # "curriculum/lr": ppo_wrapper.get_learning_rate(),
-        # "curriculum/entropy_coef": ppo_wrapper.ppo_agent.entropy_coef,
+        # "strategies": tbl,
     }
 
     logs.update(general_logs)

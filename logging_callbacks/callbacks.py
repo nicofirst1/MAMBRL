@@ -27,7 +27,7 @@ class WandbLogger:
         if not os.path.isdir(out_dir):
             os.mkdir(out_dir)
 
-        self.run=wandb.init(
+        self.run = wandb.init(
             project=project,
             id=run_id,
             dir=out_dir,
@@ -37,7 +37,7 @@ class WandbLogger:
             **kwargs,
         )
         wandb.config.update(opts)
-        self.params=params
+        self.params = params
 
     @staticmethod
     def log_to_wandb(metrics: Dict[str, Any], commit: bool = False, **kwargs):
