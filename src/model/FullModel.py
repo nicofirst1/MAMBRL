@@ -203,27 +203,30 @@ class FullModel(nn.Module):
 
         action = action.float()
 
+        # with torch.no_grad():
+        #     if batch_size > 1:
+        #         # env model dows not work for batch_size>1, so we need a for loop
+        #         frame_preds = []
+        #         reward_preds = []
+        #         value_preds = []
+        #         frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
+        #
+        #         for bt in range(batch_size):
+        #             inp = inputs[bt].unsqueeze(dim=0)
+        #             act = action[bt].unsqueeze(dim=0)
+        #             frame_pred, reward_pred, value_pred = self.env_model(inp, act)
+        #             frame_preds.append(frame_pred)
+        #             reward_preds.append(reward_pred)
+        #             value_preds.append(value_pred)
+        #
+        #         frame_pred = torch.cat(frame_preds)
+        #         reward_pred = torch.cat(reward_preds)
+        #         value_pred = torch.cat(value_preds)
+        #     else:
+        #         frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
+
         with torch.no_grad():
-            if batch_size > 1:
-                # env model dows not work for batch_size>1, so we need a for loop
-                frame_preds = []
-                reward_preds = []
-                value_preds = []
-                frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
-
-                for bt in range(batch_size):
-                    inp = inputs[bt].unsqueeze(dim=0)
-                    act = action[bt].unsqueeze(dim=0)
-                    frame_pred, reward_pred, value_pred = self.env_model(inp, act)
-                    frame_preds.append(frame_pred)
-                    reward_preds.append(reward_pred)
-                    value_preds.append(value_pred)
-
-                frame_pred = torch.cat(frame_preds)
-                reward_pred = torch.cat(reward_preds)
-                value_pred = torch.cat(value_preds)
-            else:
-                frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
+            frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
 
         frame_pred = torch.argmax(frame_pred, dim=1).unsqueeze(dim=0).float()
         fake_reward = torch.zeros((*frame_pred.shape[:2], 1)).to(self.device)
