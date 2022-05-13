@@ -195,13 +195,13 @@ class FullModel(nn.Module):
 
         """
 
-        batch_size = inputs.shape[0]
+        # batch_size = inputs.shape[0]
         # mf_features = self.mf_feature_extractor(inputs, mask)
         # _, action, _ = self.mb_actor.act(inputs, mask)
 
         mf_features, _ = self.model_free.features_and_action(inputs, mask)
 
-        action = self.distilled_policy.act("agent_0", None)
+        action, _, _ = self.distilled_policy.act("agent_0", None)
         if not isinstance(action, torch.Tensor):
             action = one_hot_encode(action, self.num_actions).to(self.device).unsqueeze(0)
         else:
