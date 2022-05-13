@@ -121,15 +121,7 @@ class PPOWandb(WandbLogger):
 
         logs["epoch"] = batch_id
 
-        # done_idx = (rollout.masks == 0).nonzero(as_tuple=True)[0].cpu()
-        #
-        # if len(done_idx) > 1:
-        #     done_idx = done_idx[0]
-
-        states = (
-            rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
-        )
-
+        states = rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
         actions = rollout.actions[:rollout.step].squeeze().cpu().numpy()
         rewards = rollout.rewards[:rollout.step].squeeze().cpu().numpy()
 
@@ -142,28 +134,28 @@ class PPOWandb(WandbLogger):
         logs["mean_reward"] = rewards.mean()
         logs["episode_length"] = rollout.step
 
-        if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
+        # if batch_id % self.log_heatmap_step == 0 and len(self.cams) != 0:
+        #
+        #     # map heatmap on image
+        #     # idx = random.choice(range(done_idx))
+        #     idx = rollout.step
+        #     img = rollout.states[idx]
+        #     reprs = []
+        #     for c in self.cams:
+        #         cam = c.generate_cam(img.clone().unsqueeze(dim=0))
+        #         reprs.append((c.name, cam))
+        #     img = img[-3:]
+        #     img = np.uint8(img.cpu().data.numpy())
+        #     img = img.transpose(2, 1, 0)
+        #     img = Image.fromarray(img).convert("RGB")
+        #
+        #     for name, rep in reprs:
+        #         heatmap, heatmap_on_image = apply_colormap_on_image(
+        #             img, rep, "hsv")
+        #
+        #         logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
 
-            # map heatmap on image
-            # idx = random.choice(range(done_idx))
-            idx = rollout.step
-            img = rollout.states[idx]
-            reprs = []
-            for c in self.cams:
-                cam = c.generate_cam(img.clone().unsqueeze(dim=0))
-                reprs.append((c.name, cam))
-            img = img[-3:]
-            img = np.uint8(img.cpu().data.numpy())
-            img = img.transpose(2, 1, 0)
-            img = Image.fromarray(img).convert("RGB")
-
-            for name, rep in reprs:
-                heatmap, heatmap_on_image = apply_colormap_on_image(
-                    img, rep, "hsv")
-
-                logs[f"cams/{name}"] = wandb.Image(heatmap_on_image)
-
-                # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
+        #       # save_gradient_images(np.array(heatmap_on_image), f"{name}_heatmap_on_image", file_dir="imgs")
 
         self.log_to_wandb(logs, commit=True)
 
@@ -210,10 +202,7 @@ class FullWandb(WandbLogger):
 
         logs["epoch"] = batch_id
 
-        states = (
-            rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
-        )
-
+        states = rollout.states[:rollout.step][:, -3:, :, :].cpu().numpy().astype(np.uint8)
         actions = rollout.actions[:rollout.step].squeeze().cpu().numpy()
         rewards = rollout.rewards[:rollout.step].squeeze().cpu().numpy()
 

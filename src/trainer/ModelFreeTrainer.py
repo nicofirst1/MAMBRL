@@ -99,25 +99,25 @@ class ModelFreeTrainer(BaseTrainer):
             rollout.states[episode * self.num_steps] = observation.unsqueeze(dim=0)
 
             for step in range(self.num_steps):
-                obs = observation.to(self.config.device).unsqueeze(dim=0)
+                observation = observation.to(self.config.device).unsqueeze(dim=0)
 
                 for agent_id in self.cur_env.agents:
                     with torch.no_grad():
                         value, action, action_log_prob = self.ppo_agents[agent_id].act(
-                            obs, rollout.masks[step]
+                            observation, rollout.masks[step]
                         )
 
                     action_dict[agent_id] = action
                     values_dict[agent_id] = value
                     action_log_dict[agent_id] = action_log_prob
 
-                observation, rewards, done, infos = self.cur_env.step(action_dict)
+                observation, rewards, done, _ = self.cur_env.step(action_dict)
 
                 actions = mas_dict2tensor(action_dict, int)
                 action_log_probs = torch.cat([elem.unsqueeze(0) for _, elem in action_log_dict.items()], 0)
-                masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
                 rewards = mas_dict2tensor(rewards, float)
                 values = mas_dict2tensor(values_dict, float)
+                masks = (~torch.tensor(done["__all__"])).float().unsqueeze(0)
 
                 rollout.insert(
                     state=observation,
@@ -150,9 +150,8 @@ class ModelFreeTrainer(BaseTrainer):
 
         rollout.compute_returns(next_value, True, self.config.gamma, 0.95)
         advantages = rollout.returns - rollout.value_preds
-        # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
 
-        for epoch in range(self.config.ppo_epochs):
+        for _ in range(self.config.ppo_epochs):
             data_generator = rollout.recurrent_generator(
                 advantages, minibatch_frames=self.config.minibatch
             )
@@ -176,14 +175,13 @@ class ModelFreeTrainer(BaseTrainer):
                             agent_returns, agent_adv_targ, masks_batch
                         )
 
-                    logs[agent_id] = log
+                    logs[agent_id].append(log)
 
                     action_losses[agent_id] += float(action_loss)
                     value_losses[agent_id] += float(value_loss)
                     entropies[agent_id] += float(entropy)
 
-        num_updates = self.config.ppo_epochs * \
-            int(math.ceil(rollout.rewards.size(0) / self.config.minibatch))
+        num_updates = self.config.ppo_epochs * int(math.ceil(rollout.rewards.size(0) / self.config.minibatch))
 
         action_losses = sum(action_losses.values()) / num_updates
         value_losses = sum(value_losses.values()) / num_updates
@@ -209,7 +207,6 @@ if __name__ == '__main__':
 
         if epoch % params.checkpoint == 0:
             trainer.checkpoint(params.WEIGHT_DIR)
-
 
         if params.use_wandb and epoch % params.log_step == 0:
             logs = preprocess_logs([value_loss, action_loss, entropy, logs], trainer)
