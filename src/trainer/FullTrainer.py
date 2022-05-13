@@ -23,7 +23,7 @@ from src.trainer.Policies import MultimodalMAS
 
 
 class FullTrainer(BaseTrainer):
-    def __init__(self, agent, config: Params):
+    def __init__(self, agent, env, config: Params):
         """__init__ module.
 
         config : Params
@@ -34,13 +34,10 @@ class FullTrainer(BaseTrainer):
         None.
 
         """
-
-        env = get_env_wrapper(config)
-
         super(FullTrainer, self).__init__(env, config)
 
         self.model = {
-            agent_id: FullModel(ModelFree, NextFramePredictor, RolloutEncoder, config)
+            agent_id: FullModel(env, ModelFree, NextFramePredictor, RolloutEncoder, config)
             for agent_id in self.cur_env.agents
         }
 
@@ -49,8 +46,6 @@ class FullTrainer(BaseTrainer):
             agent_id: agent(self.model[agent_id], config.device, **ppo_configs)
             for agent_id in self.cur_env.agents
         }
-
-        self.policy = MultimodalMAS(self.model)
 
         self.use_wandb = self.config.use_wandb
         if self.config.use_wandb:
@@ -74,6 +69,7 @@ class FullTrainer(BaseTrainer):
             self.model["agent_0"].env_model.load_model(os.path.join(artifact_dir, 'env_model.pt'))
 
     def collect_trajectories(self) -> RolloutStorage:
+        [model.eval() for model in self.ppo_agents.values()]
 
         rollout = RolloutStorage(
             num_steps=self.config.horizon * self.config.episodes,
@@ -97,7 +93,9 @@ class FullTrainer(BaseTrainer):
 
                 for agent_id in self.cur_env.agents:
                     with torch.no_grad():
-                        value, action, action_log_prob = self.policy.act(agent_id, observation)
+                        value, action, action_log_prob = self.ppo_agents[agent_id].act(
+                            observation, rollout.masks[step]
+                        )
 
                     action_dict[agent_id] = action
                     values_dict[agent_id] = value
@@ -122,8 +120,6 @@ class FullTrainer(BaseTrainer):
                 )
 
                 if done["__all__"]:
-                    # Needed only when training also env model
-                    # rollout.compute_value_world_model(episode * self.config.horizon + step, self.config.gamma)
                     observation = self.cur_env.reset()
 
         return rollout
@@ -144,7 +140,6 @@ class FullTrainer(BaseTrainer):
 
         rollout.compute_returns(next_value, True, self.config.gamma, 0.95)
         advantages = rollout.returns - rollout.value_preds
-        # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
 
         for _ in range(self.config.ppo_epochs):
             data_generator = rollout.recurrent_generator(
@@ -187,9 +182,9 @@ class FullTrainer(BaseTrainer):
 
 if __name__ == '__main__':
     params = Params()
+    env = get_env_wrapper(params)
 
-    trainer = FullTrainer(PPO_Agent, params)
-    # trainer.collect_features()
+    trainer = FullTrainer(PPO_Agent, env, params)
 
     for epoch in trange(params.model_free_epochs, desc="Training full free"):
         rollout = trainer.collect_trajectories()

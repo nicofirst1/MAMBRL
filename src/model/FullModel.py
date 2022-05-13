@@ -11,6 +11,8 @@ from src.common.Params import Params
 from src.model.ModelFree import FeatureExtractor, ModelFree
 from src.model.EnvModel import NextFramePredictor
 from src.model.RolloutEncoder import RolloutEncoder
+from trainer.Policies import OptimalAction
+
 
 class FullModel(nn.Module):
     """FullModel class.
@@ -22,6 +24,7 @@ class FullModel(nn.Module):
 
     def __init__(
             self,
+            env,
             model_free: Type[ModelFree],
             env_model: Type[NextFramePredictor],
             rollout_encoder: Type[RolloutEncoder],
@@ -52,6 +55,8 @@ class FullModel(nn.Module):
 
         # FIXME: add a get_env_model_config() function
         self.env_model = env_model(config).to(self.device)
+
+        self.distilled_policy = OptimalAction(env, 5, self.device)
 
         # if config.load_pretrained_envmodel:
         #    self.env_model.load_model(os.path.join(config.WEIGHT_DIR, "env_model.pt"))
@@ -194,8 +199,9 @@ class FullModel(nn.Module):
         # mf_features = self.mf_feature_extractor(inputs, mask)
         # _, action, _ = self.mb_actor.act(inputs, mask)
 
-        mf_features, action = self.model_free.features_and_action(inputs, mask)
+        mf_features, _ = self.model_free.features_and_action(inputs, mask)
 
+        action = self.distilled_policy.act("agent_0", None)
         if not isinstance(action, torch.Tensor):
             action = one_hot_encode(action, self.num_actions).to(self.device).unsqueeze(0)
         else:
