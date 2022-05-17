@@ -137,7 +137,7 @@ class ModelFreeTrainer(BaseTrainer):
     def train(self, rollout: RolloutStorage) -> [torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Dict]]:
         [model.train() for model in self.ppo_agents.values()]
 
-        logs = {ag: None for ag in self.ppo_agents.keys()}
+        logs = {ag: [] for ag in self.ppo_agents.keys()}
 
         action_losses = {ag: 0 for ag in self.ppo_agents.keys()}
         value_losses = {ag: 0 for ag in self.ppo_agents.keys()}
