@@ -1,6 +1,3 @@
-from functools import partial
-
-import rich.progress
 import torch
 from tqdm import trange
 from typing import Dict
@@ -10,16 +7,12 @@ from logging_callbacks.wandbLogger import preprocess_logs
 from src.agent.PPO_Agent import PPO_Agent
 from src.agent.RolloutStorage import RolloutStorage
 from src.common import Params, mas_dict2tensor
-from src.common.utils import one_hot_encode
 from src.env.EnvWrapper import get_env_wrapper
 from src.model import NextFramePredictor
-from src.model.ModelFree import ModelFree, FeatureExtractor
+from src.model.ModelFree import ModelFree
 from src.model.FullModel import FullModel
 from src.model.RolloutEncoder import RolloutEncoder
 from src.trainer.BaseTrainer import BaseTrainer
-from src.trainer.EnvModelTrainer import EnvModelTrainer
-from src.trainer.ModelFreeTrainer import ModelFreeTrainer
-from src.trainer.Policies import MultimodalMAS
 
 
 class FullTrainer(BaseTrainer):
