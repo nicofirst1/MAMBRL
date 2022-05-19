@@ -11,7 +11,7 @@ from src.common.Params import Params
 from src.model.ModelFree import FeatureExtractor, ModelFree
 from src.model.EnvModel import NextFramePredictor
 from src.model.RolloutEncoder import RolloutEncoder
-from trainer.Policies import OptimalAction
+from src.trainer.Policies import OptimalAction
 
 
 class FullModel(nn.Module):
