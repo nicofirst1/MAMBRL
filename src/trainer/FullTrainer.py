@@ -9,7 +9,7 @@ from src.agent.RolloutStorage import RolloutStorage
 from src.common import Params, mas_dict2tensor
 from src.env.EnvWrapper import get_env_wrapper
 from src.model import NextFramePredictor
-from src.model.ModelFree import ModelFree
+from src.model.ModelFree import ModelFree, FeatureExtractor
 from src.model.FullModel import FullModel
 from src.model.RolloutEncoder import RolloutEncoder
 from src.trainer.BaseTrainer import BaseTrainer
@@ -30,7 +30,7 @@ class FullTrainer(BaseTrainer):
         super(FullTrainer, self).__init__(env, config)
 
         self.model = {
-            agent_id: FullModel(env, ModelFree, NextFramePredictor, RolloutEncoder, config)
+            agent_id: FullModel(env, FeatureExtractor, NextFramePredictor, RolloutEncoder, config)
             for agent_id in self.cur_env.agents
         }
 

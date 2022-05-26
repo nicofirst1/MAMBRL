@@ -166,8 +166,8 @@ class ModelFree(nn.Module):
     def get_value(self, inputs, masks):
         return self.base(inputs, masks)[1]
 
-    def features_and_action(self, inputs, masks, deterministic=False):
-        return self.base.features_and_action(inputs, masks, deterministic)
+    def features(self, inputs, masks):
+        return self.base.features(inputs, masks)
 
     def evaluate_actions(self, inputs: torch.Tensor, masks):
         """evaluate_actions method.
@@ -298,15 +298,20 @@ class FeatureExtractor(NNBase):
     customizable
     """
 
-    def __init__(self, input_shape, conv_layers, fc_layers, recurrent=False, hidden_size=512, num_frames=1, **kwargs):
+    def __init__(self, obs_shape, conv_layers, fc_layers, recurrent=False, hidden_size=512, num_frames=1, **kwargs):
         super(FeatureExtractor, self).__init__(recurrent=recurrent,
                                                hidden_size=hidden_size, recurrent_input_size=hidden_size,)
-        self.in_shape = input_shape
-        self.num_channels = input_shape[0]
+        self.in_shape = obs_shape
+        self.num_channels = obs_shape[0]
         self.num_frames = num_frames
 
         next_inp = None
         feature_extractor_layers = OrderedDict()
+
+        if len(conv_layers) > 1:
+            conv_layers = conv_layers[0]
+        if len(fc_layers) > 1:
+            fc_layers = fc_layers[0]
 
         # if num_frames == 1 we build a 2DConv base, otherwise we build a 3Dconv base
         for i, cnn in enumerate(conv_layers):
@@ -335,7 +340,7 @@ class FeatureExtractor(NNBase):
         self.model = nn.Sequential(feature_extractor_layers)
 
     def forward(self, inputs, masks):
-        return self.model(inputs)
+        return self.model(inputs / 255.0)
 
 
 class Conv2DModelFree(nn.Module):
@@ -367,7 +372,7 @@ class Conv2DModelFree(nn.Module):
             fc_layers = (fc_layers[0], fc_layers[0])
 
         if self.share_weights:
-            self.feature_extractor = FeatureExtractor(
+            self.feature_extractor_actor = FeatureExtractor(
                 obs_shape, conv_layers[0], fc_layers[0], recurrent=use_recurrent,
                 hidden_size=base_hidden_size, num_frames=num_frames
             )
@@ -414,7 +419,7 @@ class Conv2DModelFree(nn.Module):
 
         modules_dict = {}
         if self.share_weights:
-            modules_dict['feature_extractor'] = self.feature_extractor.model
+            modules_dict['feature_extractor'] = self.feature_extractor_actor.model
         else:
             modules_dict['feature_extractor_actor'] = self.feature_extractor_actor.model
             modules_dict['feature_extractor_critic'] = self.feature_extractor_critic.model
@@ -426,7 +431,7 @@ class Conv2DModelFree(nn.Module):
 
     def to(self, device):
         if self.share_weights:
-            self.feature_extractor.to(device)
+            self.feature_extractor_actor.to(device)
         else:
             self.feature_extractor_critic.to(device)
             self.feature_extractor_actor.to(device)
@@ -455,7 +460,7 @@ class Conv2DModelFree(nn.Module):
         """
         inputs = inputs / 255.0
         if self.share_weights:
-            x = self.feature_extractor.forward(inputs, masks)
+            x = self.feature_extractor_actor.forward(inputs, masks)
             return self.actor(x), self.critic(x)
         else:
             x = self.feature_extractor_critic.forward(inputs, masks)
@@ -466,7 +471,7 @@ class Conv2DModelFree(nn.Module):
 
             return action_logits, value
 
-    def features_and_action(self, inputs, masks, deterministic=False):
+    def features(self, inputs, masks):
         """features_and_action method.
 
         Return the features and the action of the Conv2DModelFree, used just for the full model.
@@ -486,20 +491,11 @@ class Conv2DModelFree(nn.Module):
 
         inputs = inputs / 255.0
         if self.share_weights:
-            x = self.feature_extractor.forward(inputs, masks)
-            action_logit = self.actor(x)
-        else:
-            # fixme: should we use both actor and critic?
             x = self.feature_extractor_actor.forward(inputs, masks)
-            action_logit = self.actor(x)
-
-        action_probs = F.softmax(action_logit, dim=1)
-        if deterministic:
-            action = action_probs.max(1)[1]
         else:
-            action = action_probs.multinomial(1)
+            x = self.feature_extractor_actor.forward(inputs, masks)
 
-        return x, action
+        return x
 
     def get_actor_parameters(self):
         """get_actor_parameters method.

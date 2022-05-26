@@ -25,7 +25,7 @@ class FullModel(nn.Module):
     def __init__(
             self,
             env,
-            model_free: Type[ModelFree],
+            model_free: Type[FeatureExtractor],
             env_model: Type[NextFramePredictor],
             rollout_encoder: Type[RolloutEncoder],
             config: Params
@@ -50,7 +50,7 @@ class FullModel(nn.Module):
         # =============================================================================
         # BLOCKS
         # =============================================================================
-        model_free_configs = config.get_model_free_configs()
+        model_free_configs = config.get_mf_feature_extractor_configs()
         self.model_free = model_free(**model_free_configs).to(self.device)
 
         # FIXME: add a get_env_model_config() function
@@ -107,8 +107,7 @@ class FullModel(nn.Module):
         fake_input = torch.zeros(1, *self.input_shape).to(self.device)
         # FIXME: Hardcoded mask, need to fix
         mask = torch.ones(1)
-        # mf_features = self.mf_feature_extractor(fake_input, mask)
-        mf_features, _ = self.model_free.features_and_action(fake_input, mask)
+        mf_features = self.model_free.forward(fake_input, mask)
         fake_action = torch.randint(self.num_actions, (1,))
         fake_action = one_hot_encode(fake_action, self.num_actions).to(self.device)
         fake_action = fake_action.float()
@@ -199,7 +198,8 @@ class FullModel(nn.Module):
         # mf_features = self.mf_feature_extractor(inputs, mask)
         # _, action, _ = self.mb_actor.act(inputs, mask)
 
-        mf_features, _ = self.model_free.features_and_action(inputs, mask)
+        with torch.enable_grad():
+            mf_features = self.model_free.forward(inputs, mask)
 
         action, _, _ = self.distilled_policy.act("agent_0", None)
         if not isinstance(action, torch.Tensor):
@@ -235,8 +235,10 @@ class FullModel(nn.Module):
             frame_pred, reward_pred, value_pred = self.env_model(inputs, action)
 
         frame_pred = torch.argmax(frame_pred, dim=1).unsqueeze(dim=0).float()
-        fake_reward = torch.zeros((*frame_pred.shape[:2], 1)).to(self.device)
-        em_features = self.rollout_encoder(frame_pred, fake_reward)
+
+        with torch.enable_grad():
+            em_features = self.rollout_encoder(frame_pred, reward_pred.unsqueeze(dim=0))
+
         features = torch.cat((mf_features, em_features), dim=-1)
 
         action_logits = self.actor(features)

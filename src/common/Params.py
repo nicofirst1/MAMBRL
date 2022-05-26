@@ -44,7 +44,7 @@ class Params:
     minibatch = 32  # 32
     batch_size = 4  # 64
     # number of future frames that the EnvModel will predict
-    future_frame_horizon = 3
+    future_frame_horizon = 1
     framework = "torch"
     epochs = 10
     checkpoint = 100
@@ -57,7 +57,7 @@ class Params:
     # =============================================================================
     #  OPTIMIZER
     # =============================================================================
-    lr = 3e-4
+    lr = 1e-4
     alpha = 0.99
     max_grad_norm = 5
     eps = 1e-5
@@ -82,7 +82,7 @@ class Params:
     # MODEL FREE NETWORK PARAMETERS
     # =============================================================================
     # if to use the same architecture for the actor-critic
-    share_weights = False
+    share_weights = True
     # conv_layers is a tuple of 1 or 2 elements. If len(conv_layers)==1 we use
     # the same structure for both actor and critic network, otherwise the first
     # element are the layers of the critic and the second are the layers of
@@ -143,7 +143,7 @@ class Params:
         [(16, 3, 1), (16, 3, 2)]
     )
     # hidden size of the recurrent layer
-    re_recurrent_layers = 256
+    re_recurrent_layers = 128
 
     # =============================================================================
     # FULL MODEL PARAMETERS
